@@ -12,7 +12,7 @@ vi.mock('vue-i18n', async () => ({
 const mountView = () => shallowMount(ChannelStatusV1View, {
   global: { stubs: {
     AppLayout: { template: '<div><slot /></div>' },
-    MonitorHero: { props: ['autoRefresh'], emits: ['refresh'], template: `<div>
+    MonitorHero: { props: ['autoRefresh', 'overallStatus'], emits: ['refresh'], template: `<div :data-status="overallStatus">
       <button class="interval" @click="autoRefresh.setInterval(120)">120 seconds</button>
       <button class="refresh" @click="$emit('refresh')">Refresh</button>
       <button class="disable" @click="autoRefresh.setEnabled(false)">Disable</button>
@@ -24,6 +24,17 @@ beforeEach(() => { vi.useFakeTimers(); localStorage.clear(); list.mockReset().mo
 afterEach(() => { wrapper?.unmount(); vi.useRealTimers(); localStorage.clear() })
 
 describe('channel monitor refresh interval', () => {
+  it('does not report healthy service for an empty monitor list or a failed refresh', async () => {
+    wrapper = mountView(); await flushPromises()
+    expect(wrapper.get('[data-status]').attributes('data-status')).toBe('unknown')
+    list.mockRejectedValueOnce(new Error('offline'))
+    await wrapper.get('.refresh').trigger('click'); await flushPromises()
+    expect(wrapper.get('[data-status]').attributes('data-status')).toBe('unknown')
+    expect(wrapper.get('[role="alert"]').text()).toContain('userPages.monitorFailed')
+    await wrapper.get('[role="alert"] button').trigger('click'); await flushPromises()
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+  })
+
   it('refreshes at the selected interval on successive automatic refreshes', async () => {
     wrapper = mountView(); await flushPromises()
     await wrapper.get('.interval').trigger('click')

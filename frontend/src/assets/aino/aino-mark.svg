@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="aino-sky" x1="4" y1="0" x2="56" y2="64" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#53D9BE"/><stop offset=".55" stop-color="#19B8B2"/><stop offset="1" stop-color="#18B48C"/>
+    </linearGradient>
+    <clipPath id="aino-clip"><rect width="64" height="64" rx="17"/></clipPath>
+  </defs>
+  <g clip-path="url(#aino-clip)">
+    <rect width="64" height="64" fill="url(#aino-sky)"/>
+    <path d="M0 58C16 51 27 57 38 62C47 55 54 46 64 47V64H0Z" fill="#8AD657"/>
+    <path d="M10 33C12 21 24 18 36 20C49 21 54 34 54 44C54 56 42 58 31 57C18 57 9 53 9 43Z" fill="#06283F"/>
+    <path d="M9 30C22 28 28 18 37 9C43 3 48 6 53 18C56 25 58 29 61 32C63 35 55 36 49 33C41 29 33 33 24 38C17 42 7 45 6 37C6 34 7 32 9 30Z" fill="#F8FCFB"/>
+    <circle cx="7.8" cy="32" r="5.7" fill="#F8FCFB"/>
+    <circle cx="52.2" cy="28.6" r="3.2" fill="#FFC63D"/>
+    <rect x="33" y="40" width="4" height="10" rx="2" transform="rotate(-9 33 40)" fill="#F8FCFB"/>
+    <rect x="45" y="38" width="4" height="10" rx="2" transform="rotate(-9 45 38)" fill="#F8FCFB"/>
+  </g>
+</svg>

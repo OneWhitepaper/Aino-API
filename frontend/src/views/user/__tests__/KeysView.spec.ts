@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { nextTick } from 'vue'
+import { createMemoryHistory, createRouter } from 'vue-router'
 
 import type { ApiKey } from '@/types'
 import { keysAPI } from '@/api'
@@ -223,9 +224,13 @@ const IconStub = {
   template: '<span data-test="icon">{{ name }}</span>',
 }
 
-const mountView = async (realTable = false) => {
+const mountView = async (realTable = false, initialRoute = '/keys') => {
+  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/keys', component: { template: '<div />' } }] })
+  await router.push(initialRoute)
+  await router.isReady()
   const wrapper = mount(KeysView, {
     global: {
+      plugins: [router],
       stubs: {
         AppLayout: AppLayoutStub,
         TablePageLayout: TablePageLayoutStub,
@@ -242,6 +247,7 @@ const mountView = async (realTable = false) => {
         SearchInput: SearchInputStub,
         Icon: IconStub,
         UseKeyModal: true,
+        ConnectionGuide: true,
         BulkEditKeysModal: true,
         EndpointPopover: true,
         GroupBadge: true,
@@ -270,6 +276,27 @@ const getButtonByText = (wrapper: VueWrapper, text: string) => {
 }
 
 describe('user KeysView column settings', () => {
+  it('opens the create form from the workspace without creating a key and consumes the action', async () => {
+    const wrapper = await mountView(false, '/keys?create=1&source=workspace')
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(true)
+    expect(wrapper.find('[data-tour="key-form-provider"]').exists()).toBe(true)
+    expect(keysAPI.create).not.toHaveBeenCalled()
+    expect(wrapper.vm.$router.currentRoute.value.query).toEqual({ source: 'workspace' })
+    await wrapper.get('[data-test="close-dialog"]').trigger('click')
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
+    await wrapper.vm.$router.push('/keys?create=1')
+    await flushPromises()
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(true)
+  })
+
+  it('opens the connection guide independently of the create form', async () => {
+    const wrapper = await mountView(false, '/keys?guide=1')
+    expect(wrapper.find('connection-guide-stub').exists()).toBe(true)
+    expect(wrapper.find('[data-tour="key-form-provider"]').exists()).toBe(false)
+    expect(keysAPI.create).not.toHaveBeenCalled()
+    expect(wrapper.vm.$router.currentRoute.value.query).toEqual({})
+  })
+
   beforeEach(() => {
     localStorage.clear()
 

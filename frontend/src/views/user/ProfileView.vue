@@ -2,9 +2,15 @@
   <AppLayout>
     <div
       data-testid="profile-shell"
-      class="mx-auto max-w-[950px] space-y-6"
+      class="user-page space-y-6"
     >
+      <UserPageHeader :title="t('userPages.profileTitle')" :description="t('userPages.profileDescription')" />
+      <div class="user-profile-layout">
+      <UserSectionNav v-model="activeSection" :items="sections" :label="t('userPages.profileTitle')" />
+      <div class="user-profile-content flex flex-col gap-6">
       <ProfileInfoCard
+        v-show="activeSection === 'basics' || activeSection === 'bindings'"
+        :section="activeSection === 'bindings' ? 'bindings' : 'basics'"
         :user="user"
         :linuxdo-enabled="linuxdoOAuthEnabled"
         :dingtalk-enabled="dingtalkOAuthEnabled"
@@ -32,10 +38,16 @@
         </div>
       </div>
 
-      <ProfilePasswordForm />
+      <div v-show="activeSection === 'security'" class="space-y-6">
+        <p class="text-sm text-gray-500 dark:text-gray-400">{{ t('userPages.securityHint') }}</p>
+        <ProfilePasswordForm />
+        <ProfileTotpCard />
+        <ProfilePasskeyCard :enabled="passkeyEnabled" />
+      </div>
 
       <ProfileBalanceNotifyCard
         v-if="user && balanceLowNotifyEnabled"
+        v-show="activeSection === 'notifications'"
         :enabled="user.balance_notify_enabled ?? true"
         :threshold="user.balance_notify_threshold"
         :extra-emails="user.balance_notify_extra_emails ?? []"
@@ -43,8 +55,8 @@
         :user-email="user.email"
       />
 
-      <ProfileTotpCard />
-      <ProfilePasskeyCard :enabled="passkeyEnabled" />
+      </div>
+      </div>
     </div>
   </AppLayout>
 </template>
@@ -54,6 +66,8 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Icon } from '@/components/icons'
 import AppLayout from '@/components/layout/AppLayout.vue'
+import UserPageHeader from '@/components/user/workspace/UserPageHeader.vue'
+import UserSectionNav from '@/components/user/workspace/UserSectionNav.vue'
 import ProfileBalanceNotifyCard from '@/components/user/profile/ProfileBalanceNotifyCard.vue'
 import ProfileInfoCard from '@/components/user/profile/ProfileInfoCard.vue'
 import ProfilePasswordForm from '@/components/user/profile/ProfilePasswordForm.vue'
@@ -70,6 +84,13 @@ const user = computed(() => authStore.user)
 
 const contactInfo = ref('')
 const balanceLowNotifyEnabled = ref(false)
+const activeSection = ref('basics')
+const sections = computed(() => [
+  { value: 'basics', label: t('userPages.basics') },
+  { value: 'bindings', label: t('userPages.bindings') },
+  { value: 'security', label: t('userPages.security') },
+  ...(balanceLowNotifyEnabled.value ? [{ value: 'notifications', label: t('userPages.notifications') }] : []),
+])
 const systemDefaultThreshold = ref(0)
 const linuxdoOAuthEnabled = ref(false)
 const dingtalkOAuthEnabled = ref(false)

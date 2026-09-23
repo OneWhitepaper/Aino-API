@@ -73,8 +73,9 @@ describe('ProfileView', () => {
     })
   })
 
-  it('renders the simplified single-column profile shell without separate stat cards', async () => {
+  it('switches settings sections while preserving mounted forms', async () => {
     const wrapper = mount(ProfileView, {
+      attachTo: document.body,
       global: {
         stubs: {
           AppLayout: { template: '<div><slot /></div>' },
@@ -95,5 +96,14 @@ describe('ProfileView', () => {
     expect(wrapper.get('[data-testid="profile-shell"]').html()).toContain('profile-info-card')
     expect(wrapper.get('[data-testid="profile-shell"]').html()).toContain('profile-password-form')
     expect(wrapper.get('[data-testid="profile-shell"]').html()).toContain('profile-totp-card')
+    expect(wrapper.get('[data-testid="profile-password-form"]').isVisible()).toBe(false)
+    await wrapper.findAll('.user-section-nav button')[2].trigger('click')
+    expect(wrapper.get('[data-testid="profile-password-form"]').isVisible()).toBe(true)
+    expect(wrapper.get('[data-testid="profile-info-card"]').isVisible()).toBe(false)
+    await wrapper.findAll('.user-section-nav button')[0].trigger('click')
+    expect(wrapper.get('[data-testid="profile-info-card"]').isVisible()).toBe(true)
+    expect(wrapper.find('[data-testid="profile-password-form"]').exists()).toBe(true)
+    expect(wrapper.findAll('.user-section-nav button')).toHaveLength(3)
+    wrapper.unmount()
   })
 })

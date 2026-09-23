@@ -209,7 +209,7 @@ const routes: RouteRecordRaw[] = [
       requiresAuth: true,
       requiresAdmin: false,
       title: 'Dashboard',
-      titleKey: 'dashboard.title',
+      titleKey: 'workspace.overview',
       descriptionKey: 'dashboard.welcomeMessage'
     }
   },

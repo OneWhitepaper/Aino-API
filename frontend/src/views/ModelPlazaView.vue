@@ -1,6 +1,10 @@
 <template>
   <!-- 后台内嵌形态:?embedded=1 且已登录,套完整后台布局 -->
   <AppLayout v-if="isEmbedded">
+    <header class="workspace-intro workspace-key-intro">
+      <div><h2>{{ t('workspace.models') }}</h2><p>{{ t('workspace.modelPageDescription') }}</p></div>
+      <router-link to="/keys?create=1" class="btn btn-primary">{{ t('workspace.create') }}</router-link>
+    </header>
     <ModelPlazaContent :response="data" :loading="loading" :error="loadFailed" embedded />
   </AppLayout>
 
@@ -16,6 +20,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import PlazaNavBar from '@/components/modelPlaza/PlazaNavBar.vue'
 import ModelPlazaContent from '@/components/modelPlaza/ModelPlazaContent.vue'
@@ -24,6 +29,7 @@ import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
+const { t } = useI18n()
 const appStore = useAppStore()
 const authStore = useAuthStore()
 

@@ -1,8 +1,8 @@
 <template>
-  <header class="glass sticky top-0 z-30 border-b border-gray-200/50 dark:border-dark-700/50">
-    <div class="flex h-16 items-center justify-between gap-2 px-2 sm:px-4 md:px-6">
+  <header class="workspace-header sticky top-0 z-30 border-b border-gray-200 bg-white dark:border-dark-700 dark:bg-dark-900">
+    <div class="flex min-h-20 items-center justify-between gap-2 px-3 py-3 sm:px-4 md:px-6">
       <!-- Left: Mobile Menu Toggle + Page Title -->
-      <div class="flex shrink-0 items-center gap-2 sm:gap-4">
+      <div class="flex min-w-0 items-center gap-2 sm:gap-4">
         <button
           @click="toggleMobileSidebar"
           class="btn-ghost btn-icon lg:hidden"
@@ -11,11 +11,11 @@
           <Icon name="menu" size="md" />
         </button>
 
-        <div class="hidden lg:block">
-          <h1 class="text-lg font-semibold text-gray-900 dark:text-white">
+        <div class="min-w-0">
+          <h1 class="truncate text-base font-semibold text-gray-900 dark:text-white lg:text-lg">
             {{ pageTitle }}
           </h1>
-          <p v-if="pageDescription" class="text-xs text-gray-500 dark:text-dark-400">
+          <p v-if="pageDescription" class="hidden text-xs text-gray-500 dark:text-dark-400 lg:block">
             {{ pageDescription }}
           </p>
         </div>
@@ -108,7 +108,7 @@
             class="flex items-center gap-2 rounded-xl p-1.5 transition-colors hover:bg-gray-100 dark:hover:bg-dark-800"
             :aria-label="t('common.userMenu')"
           >
-            <div class="flex h-8 w-8 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-primary-500 to-primary-600 text-sm font-medium text-white shadow-sm">
+            <div class="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-gray-900 text-sm font-medium text-white dark:bg-primary-100 dark:text-gray-900">
               <img
                 v-if="avatarUrl"
                 :src="avatarUrl"
@@ -289,7 +289,7 @@ const balanceFrozenLabel = computed(() => `${balanceFrozenText.value} ${formatHe
 
 // 只在标准模式的管理员下显示新手引导按钮
 const showOnboardingButton = computed(() => {
-  return !authStore.isSimpleMode && user.value?.role === 'admin'
+  return !authStore.isSimpleMode && user.value?.role === 'admin' && route.path.startsWith('/admin/')
 })
 
 const userInitials = computed(() => {
@@ -336,6 +336,7 @@ const pageTitle = computed(() => {
 })
 
 const pageDescription = computed(() => {
+  if (route.path === '/dashboard') return ''
   const descKey = routeMetaKeys.value.descriptionKey
   if (descKey) {
     return t(descKey)

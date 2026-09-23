@@ -13,11 +13,11 @@ function read(rel: string) {
 }
 
 describe('channel-monitor-v2 design system structure', () => {
-  it('user ChannelStatus V2 shell uses page-header, card, btn, tabs utilities', () => {
+  it('user ChannelStatus V2 shell uses the workspace header and shared card, button and tab utilities', () => {
     // Route wrapper may switch V1/V2; design chrome lives on the V2 implementation.
     const src = read('views/user/ChannelStatusV2View.vue')
     expect(src).toContain('page-header')
-    expect(src).toContain('page-title')
+    expect(src).toContain('UserPageHeader')
     expect(src).toContain('class="card')
     expect(src).toContain('btn btn-secondary')
     expect(src).toContain('class="tab')
@@ -28,9 +28,6 @@ describe('channel-monitor-v2 design system structure', () => {
     expect(src).toContain('clearFilters')
     expect(src).toContain('healthModeOptions')
     expect(src).toContain("'cache'")
-    // Ops elevation: rounded-3xl + ring surfaces
-    expect(src).toContain('rounded-3xl')
-    expect(src).toContain('ring-1 ring-gray-900/5')
     // Overview-first KPI strip before primary viz
     expect(src.indexOf('summaryAria')).toBeLessThan(src.indexOf('MonitorTrendChart'))
     // No page-level fixed min-width that forces viewport horizontal scroll

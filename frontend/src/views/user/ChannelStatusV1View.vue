@@ -1,5 +1,12 @@
 <template>
   <AppLayout>
+    <div class="user-page">
+    <UserPageHeader :title="t('userPages.monitorTitle')" :description="t('userPages.monitorDescription')" />
+    <dl v-if="!loading && !loadFailed && items.length" class="user-summary">
+      <div><dt>{{ t('userPages.monitored') }}</dt><dd>{{ items.length }}</dd></div>
+      <div><dt>{{ t('userPages.operational') }}</dt><dd>{{ operationalCount }}</dd></div>
+      <div><dt>{{ t('userPages.attention') }}</dt><dd>{{ items.length - operationalCount }}</dd></div>
+    </dl>
     <MonitorHero
       :overall-status="overallStatus"
       :interval-seconds="DEFAULT_INTERVAL_SECONDS"
@@ -10,7 +17,12 @@
       @refresh="manualReload"
     />
 
+    <div v-if="loadFailed" role="alert" class="card p-8 text-center">
+      <p>{{ t('userPages.monitorFailed') }}</p>
+      <button class="btn btn-secondary mt-4" :disabled="loading" @click="manualReload">{{ t('workspace.retry') }}</button>
+    </div>
     <MonitorCardGrid
+      v-else
       :items="items"
       :window="currentWindow"
       :countdown-seconds="countdown"
@@ -25,6 +37,7 @@
       :title="detailTitle"
       @close="closeDetail"
     />
+    </div>
   </AppLayout>
 </template>
 
@@ -40,6 +53,7 @@ import {
   type UserMonitorDetail,
 } from '@/api/channelMonitor'
 import AppLayout from '@/components/layout/AppLayout.vue'
+import UserPageHeader from '@/components/user/workspace/UserPageHeader.vue'
 import MonitorHero, {
   type MonitorWindow,
   type OverallStatus,
@@ -55,6 +69,7 @@ const appStore = useAppStore()
 // ── State ──
 const items = ref<UserMonitorView[]>([])
 const loading = ref(false)
+const loadFailed = ref(false)
 const currentWindow = ref<MonitorWindow>('7d')
 const detailCache = reactive<Record<number, UserMonitorDetail>>({})
 const showDetail = ref(false)
@@ -72,8 +87,9 @@ const autoRefresh = useAutoRefresh({
 const countdown = autoRefresh.countdown
 
 // ── Computed ──
+const operationalCount = computed(() => items.value.filter(item => item.primary_status === STATUS_OPERATIONAL).length)
 const overallStatus = computed<OverallStatus>(() => {
-  if (items.value.length === 0) return 'operational'
+  if (items.value.length === 0 || loading.value || loadFailed.value) return 'unknown'
   for (const it of items.value) {
     if (it.primary_status === 'failed' || it.primary_status === 'error') return 'degraded'
     if (it.primary_status !== STATUS_OPERATIONAL) return 'degraded'
@@ -95,9 +111,12 @@ async function reload(silent = false) {
     const res = await listChannelMonitorViews({ signal: ctrl.signal })
     if (ctrl.signal.aborted || abortController !== ctrl) return
     items.value = res.items || []
+    loadFailed.value = false
   } catch (err: unknown) {
     const e = err as { name?: string; code?: string }
     if (e?.name === 'AbortError' || e?.code === 'ERR_CANCELED') return
+    if (ctrl.signal.aborted || abortController !== ctrl) return
+    loadFailed.value = true
     appStore.showError(extractApiErrorMessage(err, t('channelStatus.loadError')))
   } finally {
     if (abortController === ctrl) {

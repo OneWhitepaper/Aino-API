@@ -1,5 +1,12 @@
 <template>
   <AppLayout>
+    <div class="user-page workspace-keys">
+      <UserPageHeader :title="t('userPages.keysTitle')" :description="t('userPages.keysDescription')">
+        <button class="btn btn-secondary" @click="showConnectionGuide = true"><Icon name="book" size="sm" />{{ t('workspace.guide') }}</button>
+        <button @click="showCreateModal = true" class="btn btn-primary" data-tour="keys-create-btn">
+          <Icon name="plus" size="md" />{{ t('keys.createKey') }}
+        </button>
+      </UserPageHeader>
     <TablePageLayout>
       <template #filters>
         <div class="flex flex-col gap-3">
@@ -89,14 +96,13 @@
               </button>
             </div>
           </div>
-          <button @click="showCreateModal = true" class="btn btn-primary" data-tour="keys-create-btn">
-            <Icon name="plus" size="md" class="mr-2" />
-            {{ t('keys.createKey') }}
-          </button>
         </div>
       </template>
 
       <template #table>
+        <div class="user-table-heading px-5 py-4">
+          <div><h3>{{ t('userPages.keyList') }}</h3><p>{{ t('userPages.keyTotal', { count: pagination.total }) }}</p></div>
+        </div>
         <DataTable
           :columns="columns"
           :data="apiKeys"
@@ -471,6 +477,8 @@
         />
       </template>
     </TablePageLayout>
+    </div>
+    <BaseDialog :show="showConnectionGuide" :title="t('workspace.guide')" width="wide" @close="showConnectionGuide = false"><ConnectionGuide /></BaseDialog>
 
     <!-- Create/Edit Modal -->
     <BaseDialog
@@ -587,6 +595,9 @@
           </Select>
         </div>
 
+        <details class="user-disclosure" :open="showEditModal || !!customKeyError" @invalid.capture="revealAdvancedOptions">
+          <summary>{{ t('userPages.advanced') }}<span>{{ t('userPages.advancedHint') }}</span></summary>
+          <div class="user-disclosure-body space-y-5">
         <!-- Custom Key Section (only for create) -->
         <div v-if="!showEditModal" class="space-y-3">
           <div class="flex items-center justify-between">
@@ -987,6 +998,8 @@
             </div>
           </div>
         </div>
+          </div>
+        </details>
       </form>
       <template #footer>
         <div class="flex justify-end gap-3">
@@ -1205,6 +1218,8 @@
 </template>
 
 <script setup lang="ts">
+import { useRoute, useRouter } from 'vue-router'
+import ConnectionGuide from '@/components/user/workspace/ConnectionGuide.vue'
 	import { ref, reactive, computed, watch, onMounted, onUnmounted, type ComponentPublicInstance } from 'vue'
 	import { useI18n } from 'vue-i18n'
 	import { useAppStore } from '@/stores/app'
@@ -1215,6 +1230,7 @@ import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
 const { t } = useI18n()
 import { keysAPI, authAPI, usageAPI, userGroupsAPI } from '@/api'
 import AppLayout from '@/components/layout/AppLayout.vue'
+import UserPageHeader from '@/components/user/workspace/UserPageHeader.vue'
 import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 import BulkEditKeysModal from '@/components/keys/BulkEditKeysModal.vue'
 	import DataTable from '@/components/common/DataTable.vue'
@@ -1405,6 +1421,18 @@ const filterStatus = ref('')
 const filterGroupId = ref<string | number>('')
 
 const showCreateModal = ref(false)
+const showConnectionGuide = ref(false)
+const route = useRoute()
+const router = useRouter()
+watch(() => [route.query.create, route.query.guide], () => {
+  if (route.query.create !== '1' && route.query.guide !== '1') return
+  showCreateModal.value = route.query.create === '1'
+  showConnectionGuide.value = !showCreateModal.value && route.query.guide === '1'
+  const query = { ...route.query }
+  delete query.create
+  delete query.guide
+  void router.replace({ query, hash: route.hash })
+}, { immediate: true })
 const showEditModal = ref(false)
 const showDeleteDialog = ref(false)
 const showResetQuotaDialog = ref(false)
@@ -1803,6 +1831,11 @@ const closeGroupSelector = (event: MouseEvent) => {
 const confirmDelete = (key: ApiKey) => {
   selectedKey.value = key
   showDeleteDialog.value = true
+}
+
+function revealAdvancedOptions(event: Event) {
+  const details = event.currentTarget as HTMLDetailsElement
+  details.open = true
 }
 
 const handleSubmit = async () => {

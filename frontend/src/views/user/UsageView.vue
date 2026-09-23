@@ -1,7 +1,7 @@
 <template>
   <AppLayout>
-    <div class="space-y-6">
-      <UsageStatsCards :stats="usageStats" :show-account-cost="false" :strike-standard-cost="true" />
+    <div class="user-page space-y-6">
+      <UserPageHeader :title="t('userPages.usageTitle')" :description="t('userPages.usageDescription')" />
 
       <div class="space-y-4">
         <div class="card p-4">
@@ -23,6 +23,12 @@
           </div>
         </div>
 
+        <div class="user-usage-summary">
+          <UsageStatsCards :stats="usageStats" :show-account-cost="false" :strike-standard-cost="true" />
+        </div>
+        <details class="user-disclosure">
+          <summary>{{ t('userPages.analysis') }}<span>{{ t('userPages.analysisHint') }}</span></summary>
+          <div class="user-disclosure-body space-y-6">
         <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <ModelDistributionChart
             v-model:metric="modelDistributionMetric"
@@ -64,11 +70,14 @@
           />
           <TokenUsageTrend :trend-data="trendData" :loading="chartsLoading" />
         </div>
+          </div>
+        </details>
       </div>
 
-      <div class="card p-6">
+      <div class="user-filter-panel">
+        <h3 class="mb-4 text-sm font-semibold">{{ t('userPages.filters') }}</h3>
         <div class="flex flex-wrap items-end justify-between gap-4">
-          <div v-if="activeTab === 'errors'" class="flex flex-1 flex-wrap items-end gap-4">
+          <div v-if="activeTab === 'errors'" class="user-usage-filters">
             <div class="w-full sm:w-auto sm:min-w-[220px]">
               <label class="input-label">{{ t('usage.errors.keyName') }}</label>
               <Select v-model="errorFilter.api_key_id" :options="errorKeyOptions" @change="applyErrorFilters" />
@@ -94,7 +103,7 @@
               <Select v-model="errorFilter.status_code" :options="errorStatusOptions" @change="applyErrorFilters" />
             </div>
           </div>
-          <div v-else class="flex flex-1 flex-wrap items-end gap-4">
+          <div v-else class="user-usage-filters">
             <div class="w-full sm:w-auto sm:min-w-[220px]">
               <label class="input-label">{{ t('usage.apiKeyFilter') }}</label>
               <Select v-model="filters.api_key_id" :options="apiKeyOptions" @change="applyFilters" />
@@ -107,6 +116,9 @@
               <label class="input-label">{{ t('admin.usage.group') }}</label>
               <Select v-model="filters.group_id" :options="groupOptions" searchable @change="applyFilters" />
             </div>
+            <details class="user-disclosure user-usage-more">
+              <summary>{{ t('userPages.moreFilters') }}</summary>
+              <div class="user-disclosure-body user-usage-filters">
             <div class="w-full sm:w-auto sm:min-w-[180px]">
               <label class="input-label">{{ t('usage.type') }}</label>
               <Select v-model="filters.request_type" :options="requestTypeOptions" @change="applyFilters" />
@@ -123,9 +135,11 @@
               <label class="input-label">{{ t('admin.usage.billingMode') }}</label>
               <Select v-model="filters.billing_mode" :options="billingModeOptions" @change="applyFilters" />
             </div>
+              </div>
+            </details>
           </div>
 
-          <div class="flex w-full flex-wrap items-center justify-end gap-3 sm:w-auto">
+          <div class="flex w-full flex-wrap items-center justify-end gap-3">
             <button type="button" @click="refreshData" :disabled="activeTab === 'errors' ? errorLoading : loading" class="btn btn-secondary">
               {{ t('common.refresh') }}
             </button>
@@ -225,6 +239,7 @@ import { useAppStore } from '@/stores/app'
 import { FeatureFlags, resolveFeatureFlag } from '@/utils/featureFlags'
 import { keysAPI, usageAPI, userGroupsAPI } from '@/api'
 import AppLayout from '@/components/layout/AppLayout.vue'
+import UserPageHeader from '@/components/user/workspace/UserPageHeader.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import Select, { type SelectOption } from '@/components/common/Select.vue'
 import DateRangePicker from '@/components/common/DateRangePicker.vue'

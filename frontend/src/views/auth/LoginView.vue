@@ -2,10 +2,10 @@
   <AuthLayout>
     <div class="space-y-6">
       <!-- Title -->
-      <div class="text-center">
-        <h2 class="text-2xl font-bold text-gray-900 dark:text-white">
+      <div class="login-heading text-center">
+        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
           {{ t('auth.welcomeBack') }}
-        </h2>
+        </h1>
         <p class="mt-2 text-sm text-gray-500 dark:text-dark-400">
           {{ t('auth.signInToAccount') }}
         </p>
@@ -65,6 +65,8 @@
             <button
               type="button"
               @click="showPassword = !showPassword"
+              :aria-label="showPassword ? t('home.aino.loginHidePassword') : t('home.aino.loginShowPassword')"
+              :aria-pressed="showPassword"
               :disabled="authActionDisabled"
               class="absolute inset-y-0 right-0 flex items-center pr-3.5 text-gray-400 transition-colors hover:text-gray-600 dark:hover:text-dark-300"
             >
@@ -250,7 +252,7 @@
 import { computed, ref, reactive, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { AuthLayout } from '@/components/layout'
+import AuthLayout from '@/components/layout/AinoLoginLayout.vue'
 import LinuxDoOAuthSection from '@/components/auth/LinuxDoOAuthSection.vue'
 import DingTalkOAuthSection from '@/components/auth/DingTalkOAuthSection.vue'
 import OidcOAuthSection from '@/components/auth/OidcOAuthSection.vue'

@@ -1,27 +1,13 @@
 <template>
   <AppLayout>
-    <div class="mx-auto max-w-2xl space-y-6">
-      <!-- Current Balance Card -->
-      <div class="card overflow-hidden">
-        <div class="bg-gradient-to-br from-primary-500 to-primary-600 px-6 py-8 text-center">
-          <div
-            class="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-sm"
-          >
-            <Icon name="creditCard" size="xl" class="text-white" />
-          </div>
-          <p class="text-sm font-medium text-primary-100">{{ t('redeem.currentBalance') }}</p>
-          <p class="mt-2 text-4xl font-bold text-white">
-            ${{ user?.balance?.toFixed(2) || '0.00' }}
-          </p>
-          <p class="mt-2 text-sm text-primary-100">
-            {{ t('redeem.concurrency') }}: {{ user?.concurrency || 0 }} {{ t('redeem.requests') }}
-          </p>
-        </div>
-      </div>
+    <div class="user-page space-y-6">
+      <UserPageHeader :title="t('userPages.redeemTitle')" :description="t('userPages.redeemDescription')" />
+      <div class="user-redeem-grid">
 
       <!-- Redeem Form -->
-      <div class="card">
-        <div class="p-6">
+      <section class="user-redeem-form">
+          <h3>{{ t('userPages.redeemForm') }}</h3>
+          <p>{{ t('userPages.redeemNote') }}</p>
           <form @submit.prevent="handleRedeem" class="space-y-5">
             <div>
               <label for="code" class="input-label">
@@ -75,13 +61,19 @@
               {{ submitting ? t('redeem.redeeming') : t('redeem.redeemButton') }}
             </button>
           </form>
-        </div>
+      </section>
+      <aside class="user-redeem-balance">
+        <p>{{ t('redeem.currentBalance') }}</p>
+        <strong>${{ user?.balance?.toFixed(2) || '0.00' }}</strong>
+        <p>{{ t('redeem.concurrency') }}: {{ user?.concurrency || 0 }} {{ t('redeem.requests') }}</p>
+      </aside>
       </div>
 
       <!-- Success Message -->
       <transition name="fade">
         <div
           v-if="redeemResult"
+          role="status"
           class="card border-emerald-200 bg-emerald-50 dark:border-emerald-800/50 dark:bg-emerald-900/20"
         >
           <div class="p-6">
@@ -136,6 +128,7 @@
       <transition name="fade">
         <div
           v-if="errorMessage"
+          role="alert"
           class="card border-red-200 bg-red-50 dark:border-red-800/50 dark:bg-red-900/20"
         >
           <div class="p-6">
@@ -163,10 +156,9 @@
       </transition>
 
       <!-- Information Card -->
-      <div
-        class="card border-primary-200 bg-primary-50 dark:border-primary-800/50 dark:bg-primary-900/20"
-      >
-        <div class="p-6">
+      <details class="user-disclosure">
+        <summary>{{ t('redeem.aboutCodes') }}</summary>
+        <div class="user-disclosure-body">
           <div class="flex items-start gap-4">
             <div
               class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-primary-100 dark:bg-primary-900/30"
@@ -174,9 +166,6 @@
               <Icon name="infoCircle" size="md" class="text-primary-600 dark:text-primary-400" />
             </div>
             <div class="flex-1">
-              <h3 class="text-sm font-semibold text-primary-800 dark:text-primary-300">
-                {{ t('redeem.aboutCodes') }}
-              </h3>
               <ul
                 class="mt-2 list-inside list-disc space-y-1 text-sm text-primary-700 dark:text-primary-400"
               >
@@ -196,10 +185,10 @@
             </div>
           </div>
         </div>
-      </div>
+      </details>
 
       <!-- Recent Activity -->
-      <div class="card">
+      <div class="card user-redeem-history">
         <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
           <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
             {{ t('redeem.recentActivity') }}
@@ -230,7 +219,7 @@
             <div
               v-for="item in history"
               :key="item.id"
-              class="flex items-center justify-between rounded-xl bg-gray-50 p-4 dark:bg-dark-800"
+              class="history-row flex items-center justify-between"
             >
               <div class="flex items-center gap-4">
                 <div
@@ -349,6 +338,7 @@ import { useAppStore } from '@/stores/app'
 import { useSubscriptionStore } from '@/stores/subscriptions'
 import { redeemAPI, authAPI, type RedeemHistoryItem } from '@/api'
 import AppLayout from '@/components/layout/AppLayout.vue'
+import UserPageHeader from '@/components/user/workspace/UserPageHeader.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { formatDateTime } from '@/utils/format'
 

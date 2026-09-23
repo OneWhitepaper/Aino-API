@@ -1,6 +1,17 @@
 <template>
   <AppLayout>
-    <div class="space-y-6">
+    <div class="user-page space-y-6">
+      <UserPageHeader :title="t('userPages.subscriptionsTitle')" :description="t('userPages.subscriptionsDescription')">
+        <button v-if="purchaseEnabled" class="btn btn-primary" @click="router.push({ path: '/purchase', query: { tab: 'subscription' } })">{{ t('userPages.browsePlans') }}</button>
+      </UserPageHeader>
+      <template v-if="!loading && !loadFailed">
+        <dl class="user-summary">
+          <div><dt>{{ t('userPages.activePlans') }}</dt><dd>{{ activePlans.length }}</dd></div>
+          <div><dt>{{ t('userPages.expiringPlans') }}</dt><dd>{{ expiringPlans.length }}</dd></div>
+          <div><dt>{{ t('userPages.allPlans') }}</dt><dd>{{ subscriptions.length }}</dd></div>
+        </dl>
+        <UserSectionNav v-model="selectedSection" :items="sections" :label="t('userPages.subscriptionsTitle')" />
+      </template>
       <!-- Loading State -->
       <div v-if="loading" class="flex justify-center py-12">
         <div
@@ -9,6 +20,10 @@
       </div>
 
       <!-- Empty State -->
+      <div v-else-if="loadFailed" role="alert" class="card p-8 text-center">
+        <p>{{ t('userPages.subscriptionsFailed') }}</p>
+        <button class="btn btn-secondary mt-4" @click="loadSubscriptions">{{ t('workspace.retry') }}</button>
+      </div>
       <div v-else-if="subscriptions.length === 0" class="card p-12 text-center">
         <div
           class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100 dark:bg-dark-700"
@@ -24,17 +39,15 @@
       </div>
 
       <!-- Subscriptions Grid -->
-      <div v-else class="grid gap-6 lg:grid-cols-2">
+      <div v-else-if="visibleSubscriptions.length === 0" class="card p-12 text-center text-gray-500 dark:text-gray-400">{{ t('userPages.noMatchingPlans') }}</div>
+      <div v-else class="space-y-6">
         <div
-          v-for="subscription in subscriptions"
+          v-for="subscription in visibleSubscriptions"
           :key="subscription.id"
-          class="overflow-hidden rounded-2xl border bg-white dark:bg-dark-800"
-          :class="platformBorderClass(subscription.group?.platform || '')"
+          class="user-subscription-card"
         >
           <!-- Header -->
-          <div
-            class="flex items-center justify-between border-b border-gray-100 p-4 dark:border-dark-700"
-          >
+          <header>
             <div class="flex items-center gap-3">
               <div :class="['h-1.5 w-1.5 shrink-0 rounded-full', platformAccentDotClass(subscription.group?.platform || '')]" />
               <div>
@@ -71,17 +84,17 @@
                 {{ t(`userSubscriptions.status.${subscription.status}`) }}
               </span>
               <button
-                v-if="subscription.status === 'active'"
-                :class="['rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition-colors', platformButtonClass(subscription.group?.platform || '')]"
+                v-if="subscription.status === 'active' && purchaseEnabled"
+                class="btn btn-primary btn-sm"
                 @click="router.push({ path: '/purchase', query: { tab: 'subscription', group: String(subscription.group_id) } })"
               >
                 {{ t('payment.renewNow') }}
               </button>
             </div>
-          </div>
+          </header>
 
           <!-- Usage Progress -->
-          <div class="space-y-4 p-4">
+          <div class="user-subscription-body space-y-4">
             <!-- Expiration Info -->
             <div v-if="subscription.expires_at" class="flex items-center justify-between text-sm">
               <span class="text-gray-500 dark:text-dark-400">{{
@@ -226,7 +239,7 @@
                 !subscription.group?.weekly_limit_usd &&
                 !subscription.group?.monthly_limit_usd
               "
-              class="flex items-center justify-center rounded-xl bg-gradient-to-r from-emerald-50 to-teal-50 py-6 dark:from-emerald-900/20 dark:to-teal-900/20"
+              class="subscription-unlimited flex items-center justify-center rounded-xl bg-primary-50 py-6 dark:bg-primary-900/20"
             >
               <div class="flex items-center gap-3">
                 <span class="text-4xl text-emerald-600 dark:text-emerald-400">∞</span>
@@ -248,17 +261,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import subscriptionsAPI from '@/api/subscriptions'
 import type { UserSubscription } from '@/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
+import UserPageHeader from '@/components/user/workspace/UserPageHeader.vue'
+import UserSectionNav from '@/components/user/workspace/UserSectionNav.vue'
+import { FeatureFlags, resolveFeatureFlag } from '@/utils/featureFlags'
 import Icon from '@/components/icons/Icon.vue'
 import { formatDateTimeToMinute } from '@/utils/format'
 import { hasPeakRate, formatPeakRateWindow, serverTimezoneLabel } from '@/utils/peak-rate'
-import { platformBorderClass, platformBadgeClass, platformButtonClass, platformLabel } from '@/utils/platformColors'
+import { platformBadgeClass, platformLabel } from '@/utils/platformColors'
 import {
   getExpirationDateRelation,
   getRemainingDurationParts,
@@ -282,6 +298,21 @@ const appStore = useAppStore()
 
 const subscriptions = ref<UserSubscription[]>([])
 const loading = ref(true)
+const loadFailed = ref(false)
+const selectedSection = ref('active')
+const sections = computed(() => [
+  { value: 'active', label: t('userPages.activePlans') },
+  { value: 'all', label: t('userPages.allPlans') },
+  { value: 'history', label: t('userPages.historyPlans') },
+])
+const purchaseEnabled = computed(() => resolveFeatureFlag(appStore.cachedPublicSettings, FeatureFlags.payment) && resolveFeatureFlag(appStore.cachedPublicSettings, FeatureFlags.subscription))
+const activePlans = computed(() => subscriptions.value.filter(item => item.status === 'active'))
+const expiringPlans = computed(() => activePlans.value.filter(item => {
+  if (!item.expires_at) return false
+  const remaining = new Date(item.expires_at).getTime() - Date.now()
+  return remaining > 0 && remaining <= 7 * 24 * 60 * 60 * 1000
+}))
+const visibleSubscriptions = computed(() => subscriptions.value.filter(item => selectedSection.value === 'all' || (selectedSection.value === 'active' ? item.status === 'active' : item.status !== 'active')))
 
 function subscriptionHasPeakRate(subscription: UserSubscription): boolean {
   return hasPeakRate(subscription.group)
@@ -295,7 +326,9 @@ async function loadSubscriptions() {
   try {
     loading.value = true
     subscriptions.value = await subscriptionsAPI.getMySubscriptions()
+    loadFailed.value = false
   } catch (error) {
+    loadFailed.value = true
     console.error('Failed to load subscriptions:', error)
     appStore.showError(t('userSubscriptions.failedToLoad'))
   } finally {

@@ -279,7 +279,7 @@ const isAdminArea = computed(() => isAdmin.value && (
 const sidebarNavRef = ref<HTMLElement | null>(null)
 const isDark = ref(document.documentElement.classList.contains('dark'))
 
-const homePath = computed(() => (isAdminArea.value ? '/admin/dashboard' : '/dashboard'))
+const homePath = '/home'
 
 // Per-group expand/collapse overrides. A group with no entry follows the
 // automatic behavior (expanded while the active route is one of its children);

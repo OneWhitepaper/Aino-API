@@ -11,11 +11,13 @@ import { getSetupStatus } from '@/api/setup'
 import { updateFavicon } from '@/utils/branding'
 import { FeatureFlags, isFeatureFlagEnabled } from '@/utils/featureFlags'
 import { resolveSiteBillingMode } from '@/utils/siteBillingMode'
+import { useLoginEntryTransition } from '@/composables/useLoginEntryTransition'
 
 const router = useRouter()
 const route = useRoute()
 const appStore = useAppStore()
 const authStore = useAuthStore()
+const { entering, finish: finishLoginEntry } = useLoginEntryTransition(() => authStore.isAuthenticated)
 const subscriptionStore = useSubscriptionStore()
 const announcementStore = useAnnouncementStore()
 const adminComplianceStore = useAdminComplianceStore()
@@ -131,8 +133,32 @@ onMounted(async () => {
 
 <template>
   <NavigationProgress />
-  <RouterView />
+  <div :class="{ 'aino-login-entry': entering }" @animationend.self="finishLoginEntry">
+    <RouterView />
+  </div>
   <Toast />
   <AnnouncementPopup />
   <AdminComplianceDialog />
 </template>
+
+<style>
+.aino-login-entry {
+  animation: aino-login-fade 420ms ease-out;
+}
+.aino-login-entry #main-content {
+  animation: aino-login-content 420ms cubic-bezier(.22, 1, .36, 1);
+}
+@keyframes aino-login-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes aino-login-content {
+  from { transform: translateY(10px); }
+  to { transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .aino-login-entry, .aino-login-entry #main-content {
+    animation: none;
+  }
+}
+</style>

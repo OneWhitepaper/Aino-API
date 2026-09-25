@@ -34,6 +34,8 @@ func NewUserHandler(
 	emailCache service.EmailCache,
 	affiliateService *service.AffiliateService,
 	userPlatformQuotaRepo service.UserPlatformQuotaRepository,
+	totpService *service.TotpService,
+	settingService *service.SettingService,
 ) *UserHandler {
 	return &UserHandler{
 		userService:           userService,
@@ -42,18 +44,9 @@ func NewUserHandler(
 		emailCache:            emailCache,
 		affiliateService:      affiliateService,
 		userPlatformQuotaRepo: userPlatformQuotaRepo,
+		totpService:           totpService,
+		settingService:        settingService,
 	}
-}
-
-// SetStepUpDependencies attaches the services used to protect sensitive
-// account-binding operations.  It is a setter so existing constructor callers
-// and focused handler tests remain source-compatible.
-func (h *UserHandler) SetStepUpDependencies(totpService *service.TotpService, settingService *service.SettingService) {
-	if h == nil {
-		return
-	}
-	h.totpService = totpService
-	h.settingService = settingService
 }
 
 // GetMyPlatformQuotas GET /user/platform-quotas

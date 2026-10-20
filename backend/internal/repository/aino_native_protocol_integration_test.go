@@ -197,7 +197,7 @@ func (p *ainoNativeProtocol) ServeHTTP(w http.ResponseWriter, req *http.Request)
 	}
 	call := p.rig.modelCalls.Add(1)
 	last := body.Messages[len(body.Messages)-1]
-	toolID := "fixture-native-read"
+	toolID := fmt.Sprintf("fixture-native-read-%d", call)
 	arguments, _ := json.Marshal(map[string]string{"path": p.path})
 	message := map[string]any{"role": "assistant", "content": nil, "tool_calls": []any{map[string]any{"id": toolID, "type": "function", "function": map[string]any{"name": "read_file", "arguments": string(arguments)}}}}
 	finish := "tool_calls"
@@ -228,7 +228,7 @@ func (p *ainoNativeProtocol) ServeHTTP(w http.ResponseWriter, req *http.Request)
 			}
 			break
 		}
-		if last.ToolCallID != toolID || !matched || !strings.Contains(string(last.Content), p.content) {
+		if !matched || !strings.Contains(string(last.Content), p.content) {
 			http.Error(w, "native tool roundtrip mismatch", 400)
 			return
 		}
@@ -545,4 +545,41 @@ func TestRegisterNativeProtocolCleanupSignalsShutdownBeforeServerClose(t *testin
 	})
 
 	require.True(t, serverClosedAfterShutdown)
+}
+
+func TestAinoNativeProtocolUsesUniqueToolIDsAcrossHistory(t *testing.T) {
+	protocol := &ainoNativeProtocol{rig: &ainoPlatformFixture{runID: "tool-history"}, path: "/fixture.txt", content: "fixture content"}
+	messages := []map[string]any{{"role": "user", "content": "Read fixture"}}
+	tools := []any{map[string]any{"function": map[string]any{"name": "read_file", "parameters": map[string]any{"properties": map[string]any{"path": map[string]any{}}}}}}
+	send := func() *httptest.ResponseRecorder {
+		body, err := json.Marshal(map[string]any{"model": "fixture-tool-model", "messages": messages, "tools": tools})
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewReader(body))
+		req.Header.Set("Authorization", "Bearer fixture-upstream-key")
+		reply := httptest.NewRecorder()
+		protocol.ServeHTTP(reply, req)
+		return reply
+	}
+	ids := map[string]bool{}
+	for turn := 0; turn < 2; turn++ {
+		reply := send()
+		require.Equal(t, http.StatusOK, reply.Code, reply.Body.String())
+		var response struct {
+			Choices []struct{ Message map[string]any }
+		}
+		require.NoError(t, json.Unmarshal(reply.Body.Bytes(), &response))
+		message := response.Choices[0].Message
+		call := message["tool_calls"].([]any)[0].(map[string]any)
+		id := call["id"].(string)
+		require.False(t, ids[id], "each tool invocation needs a unique ID across persisted history")
+		ids[id] = true
+		messages = append(messages, message, map[string]any{"role": "tool", "tool_call_id": id, "content": protocol.content})
+		reply = send()
+		require.Equal(t, http.StatusOK, reply.Code, reply.Body.String())
+		require.Contains(t, reply.Body.String(), "Verified fixture content")
+		messages = append(messages, map[string]any{"role": "assistant", "content": "Verified fixture content"}, map[string]any{"role": "user", "content": "Read again after restart"})
+	}
+	require.EqualValues(t, 2, protocol.toolResults.Load())
+	messages = append(messages, map[string]any{"role": "tool", "tool_call_id": "unpaired", "content": protocol.content})
+	require.Equal(t, http.StatusBadRequest, send().Code)
 }

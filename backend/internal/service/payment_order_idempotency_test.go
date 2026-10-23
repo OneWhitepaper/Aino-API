@@ -81,3 +81,20 @@ func TestPaymentIdempotencyExpectedQuoteIsStrictAndComparisonOnly(t *testing.T) 
 		require.False(t, paymentQuoteMatchesOrder(&q, o))
 	}
 }
+
+func TestPaymentIdempotencyDiscountQuoteUsesPersistedPaymentBase(t *testing.T) {
+	quote := &PaymentQuote{RequestedAmount: "100", PayAmount: "82.00", CreditAmount: "14.00000000", FeeAmount: "2.00", PaymentCurrency: "CNY", CreditCurrency: "USD"}
+	order := &dbent.PaymentOrder{Amount: 14, PayAmount: 82, BonusAmount: 2.8, ProviderSnapshot: map[string]any{
+		"requested_amount": "100", "pay_base_amount": "80", "currency": "CNY",
+	}}
+	fields := PaymentOrderDecimalDetails(order)
+	require.Equal(t, "100", fields.RequestedAmountDecimal)
+	require.Equal(t, "2.00", fields.FeeAmountDecimal)
+	require.True(t, paymentQuoteMatchesOrder(quote, order))
+
+	order.ProviderSnapshot["pay_base_amount"] = "invalid"
+	require.False(t, paymentQuoteMatchesOrder(quote, order), "invalid stored metadata must require a new confirmation")
+	quote.PayAmount, quote.FeeAmount = "80", "0"
+	order.PayAmount = 80
+	require.False(t, paymentQuoteMatchesOrder(quote, order), "a missing fee must not be interpreted as zero")
+}

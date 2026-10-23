@@ -114,7 +114,7 @@ func TestQuoteMatchesTheActualOrderAmounts(t *testing.T) {
 	payments := service.NewPaymentService(r.client, payment.NewRegistry(), payment.NewDefaultLoadBalancer(r.client, nil), nil, nil, cfg, r.userRepo, r.groups, nil)
 	ph := handler.NewPaymentHandler(payments, cfg)
 	routes.RegisterPaymentRoutes(r.router.Group("/api/v1"), ph, nil, nil,
-		middleware.NewJWTAuthMiddleware(r.auth, r.users, r.settings, nil), func(c *gin.Context) { c.AbortWithStatus(http.StatusForbidden) }, func(c *gin.Context) { c.Next() }, r.settings, middleware.NewPanelRateLimiter(r.redis, r.settings))
+		middleware.NewJWTAuthMiddleware(r.auth, r.users, r.settings, nil), func(c *gin.Context) { c.AbortWithStatus(http.StatusForbidden) }, func(c *gin.Context) { c.Next() }, r.settings, middleware.NewPanelRateLimiter(r.redis, r.settings), r.redis)
 	token, err := r.auth.GenerateToken(r.ctx, u)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusUnauthorized, r.request(http.MethodPost, "/api/v1/payment/quote", `{"amount":"20.00","payment_type":"alipay","order_type":"balance"}`, "").Code)

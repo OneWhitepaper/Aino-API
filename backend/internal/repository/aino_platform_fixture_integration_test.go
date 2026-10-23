@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -187,12 +188,27 @@ func (r *ainoPlatformFixture) wireModel(t *testing.T, userID int64) {
 
 func (r *ainoPlatformFixture) wirePayment(t *testing.T) {
 	t.Helper()
+	var merchantAmounts sync.Map
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		require.NoError(t, req.ParseForm())
+		if req.URL.Path == "/api.php" {
+			amount, ok := merchantAmounts.Load(req.Form.Get("out_trade_no"))
+			if !ok {
+				http.Error(w, "unknown merchant order", http.StatusNotFound)
+				return
+			}
+			require.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+				"code": 1, "status": 1, "money": amount, "trade_no": "fixture-payment",
+				"out_trade_no": req.Form.Get("out_trade_no"),
+			}))
+			return
+		}
 		if req.URL.Path != "/mapi.php" {
 			t.Error("unexpected payment request")
 			http.Error(w, "unexpected route", 400)
 			return
 		}
+		merchantAmounts.Store(req.Form.Get("out_trade_no"), req.Form.Get("money"))
 		r.paymentCalls.Add(1)
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{"code":1,"trade_no":"fixture-payment","qrcode":"weixin://fixture"}`)
@@ -211,7 +227,7 @@ func (r *ainoPlatformFixture) wirePayment(t *testing.T) {
 	registry := payment.NewRegistry()
 	payments := service.NewPaymentService(r.client, registry, payment.NewDefaultLoadBalancer(r.client, nil), redeem, nil, cfg, r.userRepo, r.groups, nil)
 	jwt := middleware.NewJWTAuthMiddleware(r.auth, r.users, r.settings, nil)
-	routes.RegisterPaymentRoutes(r.router.Group("/api/v1"), handler.NewPaymentHandler(payments, cfg), nil, nil, jwt, func(c *gin.Context) { c.AbortWithStatus(403) }, func(c *gin.Context) { c.Next() }, r.settings, middleware.NewPanelRateLimiter(r.redis, r.settings))
+	routes.RegisterPaymentRoutes(r.router.Group("/api/v1"), handler.NewPaymentHandler(payments, cfg), nil, nil, jwt, func(c *gin.Context) { c.AbortWithStatus(403) }, func(c *gin.Context) { c.Next() }, r.settings, middleware.NewPanelRateLimiter(r.redis, r.settings), r.redis)
 	r.router.POST("/fixture/notify", handler.NewPaymentWebhookHandler(payments, registry).EasyPayNotify)
 	subs := service.NewSubscriptionService(r.groups, r.subs, nil, r.client, nil)
 	t.Cleanup(subs.Stop)

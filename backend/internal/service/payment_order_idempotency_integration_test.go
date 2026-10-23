@@ -340,6 +340,61 @@ func TestPaymentIdempotencyDecimalQuoteAndLegacyCompatibility(t *testing.T) {
 	}
 }
 
+func TestPaymentIdempotencyRechargePromotionsPreserveQuoteAndReplay(t *testing.T) {
+	for _, test := range []struct {
+		mode, pay, credit, fee string
+	}{
+		{service.RechargeBonusModeBonus, "102.50", "16.80000000", "2.50"},
+		{service.RechargeBonusModeDiscount, "82.00", "14.00000000", "2.00"},
+	} {
+		t.Run(test.mode, func(t *testing.T) {
+			r := newPaymentIdempotencyRig(t)
+			ctx := context.Background()
+			require.NoError(t, repository.NewSettingRepository(r.client).SetMultiple(ctx, map[string]string{
+				service.SettingBalanceRechargeMult: "0.14",
+				service.SettingRechargeFeeRate:     "2.5",
+				service.SettingRechargeBonusMode:   test.mode,
+				service.SettingRechargeBonusTiers:  `[{"min_amount":100,"bonus_percent":20}]`,
+			}))
+			quote, err := r.payments.QuoteBalance(ctx, r.userID, service.PaymentQuoteInput{Amount: "100", PaymentType: "alipay", OrderType: "balance"})
+			require.NoError(t, err)
+			require.Equal(t, test.pay, quote.PayAmount)
+			require.Equal(t, test.credit, quote.CreditAmount)
+			require.Equal(t, test.fee, quote.FeeAmount)
+			body, err := json.Marshal(map[string]any{
+				"amount_decimal": "100", "client_order_id": uuid.NewString(), "payment_source": "aino_desktop",
+				"payment_type": "alipay", "order_type": "balance", "expected_quote": quote,
+			})
+			require.NoError(t, err)
+			var orderID int64
+			for range 2 {
+				w := httptest.NewRecorder()
+				r.router.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/orders", strings.NewReader(string(body))))
+				require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+				var result struct {
+					Data service.CreateOrderResponse `json:"data"`
+				}
+				require.NoError(t, json.Unmarshal(w.Body.Bytes(), &result))
+				require.False(t, result.Data.ConfirmationRequired)
+				require.Equal(t, test.pay, result.Data.PayAmountDecimal)
+				require.Equal(t, test.credit, result.Data.CreditAmountDecimal)
+				require.Equal(t, test.fee, result.Data.FeeAmountDecimal)
+				require.Equal(t, 2.8, result.Data.BonusAmount)
+				if orderID != 0 {
+					require.Equal(t, orderID, result.Data.OrderID)
+				}
+				orderID = result.Data.OrderID
+			}
+			require.EqualValues(t, 1, r.creates.Load())
+			w := httptest.NewRecorder()
+			r.router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, fmt.Sprintf("/orders/%d", orderID), nil))
+			require.Equal(t, http.StatusOK, w.Code)
+			require.Contains(t, w.Body.String(), `"fee_amount_decimal":"`+test.fee+`"`)
+			require.Contains(t, w.Body.String(), `"bonus_amount":2.8`)
+		})
+	}
+}
+
 func TestPaymentIdempotencyReclaimsOnlyUndispatchedCreation(t *testing.T) {
 	r := newPaymentIdempotencyRig(t)
 	var fail atomic.Bool
@@ -460,7 +515,14 @@ func TestPaymentIdempotencyQueryBackfillPreservesCallbackFulfillmentLease(t *tes
 	var releaseQuery, releaseFulfillment sync.Once
 	defer releaseQuery.Do(func() { close(allowQuery) })
 	defer releaseFulfillment.Do(func() { close(allowFulfillment) })
+	var queryCalls atomic.Int64
 	r.queryReply = func(w http.ResponseWriter, req *http.Request) {
+		if queryCalls.Add(1) > 1 {
+			// Callback confirmation is an independent provider query and must
+			// finish while the original recovery query remains blocked.
+			_, _ = w.Write([]byte(`{"code":1,"status":1,"money":"20.00","trade_no":"fixture"}`))
+			return
+		}
 		close(queryStarted)
 		select {
 		case <-allowQuery:
@@ -537,6 +599,9 @@ func TestPaymentIdempotencySignedCallbacksCreditOnlyOnce(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	o, err := r.client.PaymentOrder.Query().Only(context.Background())
 	require.NoError(t, err)
+	r.queryReply = func(w http.ResponseWriter, req *http.Request) {
+		_, _ = w.Write([]byte(`{"code":1,"status":1,"money":"20.00","trade_no":"fixture"}`))
+	}
 	notify := func(money, pid, status string, valid bool) *httptest.ResponseRecorder {
 		return r.notify(o.OutTradeNo, money, pid, status, valid)
 	}

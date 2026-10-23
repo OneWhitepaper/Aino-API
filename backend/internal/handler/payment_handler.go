@@ -80,7 +80,7 @@ func (h *PaymentHandler) GetPlans(c *gin.Context) {
 		gi := groupInfo[p.GroupID]
 		result = append(result, planWithPlatform{
 			ID: int64(p.ID), GroupID: p.GroupID,
-			GroupPlatform: gi.Platform, GroupName: gi.Name,
+			GroupPlatform: gi.Platform, GroupName: gi.I18n.LocalizeName(c.GetHeader("Accept-Language"), gi.Name),
 			RateMultiplier: gi.RateMultiplier, PeakRateEnabled: gi.PeakRateEnabled,
 			PeakStart: gi.PeakStart, PeakEnd: gi.PeakEnd, PeakRateMultiplier: gi.PeakRateMultiplier,
 			Name: p.Name, Description: p.Description, Price: p.Price, OriginalPrice: p.OriginalPrice,
@@ -128,7 +128,7 @@ func (h *PaymentHandler) GetCheckoutInfo(c *gin.Context) {
 		gi := groupInfo[p.GroupID]
 		planList = append(planList, checkoutPlan{
 			ID: int64(p.ID), GroupID: p.GroupID,
-			GroupPlatform: gi.Platform, GroupName: gi.Name,
+			GroupPlatform: gi.Platform, GroupName: gi.I18n.LocalizeName(c.GetHeader("Accept-Language"), gi.Name),
 			RateMultiplier:  gi.RateMultiplier,
 			PeakRateEnabled: gi.PeakRateEnabled, PeakStart: gi.PeakStart,
 			PeakEnd: gi.PeakEnd, PeakRateMultiplier: gi.PeakRateMultiplier,
@@ -151,6 +151,9 @@ func (h *PaymentHandler) GetCheckoutInfo(c *gin.Context) {
 		BalanceRechargeMultiplier:     cfg.BalanceRechargeMultiplier,
 		SubscriptionUSDToCNYRate:      cfg.SubscriptionUSDToCNYRate,
 		RechargeFeeRate:               cfg.RechargeFeeRate,
+		RechargeBonusTiers:            cfg.RechargeBonusTiers,
+		RechargeBonusMode:             cfg.RechargeBonusMode,
+		RechargeBonusNotice:           cfg.RechargeBonusNotice,
 		HelpText:                      cfg.HelpText,
 		HelpImageURL:                  cfg.HelpImageURL,
 		StripePublishableKey:          cfg.StripePublishableKey,
@@ -168,6 +171,9 @@ type checkoutInfoResponse struct {
 	BalanceRechargeMultiplier     float64                         `json:"balance_recharge_multiplier"`
 	SubscriptionUSDToCNYRate      float64                         `json:"subscription_usd_to_cny_rate"`
 	RechargeFeeRate               float64                         `json:"recharge_fee_rate"`
+	RechargeBonusTiers            []service.RechargeBonusTier     `json:"recharge_bonus_tiers"`
+	RechargeBonusMode             string                          `json:"recharge_bonus_mode"`
+	RechargeBonusNotice           string                          `json:"recharge_bonus_notice"`
 	HelpText                      string                          `json:"help_text"`
 	HelpImageURL                  string                          `json:"help_image_url"`
 	StripePublishableKey          string                          `json:"stripe_publishable_key"`
@@ -534,6 +540,7 @@ type PublicOrderResult struct {
 	Amount              float64    `json:"amount"`
 	PayAmount           float64    `json:"pay_amount"`
 	FeeRate             float64    `json:"fee_rate"`
+	BonusAmount         float64    `json:"bonus_amount"`
 	Currency            string     `json:"currency"`
 	PaymentType         string     `json:"payment_type"`
 	OrderType           string     `json:"order_type"`
@@ -569,6 +576,7 @@ func buildPublicOrderResult(order *dbent.PaymentOrder) PublicOrderResult {
 		Amount:              order.Amount,
 		PayAmount:           order.PayAmount,
 		FeeRate:             order.FeeRate,
+		BonusAmount:         order.BonusAmount,
 		Currency:            service.PaymentOrderCurrency(order),
 		PaymentType:         order.PaymentType,
 		OrderType:           order.OrderType,
@@ -680,6 +688,7 @@ type PaymentOrderResult struct {
 	UserID               int64                    `json:"user_id"`
 	Amount               float64                  `json:"amount"`
 	PayAmount            float64                  `json:"pay_amount"`
+	BonusAmount          float64                  `json:"bonus_amount"`
 	FeeRate              float64                  `json:"fee_rate"`
 	Currency             string                   `json:"currency"`
 	PaymentType          string                   `json:"payment_type"`
@@ -723,6 +732,7 @@ func sanitizePaymentOrderForResponse(order *dbent.PaymentOrder) *PaymentOrderRes
 		Amount:                    order.Amount,
 		PayAmount:                 order.PayAmount,
 		FeeRate:                   order.FeeRate,
+		BonusAmount:               order.BonusAmount,
 		Currency:                  service.PaymentOrderCurrency(order),
 		PaymentType:               order.PaymentType,
 		OutTradeNo:                order.OutTradeNo,

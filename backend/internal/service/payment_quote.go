@@ -48,6 +48,7 @@ func ParsePaymentAmountDecimal(raw string) (float64, error) {
 
 type paymentOrderAmounts struct {
 	credit   float64
+	bonus    float64
 	limit    float64
 	pay      float64
 	payText  string
@@ -67,6 +68,11 @@ func resolvePaymentOrderAmounts(req CreateOrderRequest, cfg *PaymentConfig, plan
 	}
 	if plan == nil && req.OrderType == payment.OrderTypeBalance {
 		a.credit = calculateCreditedBalance(req.Amount, cfg.BalanceRechargeMultiplier)
+		if math.IsNaN(a.credit) || math.IsInf(a.credit, 0) || a.credit <= 0 || a.credit >= 1e12 {
+			return nil, infraerrors.BadRequest("INVALID_AMOUNT", "credited amount exceeds wallet storage range")
+		}
+		quote := quoteRechargeBonus(cfg, req.Amount, currency)
+		a.credit, a.limit, a.bonus = quote.Credited, quote.PayBase, quote.Bonus
 	}
 	// Wallet amounts use NUMERIC(20,8); payment-order amounts use NUMERIC(20,2).
 	if math.IsNaN(a.credit) || math.IsInf(a.credit, 0) || a.credit <= 0 || a.credit >= 1e12 {

@@ -14,12 +14,12 @@
       :loading="loading"
       :auto-refresh="autoRefresh"
       @update:window="handleWindowChange"
-      @refresh="manualReload"
+      @refresh="refresh()"
     />
 
     <div v-if="loadFailed" role="alert" class="card p-8 text-center">
       <p>{{ t('userPages.monitorFailed') }}</p>
-      <button class="btn btn-secondary mt-4" :disabled="loading" @click="manualReload">{{ t('workspace.retry') }}</button>
+      <button class="btn btn-secondary mt-4" :disabled="loading" @click="refresh()">{{ t('workspace.retry') }}</button>
     </div>
     <MonitorCardGrid
       v-else
@@ -82,7 +82,7 @@ const autoRefresh = useAutoRefresh({
   intervals: [30, 60, 120] as const,
   defaultInterval: DEFAULT_INTERVAL_SECONDS,
   defaultEnabled: true,
-  onRefresh: () => reload(true),
+  onRefresh: () => refresh(true),
   shouldPause: () => document.hidden || loading.value,
 })
 const countdown = autoRefresh.countdown
@@ -128,8 +128,8 @@ async function reload(silent = false) {
   }
 }
 
-async function manualReload() {
-  await reload(false)
+async function refresh(silent = false) {
+  await reload(silent)
   // After base reload, refresh any cached detail records so non-7d availability
   // values stay in sync without forcing the user to switch tabs again.
   if (currentWindow.value !== '7d') {

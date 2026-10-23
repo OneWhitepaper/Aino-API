@@ -60,3 +60,29 @@ func TestPaymentQuoteOrderResolverRejectsInvalidAmountsWithoutPanic(t *testing.T
 		})
 	}
 }
+
+func TestPaymentQuoteOrderResolverAppliesRechargePromotions(t *testing.T) {
+	for _, test := range []struct {
+		mode       string
+		wantCredit float64
+		wantLimit  float64
+		wantPay    string
+	}{
+		{RechargeBonusModeBonus, 16.8, 100, "102.50"},
+		{RechargeBonusModeDiscount, 14, 80, "82.00"},
+	} {
+		t.Run(test.mode, func(t *testing.T) {
+			cfg := &PaymentConfig{
+				BalanceRechargeMultiplier: 0.14,
+				RechargeFeeRate:           2.5,
+				RechargeBonusMode:         test.mode,
+				RechargeBonusTiers:        []RechargeBonusTier{{MinAmount: 100, BonusPercent: 20}},
+			}
+			got, err := resolvePaymentOrderAmounts(CreateOrderRequest{Amount: 100, OrderType: "balance"}, cfg, nil, "CNY")
+			require.NoError(t, err)
+			require.Equal(t, test.wantCredit, got.credit)
+			require.Equal(t, test.wantLimit, got.limit)
+			require.Equal(t, test.wantPay, got.payText)
+		})
+	}
+}

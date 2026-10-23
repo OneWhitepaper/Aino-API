@@ -54,6 +54,13 @@ func PaymentOrderDecimalDetails(o *dbent.PaymentOrder) PaymentOrderDecimalFields
 	if _, err := ParsePaymentAmountDecimal(requested); err == nil {
 		d, _ := decimal.NewFromString(requested)
 		fields.RequestedAmountDecimal = d.String()
+		if raw, exists := o.ProviderSnapshot["pay_base_amount"]; exists {
+			base, ok := raw.(string)
+			if _, err := ParsePaymentAmountDecimal(base); !ok || err != nil {
+				return fields
+			}
+			d, _ = decimal.NewFromString(base)
+		}
 		fields.FeeAmountDecimal = decimal.NewFromFloat(o.PayAmount).Sub(d).StringFixed(int32(payment.CurrencyMaxFractionDigits(currency)))
 	}
 	return fields
@@ -138,8 +145,8 @@ func paymentQuoteMatchesOrder(q *PaymentQuote, o *dbent.PaymentOrder) bool {
 	actual := []string{fields.RequestedAmountDecimal, fields.PayAmountDecimal, fields.CreditAmountDecimal, fields.FeeAmountDecimal}
 	for i, raw := range []string{q.RequestedAmount, q.PayAmount, q.CreditAmount, q.FeeAmount} {
 		d, err := decimal.NewFromString(raw)
-		value, _ := decimal.NewFromString(actual[i])
-		if err != nil || !d.Equal(value) {
+		value, actualErr := decimal.NewFromString(actual[i])
+		if err != nil || actualErr != nil || !d.Equal(value) {
 			return false
 		}
 	}
@@ -269,6 +276,7 @@ func (s *PaymentService) clientOrderResponse(ctx context.Context, o *dbent.Payme
 	checkout := PaymentOrderCheckout(o)
 	resp := &CreateOrderResponse{OrderID: o.ID, Amount: o.Amount, PayAmount: o.PayAmount, FeeRate: o.FeeRate, Status: o.Status, PaymentType: o.PaymentType, OutTradeNo: o.OutTradeNo, ExpiresAt: o.ExpiresAt, Currency: PaymentOrderCurrency(o), ConfirmationRequired: confirmation, PaymentUnknown: o.Status == OrderStatusPending && o.CreationState != "complete", Checkout: checkout, ResultType: payment.CreatePaymentResultOrderCreated}
 	resp.PaymentOrderDecimalFields = PaymentOrderDecimalDetails(o)
+	resp.BonusAmount = o.BonusAmount
 	if checkout != nil {
 		resp.PayURL = checkout.PayURL
 		resp.QRCode = checkout.QRCode

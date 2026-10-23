@@ -31,6 +31,9 @@ func RegisterAdminRoutes(
 	admin.Use(gin.HandlerFunc(auditLog))
 	admin.Use(middleware.AdminComplianceGuard(settingService))
 	{
+		admin.GET("/diagnostics", h.Desktop.ListDiagnostics)
+		admin.GET("/diagnostics/:id", h.Desktop.ReadDiagnostic)
+		admin.DELETE("/diagnostics/:id", h.Desktop.DeleteDiagnostic)
 		// 部署与运营合规确认
 		registerAdminComplianceRoutes(admin, h)
 

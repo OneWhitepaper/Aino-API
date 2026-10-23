@@ -1014,6 +1014,8 @@ var ProviderSet = wire.NewSet(
 	NewModelPlazaService,
 	NewDesktopModelService,
 	NewDesktopBillingService,
+	NewDiagnosticsService,
+	ProvideDiagnosticsCleanup,
 	NewDesktopCredentialService,
 	NewContentModerationService,
 	NewAffiliateService,

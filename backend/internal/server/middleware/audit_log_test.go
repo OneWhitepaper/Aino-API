@@ -3,6 +3,7 @@ package middleware
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -13,6 +14,41 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
+
+func TestDiagnosticReadIsAuditedWithoutCopyingPrivateResponse(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repository := &auditCaptureRepository{}
+	auditService := service.NewAuditLogService(repository, nil)
+	auditService.Start()
+	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		c.Set(string(ContextKeyUser), AuthSubject{UserID: 77})
+		c.Set(string(ContextKeyUserRole), "admin")
+		c.Next()
+	})
+	router.Use(gin.HandlerFunc(NewAuditLogMiddleware(auditService)))
+	router.GET("/api/v1/admin/diagnostics/:id", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"files": gin.H{"report": "private-diagnostic-canary"}})
+	})
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/admin/diagnostics/22c5a21b-bfaa-476e-92fd-3e408c6effb8", nil)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	auditService.Stop()
+
+	require.Equal(t, http.StatusOK, response.Code)
+	require.Contains(t, response.Body.String(), "private-diagnostic-canary")
+	repository.mu.Lock()
+	defer repository.mu.Unlock()
+	require.Len(t, repository.logs, 1)
+	entry := repository.logs[0]
+	require.Equal(t, "admin.diagnostics.read", entry.Action)
+	require.Equal(t, int64(77), *entry.ActorUserID)
+	require.Equal(t, "admin", entry.ActorRole)
+	require.Equal(t, map[string]string{"id": "22c5a21b-bfaa-476e-92fd-3e408c6effb8"}, entry.Extra["params"])
+	encoded, err := json.Marshal(entry)
+	require.NoError(t, err)
+	require.NotContains(t, string(encoded), "private-diagnostic-canary")
+}
 
 func TestDeriveAuditAction(t *testing.T) {
 	cases := []struct {

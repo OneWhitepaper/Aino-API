@@ -425,6 +425,12 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/diagnostics',
+    name: 'AdminDiagnostics',
+    component: () => import('@/views/admin/DiagnosticsView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true, title: 'Desktop Diagnostics', titleKey: 'admin.diagnostics.title' }
+  },
+  {
     path: '/admin/ops',
     name: 'AdminOps',
     component: () => import('@/views/admin/ops/OpsDashboard.vue'),

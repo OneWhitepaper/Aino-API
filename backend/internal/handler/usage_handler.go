@@ -264,7 +264,12 @@ func (h *UsageHandler) List(c *gin.Context) {
 	for i := range records {
 		out = append(out, *dto.UsageLogFromService(&records[i]).Localized(c.GetHeader("Accept-Language")))
 	}
-	response.Paginated(c, out, result.Total, page, pageSize)
+	response.Success(c, desktopUsagePage{
+		PaginatedData: response.PaginatedData{
+			Items: out, Total: result.Total, Page: page, PageSize: pageSize, Pages: max(1, result.Pages),
+		},
+		SupportedDesktopPurposes: service.SupportedDesktopUsagePurposes(),
+	})
 }
 
 // ListErrors handles listing the current user's failed requests (redacted).

@@ -19,6 +19,8 @@ func bindDesktopUsage(c *gin.Context, key *service.APIKey) (*service.APIKey, boo
 		duplicate = duplicate || len(entries) > 1
 		values[i] = headers.Get(name)
 	}
+	tasks := headers.Values("X-Aino-Task")
+	present = present || len(tasks) > 0
 	// Strip the entire private namespace, including unrecognized attribution tags.
 	for name := range headers {
 		if strings.HasPrefix(strings.ToLower(name), "x-aino-") {
@@ -28,9 +30,17 @@ func bindDesktopUsage(c *gin.Context, key *service.APIKey) (*service.APIKey, boo
 	if !key.DesktopManaged || !present {
 		return key, true
 	}
-	if duplicate || !service.ValidDesktopUsageID(values[0]) || !service.ValidDesktopUsageID(values[1]) || !service.ValidDesktopUsageID(values[2]) || !service.ValidDesktopUsagePurpose(values[3]) {
+	if duplicate || !service.ValidDesktopUsageID(values[0]) || !service.ValidDesktopUsageID(values[1]) || !service.ValidDesktopUsageID(values[2]) || !service.ValidDesktopUsagePurpose(values[3]) || service.ValidDesktopUsageTask(values[3]) {
 		AbortWithError(c, http.StatusBadRequest, "INVALID_DESKTOP_USAGE", "Invalid desktop request correlation")
 		return nil, false
+	}
+	// The coarse purpose remains compatible with servers that do not recognize this optional header.
+	if len(tasks) > 0 {
+		if len(tasks) != 1 || values[3] != "other_auxiliary" || !service.ValidDesktopUsageTask(tasks[0]) {
+			AbortWithError(c, http.StatusBadRequest, "INVALID_DESKTOP_USAGE", "Invalid desktop request task")
+			return nil, false
+		}
+		values[3] = tasks[0]
 	}
 	copy := *key
 	copy.DesktopUsage = &service.DesktopUsage{SessionID: values[0], TurnID: values[1], CallID: values[2], Purpose: values[3]}

@@ -34,7 +34,13 @@ func TestDesktopUsageHeadersArePrivateAndRequestScoped(t *testing.T) {
 		for name := range c.Request.Header {
 			require.False(t, strings.HasPrefix(strings.ToLower(name), "x-aino-"), "private header forwarded: %s", name)
 		}
-		c.JSON(200, gin.H{"session_id": service.ExtractClientSessionID(c)})
+		body := gin.H{"session_id": service.ExtractClientSessionID(c)}
+		requestKey, ok := middleware.GetAPIKeyFromContext(c)
+		require.True(t, ok)
+		if requestKey.DesktopUsage != nil {
+			body["purpose"] = requestKey.DesktopUsage.Purpose
+		}
+		c.JSON(200, body)
 	})
 	session, turn, call := uuid.NewString(), uuid.NewString(), uuid.NewString()
 	headers := map[string]string{"X-Aino-Session-Id": session, "X-Aino-Turn-Id": turn, "X-Aino-Call-Id": call, "X-Aino-Purpose": "chat", "X-Aino-User-Id": "999"}
@@ -54,6 +60,18 @@ func TestDesktopUsageHeadersArePrivateAndRequestScoped(t *testing.T) {
 	var body map[string]string
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
 	require.Equal(t, session, body["session_id"])
+	require.Equal(t, "chat", body["purpose"])
+	for _, task := range service.SupportedDesktopUsagePurposes() {
+		if !service.ValidDesktopUsageTask(task) {
+			continue
+		}
+		headers["X-Aino-Purpose"], headers["X-Aino-Task"] = "other_auxiliary", task
+		w = request(lease.APIKey, headers)
+		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+		require.Equal(t, task, body["purpose"])
+	}
+	delete(headers, "X-Aino-Task")
 	// The cached key must not retain metadata from a previous request.
 	w = request(lease.APIKey, nil)
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
@@ -87,7 +105,7 @@ func TestDesktopUsageDoesNotLeakAcrossUsersWithSameTurnID(t *testing.T) {
 	auth := middleware.NewJWTAuthMiddleware(r.auth, r.users, r.settings, nil)
 	r.router.GET("/api/v1/usage", gin.HandlerFunc(auth), h.List)
 	r.router.GET("/api/v1/usage/stats", gin.HandlerFunc(auth), h.Stats)
-	session, turn, call, purpose := uuid.NewString(), uuid.NewString(), uuid.NewString(), "chat"
+	session, turn, call, purpose := uuid.NewString(), uuid.NewString(), uuid.NewString(), "session_summary"
 	var before string
 	require.NoError(t, db.QueryRowContext(r.ctx, "SELECT balance::text FROM users WHERE id=$1", r.userID).Scan(&before))
 	for i, row := range []struct {
@@ -124,21 +142,26 @@ func TestDesktopUsageDoesNotLeakAcrossUsersWithSameTurnID(t *testing.T) {
 	afterDecimal, err := decimal.NewFromString(after)
 	require.NoError(t, err)
 	require.Equal(t, "0.03000001", beforeDecimal.Sub(afterDecimal).StringFixed(8))
-	for _, query := range []string{"desktop_turn_id=" + turn, "desktop_turn_id=" + turn + "&desktop_call_id=" + call + "&session_id=" + session + "&desktop_purpose=chat"} {
+	for _, query := range []string{"desktop_turn_id=" + turn, "desktop_turn_id=" + turn + "&desktop_call_id=" + call + "&session_id=" + session + "&desktop_purpose=" + purpose} {
 		w := r.request("GET", "/api/v1/usage?"+query+"&user_id="+fmt.Sprint(other.ID), "", r.token)
 		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 		var body struct {
 			Data struct {
-				Items []map[string]any `json:"items"`
+				Items    []map[string]any `json:"items"`
+				Purposes []string         `json:"supported_desktop_purposes"`
+				Total    int              `json:"total"`
 			} `json:"data"`
 		}
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
 		require.Len(t, body.Data.Items, 1)
+		require.Equal(t, 1, body.Data.Total)
+		require.Contains(t, body.Data.Purposes, purpose)
 		item := body.Data.Items[0]
 		require.Equal(t, "0.01000001", item["actual_cost_decimal"])
 		require.Equal(t, "settled", item["settlement_status"])
 		require.Equal(t, turn, item["desktop_turn_id"])
 		require.Equal(t, call, item["desktop_call_id"])
+		require.Equal(t, purpose, item["desktop_purpose"])
 		require.Equal(t, "USD", item["currency"])
 		w = r.request("GET", "/api/v1/usage/stats?"+query, "", r.token)
 		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
@@ -172,6 +195,7 @@ func TestDesktopUsageAuthenticationToLedger(t *testing.T) {
 		nil, nil, nil, nil, nil, nil, nil, r.pricing, nil, nil, nil)
 	requestID := uuid.NewString()
 	r.router.POST("/v1/messages", gin.HandlerFunc(middleware.NewAPIKeyAuthMiddleware(r.keys, nil, cfg)), func(c *gin.Context) {
+		require.Empty(t, c.Request.Header.Values("X-Aino-Task"))
 		key, ok := middleware.GetAPIKeyFromContext(c)
 		require.True(t, ok)
 		// Usage workers detach from the HTTP context in production. The authenticated
@@ -188,7 +212,7 @@ func TestDesktopUsageAuthenticationToLedger(t *testing.T) {
 	require.NoError(t, db.QueryRowContext(r.ctx, "SELECT balance::text FROM users WHERE id=$1", r.userID).Scan(&before))
 	for i := 0; i < 2; i++ {
 		req := httptest.NewRequest("POST", "/v1/messages", strings.NewReader(`{"model":"fixture-a"}`))
-		for name, value := range map[string]string{"Authorization": "Bearer " + lease.APIKey, "X-Aino-Session-Id": session, "X-Aino-Turn-Id": turn, "X-Aino-Call-Id": call, "X-Aino-Purpose": "chat"} {
+		for name, value := range map[string]string{"Authorization": "Bearer " + lease.APIKey, "X-Aino-Session-Id": session, "X-Aino-Turn-Id": turn, "X-Aino-Call-Id": call, "X-Aino-Purpose": "other_auxiliary", "X-Aino-Task": "session_summary"} {
 			req.Header.Set(name, value)
 		}
 		w := httptest.NewRecorder()
@@ -209,6 +233,8 @@ func TestDesktopUsageAuthenticationToLedger(t *testing.T) {
 	require.Equal(t, &session, row.SessionID)
 	require.Equal(t, &turn, row.DesktopTurnID)
 	require.Equal(t, &call, row.DesktopCallID)
+	require.NotNil(t, row.DesktopPurpose)
+	require.Equal(t, "session_summary", *row.DesktopPurpose)
 	require.Equal(t, "settled", row.SettlementStatus)
 	require.Equal(t, "0.00010000", *row.ActualCostDecimal)
 }

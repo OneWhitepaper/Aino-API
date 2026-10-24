@@ -9,6 +9,11 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+type desktopUsagePage struct {
+	response.PaginatedData
+	SupportedDesktopPurposes []string `json:"supported_desktop_purposes"`
+}
+
 func parseDesktopUsageFilters(c *gin.Context) (*usagestats.UsageLogFilters, bool) {
 	f := &usagestats.UsageLogFilters{SessionID: c.Query("session_id"), DesktopTurnID: c.Query("desktop_turn_id"), DesktopCallID: c.Query("desktop_call_id"), DesktopPurpose: c.Query("desktop_purpose")}
 	validSession := utf8.ValidString(f.SessionID) && utf8.RuneCountInString(f.SessionID) <= 255

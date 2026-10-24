@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"slices"
 	"strings"
 
 	"github.com/google/uuid"
@@ -23,13 +24,20 @@ func ValidDesktopUsageID(value string) bool {
 	return err == nil && id != uuid.Nil && strings.EqualFold(id.String(), value)
 }
 
+var desktopUsagePurposes = []string{"chat", "title", "compression", "vision", "delegation", "other_auxiliary"}
+var desktopUsageTasks = []string{"session_summary", "approval", "mcp", "tts_audio_tags", "side_question"}
+
 func ValidDesktopUsagePurpose(value string) bool {
-	switch value {
-	case "chat", "title", "compression", "vision", "delegation", "other_auxiliary":
-		return true
-	default:
-		return false
-	}
+	return slices.Contains(desktopUsagePurposes, value) || ValidDesktopUsageTask(value)
+}
+
+func ValidDesktopUsageTask(value string) bool {
+	return slices.Contains(desktopUsageTasks, value)
+}
+
+// Older servers reject unknown purpose filters, so clients discover refinements from the list response.
+func SupportedDesktopUsagePurposes() []string {
+	return append(slices.Clone(desktopUsagePurposes), desktopUsageTasks...)
 }
 
 type desktopUsageContextKey struct{}

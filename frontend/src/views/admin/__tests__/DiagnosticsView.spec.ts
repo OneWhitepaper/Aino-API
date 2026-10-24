@@ -4,7 +4,10 @@ import DiagnosticsView from '../DiagnosticsView.vue'
 
 const api = vi.hoisted(() => ({ listDiagnostics: vi.fn(), readDiagnostic: vi.fn(), deleteDiagnostic: vi.fn() }))
 vi.mock('@/api/admin/diagnostics', () => api)
-vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
+vi.mock('vue-i18n', async (importOriginal) => ({
+  ...await importOriginal<typeof import('vue-i18n')>(),
+  useI18n: () => ({ t: (key: string) => key })
+}))
 vi.mock('@/stores/app', () => ({ useAppStore: () => ({ showError: vi.fn() }) }))
 const row = { id: '22c5a21b-bfaa-476e-92fd-3e408c6effb8', user_id: 17, size_bytes: 123, created_at: '2026-10-24T00:00:00Z', expires_at: '2026-11-07T00:00:00Z' }
 function render() {

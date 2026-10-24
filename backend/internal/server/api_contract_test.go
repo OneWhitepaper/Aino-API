@@ -665,7 +665,11 @@ func TestAPIContracts(t *testing.T) {
 					"total": 1,
 					"page": 1,
 					"page_size": 10,
-					"pages": 1
+					"pages": 1,
+					"supported_desktop_purposes": [
+						"chat", "title", "compression", "vision", "delegation", "other_auxiliary",
+						"session_summary", "approval", "mcp", "tts_audio_tags", "side_question"
+					]
 				}
 			}`,
 		},

@@ -6,7 +6,7 @@ export function groupWorkspaceNavigation<T extends { path: string }>(items: T[])
     { key: 'overview', paths: ['/dashboard'] },
     { key: 'access', paths: ['/keys', '/model-plaza', '/available-channels', '/monitor', '/batch-image'] },
     { key: 'billing', paths: ['/usage', '/purchase', '/orders', '/subscriptions', '/redeem'] },
-    { key: 'account', paths: ['/profile', '/affiliate'] },
+    { key: 'account', paths: ['/profile', '/affiliate', '/contact'] },
     { key: 'resources', paths: [] as string[] },
   ]
   const known = new Set(sections.flatMap(section => section.paths))

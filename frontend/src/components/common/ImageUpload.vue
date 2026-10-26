@@ -84,6 +84,7 @@ const props = withDefaults(defineProps<{
   removeLabel?: string
   hint?: string
   maxSize?: number // bytes
+  accept?: string
 }>(), {
   mode: 'image',
   size: 'md',
@@ -91,6 +92,7 @@ const props = withDefaults(defineProps<{
   removeLabel: '',
   hint: '',
   maxSize: 300 * 1024,
+  accept: '',
 })
 
 const emit = defineEmits<{
@@ -110,7 +112,7 @@ function removeImage() {
 const resolvedUploadLabel = computed(() => props.uploadLabel || t('common.upload'))
 const resolvedRemoveLabel = computed(() => props.removeLabel || t('common.remove'))
 
-const acceptTypes = computed(() => props.mode === 'svg' ? '.svg' : 'image/*')
+const acceptTypes = computed(() => props.accept || (props.mode === 'svg' ? '.svg' : 'image/*'))
 
 const sanitizedValue = computed(() =>
   props.mode === 'svg' ? sanitizeSvg(props.modelValue ?? '') : ''

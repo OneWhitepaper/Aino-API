@@ -299,6 +299,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/contact',
+    name: 'Contact',
+    component: () => import('@/views/user/ContactView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'Contact Us',
+      titleKey: 'contact.title',
+      descriptionKey: 'contact.description'
+    }
+  },
+  {
     path: '/subscriptions',
     name: 'Subscriptions',
     component: () => import('@/views/user/SubscriptionsView.vue'),
@@ -611,6 +623,18 @@ const routes: RouteRecordRaw[] = [
       title: 'System Settings',
       titleKey: 'admin.settings.title',
       descriptionKey: 'admin.settings.description'
+    }
+  },
+  {
+    path: '/admin/contact',
+    name: 'AdminContact',
+    component: () => import('@/views/admin/ContactSettingsView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Manage Contact Details',
+      titleKey: 'contact.admin.title',
+      descriptionKey: 'contact.admin.description'
     }
   },
   {

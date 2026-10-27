@@ -312,6 +312,22 @@ export default {
 
   // Payment System
   payment: {
+    recharge: {
+      eyebrow: '账户与账单',
+      title: '为下一次灵感，续上能量。',
+      description: '充值余额，用于 Aino API 与桌面端 AI 服务。',
+      selectAmount: '选择充值金额',
+      currency: '支付币种 · {currency}',
+      amountHint: '选择常用金额，或输入你需要的金额',
+      moreAmounts: '更多金额',
+      fewerAmounts: '收起金额',
+      methodHint: '选择你习惯的方式',
+      continueWithMethod: '安全支付',
+      summary: '本次充值',
+      autoCredit: '支付完成后，余额自动到账',
+      currencyHint: '支付金额以 {currency} 结算，账户余额以美元显示。',
+      help: '充值遇到问题？ 联系我们',
+    },
     title: '充值/订阅',
     amountLabel: '充值金额',
     paymentAmount: '支付金额',

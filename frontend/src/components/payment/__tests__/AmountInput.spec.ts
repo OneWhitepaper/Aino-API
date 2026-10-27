@@ -15,6 +15,39 @@ function mountInput(value: number | null = null) {
 }
 
 describe('recharge amount input', () => {
+  it('folds additional presets until the user expands them', async () => {
+    const wrapper = mountInput()
+    expect(wrapper.findAll('[data-testid^="quick-amount-"]').filter(button => button.element.tagName === 'BUTTON')).toHaveLength(6)
+    expect(wrapper.find('[data-testid="quick-amount-1000"]').exists()).toBe(false)
+    const toggle = wrapper.get('[data-testid="toggle-quick-amounts"]')
+    expect(toggle.attributes('aria-expanded')).toBe('false')
+    await toggle.trigger('click')
+    expect(wrapper.get('[data-testid="quick-amount-1000"]').exists()).toBe(true)
+    expect(toggle.attributes('aria-expanded')).toBe('true')
+    await toggle.trigger('click')
+    expect(wrapper.find('[data-testid="quick-amount-1000"]').exists()).toBe(false)
+  })
+
+  it('reveals a selected preset outside the initial six and preserves its value', () => {
+    const wrapper = mountInput(2000)
+    expect(wrapper.get('[data-testid="quick-amount-2000"]').attributes('aria-pressed')).toBe('true')
+    expect((wrapper.get('input').element as HTMLInputElement).value).toBe('2000')
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+  })
+
+  it('uses the payment currency consistently in presets and custom input', () => {
+    const wrapper = mount(AmountInput, { props: { modelValue: null, currency: 'CNY', amounts: [100] } })
+    expect(wrapper.get('[data-testid="quick-amount-100"]').text()).toContain('¥')
+    expect(wrapper.get('[data-testid="amount-currency-symbol"]').text()).toBe('¥')
+    expect(wrapper.get('[data-testid="amount-currency-code"]').text()).toBe('CNY')
+  })
+
+  it('filters unavailable presets before deciding whether to show the disclosure', () => {
+    const wrapper = mount(AmountInput, { props: { modelValue: null, min: 20, max: 500 } })
+    expect(wrapper.find('[data-testid="quick-amount-10"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="toggle-quick-amounts"]').exists()).toBe(false)
+  })
+
   it.each(['10abc', '10.555', '-10', '1e2'])('restores the accepted amount after rejecting %s', async (value) => {
     const wrapper = mountInput(10)
     const input = wrapper.get('input')

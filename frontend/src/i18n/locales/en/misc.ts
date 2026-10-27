@@ -288,6 +288,22 @@ export default {
 
   // Payment System
   payment: {
+    recharge: {
+      eyebrow: 'ACCOUNT & BILLING',
+      title: 'Keep your next idea moving.',
+      description: 'Top up for Aino API and desktop AI services.',
+      selectAmount: 'Choose an amount',
+      currency: 'Payment currency · {currency}',
+      amountHint: 'Choose a preset or enter your own amount.',
+      moreAmounts: 'More amounts',
+      fewerAmounts: 'Fewer amounts',
+      methodHint: 'Choose how to pay',
+      continueWithMethod: 'Secure payment',
+      summary: 'Top-up summary',
+      autoCredit: 'Your balance updates after payment.',
+      currencyHint: 'Payments are settled in {currency}. Your account balance is shown in USD.',
+      help: 'Need help? Contact us',
+    },
     title: 'Recharge / Subscription',
     amountLabel: 'Amount',
     paymentAmount: 'Payment Amount',

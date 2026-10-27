@@ -1,11 +1,13 @@
 <template>
-  <div>
-    <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-      {{ t('payment.paymentMethod') }}
-    </label>
+  <div class="recharge-method-selector">
+    <div class="recharge-section-heading recharge-payment-heading">
+      <h3>{{ t('payment.paymentMethod') }}</h3>
+      <span>{{ t('payment.recharge.methodHint') }}</span>
+    </div>
     <div
       data-testid="payment-method-grid"
-      class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4"
+      class="recharge-method-grid grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4"
+      :class="{ 'recharge-method-grid--compact': sortedMethods.length <= 2 }"
     >
       <button
         v-for="method in sortedMethods"
@@ -13,30 +15,33 @@
         type="button"
         :title="methodLabel(method)"
         :disabled="!method.available"
+        :aria-pressed="selected === method.type"
         :class="[
-          'relative flex h-[60px] min-w-0 flex-col items-center justify-center rounded-lg border px-3 transition-all',
+          'recharge-method relative flex min-w-0 items-center rounded-2xl border px-3 transition-all',
           !method.available
             ? 'cursor-not-allowed border-gray-200 bg-gray-50 opacity-50 dark:border-dark-700 dark:bg-dark-800/50'
             : selected === method.type
-              ? methodSelectedClass(method.type)
+              ? 'is-selected border-primary-500 bg-primary-50 text-gray-900 dark:bg-primary-950 dark:text-gray-100'
               : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-200 dark:hover:border-dark-500',
         ]"
         @click="method.available && emit('select', method.type)"
       >
-        <span class="flex w-full min-w-0 items-center justify-center gap-2">
-          <img :src="methodIcon(method.type)" :alt="methodLabel(method)" class="h-7 w-7 shrink-0 object-contain" />
+        <span class="flex w-full min-w-0 items-center gap-3">
+          <img :src="methodIcon(method.type)" :alt="methodLabel(method)" class="h-7 w-7 shrink-0 object-contain" aria-hidden="true" />
           <span class="flex min-w-0 flex-col items-start leading-none">
-            <span data-testid="payment-method-label" class="block w-full truncate text-base font-semibold">
+            <span data-testid="payment-method-label" class="block w-full truncate text-sm font-semibold">
               {{ methodLabel(method) }}
             </span>
+            <span v-if="method.fee_rate <= 0" class="recharge-method-hint">{{ t('payment.recharge.continueWithMethod') }}</span>
             <span
               v-if="method.fee_rate > 0"
-              class="text-[10px] tracking-wide text-gray-500 dark:text-dark-400"
+              class="recharge-method-hint text-[10px] tracking-wide text-gray-500 dark:text-dark-400"
             >
               {{ t('payment.fee') }} {{ method.fee_rate }}%
             </span>
           </span>
         </span>
+        <span class="recharge-method-check" aria-hidden="true"><Icon v-if="selected === method.type" name="check" size="xs" /></span>
       </button>
     </div>
   </div>
@@ -44,6 +49,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import Icon from '@/components/icons/Icon.vue'
 import { useI18n } from 'vue-i18n'
 import { METHOD_ORDER, isBuiltInAlipayMethod, isBuiltInWxpayMethod } from './providerConfig'
 import alipayIcon from '@/assets/icons/alipay.svg'
@@ -98,11 +104,4 @@ function methodLabel(method: PaymentMethodOption): string {
   return method.display_name || t(`payment.methods.${method.type}`, method.type)
 }
 
-function methodSelectedClass(type: string): string {
-  if (isBuiltInAlipayMethod(type)) return 'border-[#02A9F1] bg-blue-50 text-gray-900 shadow-sm dark:bg-blue-950 dark:text-gray-100'
-  if (isBuiltInWxpayMethod(type)) return 'border-[#09BB07] bg-green-50 text-gray-900 shadow-sm dark:bg-green-950 dark:text-gray-100'
-  if (type === 'stripe') return 'border-[#676BE5] bg-indigo-50 text-gray-900 shadow-sm dark:bg-indigo-950 dark:text-gray-100'
-  if (type === 'airwallex') return 'border-[#FF6B3D] bg-orange-50 text-gray-900 shadow-sm dark:border-[#FF8E3C] dark:bg-orange-950 dark:text-gray-100'
-  return 'border-primary-500 bg-primary-50 text-gray-900 shadow-sm dark:bg-primary-950 dark:text-gray-100'
-}
 </script>

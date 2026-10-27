@@ -9,6 +9,26 @@ vi.mock('vue-i18n', () => ({
 }))
 
 describe('PaymentMethodSelector', () => {
+  it('exposes the selection accessibly and prevents selecting unavailable methods', async () => {
+    const wrapper = mount(PaymentMethodSelector, {
+      props: {
+        selected: 'alipay',
+        methods: [
+          { type: 'alipay', fee_rate: 0, available: true },
+          { type: 'wxpay', fee_rate: 0, available: false },
+        ],
+      },
+    })
+    const buttons = wrapper.findAll('button')
+    expect(buttons[0].attributes('aria-pressed')).toBe('true')
+    expect(buttons[1].attributes('aria-pressed')).toBe('false')
+    expect(buttons[1].attributes('disabled')).toBeDefined()
+    await buttons[1].trigger('click')
+    expect(wrapper.emitted('select')).toBeUndefined()
+    await buttons[0].trigger('click')
+    expect(wrapper.emitted('select')).toEqual([['alipay']])
+  })
+
   it('wraps large custom method collections without letting labels widen the selector', () => {
     const methods = Array.from({ length: 12 }, (_, index) => ({
       type: `custom_${index}`,

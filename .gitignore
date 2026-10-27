@@ -142,6 +142,8 @@ docs/*
 !docs/PLUGIN_DEVELOPMENT.md
 !docs/channel-monitor-v2-safe-defaults.md
 !docs/codex-credits.md
+!docs/iq-radar.md
+!docs/iq-test.md
 !docs/legal/
 !docs/legal/*.md
 !docs/screenshots/

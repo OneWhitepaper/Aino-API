@@ -519,6 +519,23 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/iq-test',
+    name: 'ModelIQTest',
+    component: () => import('@/views/user/IQTestView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: false, title: 'Model IQ Test', titleKey: 'iqTest.title' }
+  },
+  {
+    path: '/iq-radar',
+    name: 'IntelligenceRadar',
+    component: () => import('@/views/user/IQRadarView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'Intelligence Radar',
+      titleKey: 'iqRadar.title'
+    }
+  },
+  {
     path: '/monitor',
     name: 'ChannelStatus',
     component: () => import('@/views/user/ChannelStatusView.vue'),

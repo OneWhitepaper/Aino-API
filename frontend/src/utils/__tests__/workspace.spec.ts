@@ -3,12 +3,14 @@ import { buildConnectionExample, groupWorkspaceNavigation, workspaceCatalog } fr
 
 describe('workspace navigation and catalog access', () => {
   it('groups visible routes without losing custom pages or duplicating entries', () => {
-    const items = ['/dashboard', '/keys', '/usage', '/profile', '/custom/help', '/model-plaza', '/redeem'].map(path => ({ path }))
+    const items = ['/dashboard', '/keys', '/usage', '/profile', '/custom/help', '/model-plaza', '/iq-radar', '/iq-test', '/redeem'].map(path => ({ path }))
     const sections = groupWorkspaceNavigation(items)
     expect(sections.map(section => section.key)).toEqual(['overview', 'access', 'billing', 'account', 'resources'])
     expect(sections.flatMap(section => section.items)).toHaveLength(items.length)
     expect(sections.find(section => section.key === 'resources')?.items).toEqual([{ path: '/custom/help' }])
+    expect(sections.find(section => section.key === 'access')?.items.map(item => item.path)).toEqual(['/keys', '/model-plaza', '/iq-radar', '/iq-test'])
     expect(groupWorkspaceNavigation([{ path: '/keys' }]).map(section => section.key)).toEqual(['access'])
+    expect(sections.find(section => section.key === 'access')?.items).toContainEqual({ path: '/iq-radar' })
   })
 
   it('keeps disabled catalogs hidden and prioritizes models accessible to the user', () => {

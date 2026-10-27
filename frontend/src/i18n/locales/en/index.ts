@@ -7,6 +7,8 @@ import admin from './admin'
 import misc from './misc'
 import workspace from './workspace'
 import contact from './contact'
+import iqRadar from './iqRadar'
+import iqTest from './iqTest'
 
 export default {
   ...landing,
@@ -18,4 +20,6 @@ export default {
   ...misc,
   ...workspace,
   ...contact,
+  ...iqRadar,
+  ...iqTest,
 }

@@ -4,7 +4,7 @@ import { FeatureFlags, resolveFeatureFlag } from './featureFlags'
 export function groupWorkspaceNavigation<T extends { path: string }>(items: T[]) {
   const sections = [
     { key: 'overview', paths: ['/dashboard'] },
-    { key: 'access', paths: ['/keys', '/model-plaza', '/available-channels', '/monitor', '/batch-image'] },
+    { key: 'access', paths: ['/keys', '/model-plaza', '/available-channels', '/monitor', '/iq-radar', '/iq-test', '/batch-image'] },
     { key: 'billing', paths: ['/usage', '/purchase', '/orders', '/subscriptions', '/redeem'] },
     { key: 'account', paths: ['/profile', '/affiliate', '/contact'] },
     { key: 'resources', paths: [] as string[] },

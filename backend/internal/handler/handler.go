@@ -47,6 +47,8 @@ type AdminHandlers struct {
 
 // Handlers contains all HTTP handlers
 type Handlers struct {
+	IQTest           *IQTestHandler
+	IQRadar          *IQRadarHandler
 	Auth             *AuthHandler
 	User             *UserHandler
 	APIKey           *APIKeyHandler

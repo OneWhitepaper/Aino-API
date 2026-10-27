@@ -50,6 +50,32 @@ func TestDiagnosticReadIsAuditedWithoutCopyingPrivateResponse(t *testing.T) {
 	require.NotContains(t, string(encoded), "private-diagnostic-canary")
 }
 
+func TestIQTestRequestsOmitCredentialBodiesFromAudit(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repository := &auditCaptureRepository{}
+	audit := service.NewAuditLogService(repository, nil)
+	audit.Start()
+	router := gin.New()
+	router.Use(func(c *gin.Context) { c.Set(string(ContextKeyUser), AuthSubject{UserID: 77}); c.Next() })
+	router.Use(gin.HandlerFunc(NewAuditLogMiddleware(audit)))
+	for _, path := range []string{"/api/v1/iq-tests", "/api/v1/iq-tests/models"} {
+		router.POST(path, func(c *gin.Context) { c.Status(http.StatusAccepted) })
+		request := httptest.NewRequest(http.MethodPost, path, bytes.NewBufferString(`{"source":"custom","api_key":"private-iq-canary","base_url":"https://example.com/v1"}`))
+		request.Header.Set("Content-Type", "application/json")
+		router.ServeHTTP(httptest.NewRecorder(), request)
+	}
+	audit.Stop()
+	repository.mu.Lock()
+	defer repository.mu.Unlock()
+	require.Len(t, repository.logs, 2)
+	for _, entry := range repository.logs {
+		require.Equal(t, "<credential-bearing body omitted>", entry.RequestBody)
+		body, err := json.Marshal(entry)
+		require.NoError(t, err)
+		require.NotContains(t, string(body), "private-iq-canary")
+	}
+}
+
 func TestDeriveAuditAction(t *testing.T) {
 	cases := []struct {
 		method string

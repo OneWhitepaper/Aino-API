@@ -26,6 +26,17 @@ func RegisterUserRoutes(
 	authenticated.Use(gin.HandlerFunc(auditLog))
 	{
 		authenticated.GET("/contact", h.Setting.GetContactPage)
+		authenticated.GET("/iq-radar", h.IQRadar.Get)
+		iqTests := authenticated.Group("/iq-tests")
+		{
+			iqTests.GET("", h.IQTest.List)
+			iqTests.GET("/keys", h.IQTest.Keys)
+			iqTests.GET("/options", h.IQTest.Options)
+			iqTests.POST("/models", panelRateLimiter.Heavy(), h.IQTest.Models)
+			iqTests.POST("", panelRateLimiter.Heavy(), h.IQTest.Start)
+			iqTests.GET("/:id", h.IQTest.Get)
+			iqTests.DELETE("/:id", h.IQTest.Cancel)
+		}
 
 		// 用户接口
 		user := authenticated.Group("/user")

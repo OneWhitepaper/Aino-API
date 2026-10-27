@@ -42,15 +42,18 @@ type DiagnosticMetadata struct {
 	SizeBytes int       `json:"size_bytes"`
 	CreatedAt time.Time `json:"created_at"`
 	ExpiresAt time.Time `json:"expires_at"`
+	Kind      string    `json:"kind"`
 }
 
 type DiagnosticRecord struct {
 	DiagnosticMetadata
-	Bundle []byte
+	Bundle    []byte
+	InstallID string
 }
 
 type DiagnosticsRepository interface {
 	Create(context.Context, *DiagnosticRecord) error
+	CreateSharedMetrics(context.Context, *DiagnosticRecord) error
 	List(ctx context.Context, page, size int, id string) ([]DiagnosticMetadata, int64, error)
 	Get(ctx context.Context, id string, ownerID int64) (*DiagnosticRecord, error)
 	Delete(ctx context.Context, id string, ownerID int64) error
@@ -129,7 +132,7 @@ func (s *DiagnosticsService) Upload(ctx context.Context, userID int64, encoded s
 	}
 	now := time.Now().UTC()
 	record := &DiagnosticRecord{DiagnosticMetadata: DiagnosticMetadata{
-		ID: uuid.NewString(), UserID: userID, SizeBytes: len(blob), CreatedAt: now, ExpiresAt: now.Add(DiagnosticRetention),
+		ID: uuid.NewString(), UserID: userID, SizeBytes: len(blob), CreatedAt: now, ExpiresAt: now.Add(DiagnosticRetention), Kind: "diagnostic_log",
 	}, Bundle: blob}
 	if err := s.repo.Create(ctx, record); err != nil {
 		return nil, err

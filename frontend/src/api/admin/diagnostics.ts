@@ -6,6 +6,7 @@ export interface DiagnosticMetadata {
   size_bytes: number
   created_at: string
   expires_at: string
+  kind?: 'diagnostic_log' | 'usage_statistics'
 }
 
 export interface DiagnosticDetail {

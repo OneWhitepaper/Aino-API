@@ -1,6 +1,8 @@
 # Aino private desktop diagnostics deployment
 
-Status: implemented and verified locally on `codex/aino-private-diagnostics`, based on `d24c2f5ac`. This document does not record a production deployment.
+Status: support-log diagnostics were deployed through the existing Aino release flow. The
+consented usage-statistics extension below is a deployment candidate; this document does not
+claim that the new endpoint has been deployed.
 
 The desktop now has an Aino-owned destination for explicit, per-upload diagnostic consent. It retains the Hermes redacted gzip format `hermes-debug-share/1`; model credentials and account tokens are not sent as log-upload credentials. The upload uses the existing Aino account JWT. Only authorized administrators can view the stored content. There is no public log URL or Nous fallback.
 
@@ -40,3 +42,25 @@ If rolling back, preserve the diagnostics table and an active expiry purge for e
 - Compatible golangci-lint 2.15 reports zero new issues against `d24c2f5ac`. The pinned 2.13 tool cannot decode this host Go toolchain's export data; its pin was not changed.
 
 No production logs, account, database or paid model was used. Independent reviewer dispatch returned no scope and therefore provides no independent approval. Native client uploads against the deployed production service remain unverified.
+
+## Consented usage statistics
+
+Migration `249_desktop_shared_metrics.sql` extends the same table with `kind` and a random,
+profile-scoped `install_id`. Existing support logs keep their authenticated account ownership;
+statistics carry no account token or user association. The existing admin page labels both kinds.
+
+`POST /api/v1/desktop/shared-metrics` accepts the unchanged `hermes.shared_metrics.v4` schema
+only: bounded counters and dimensions, never conversation text or log files. Both raw and
+expanded bodies are limited to 1 MiB; gzip is supported. The existing Redis limiter allows
+30 attempts per IP per minute and fails closed. The repository enforces 32 packages per
+installation per rolling day, including erased receipts. Identical package retries are accepted;
+conflicting identities or payloads are rejected, and erased payloads never reappear on retry.
+
+The existing diagnostics authentication, audit, fourteen-day expiry and hourly purge apply.
+Deploy the migration, API and embedded admin frontend before the matching desktop runtime.
+Use synthetic counters for acceptance and retain the user's opt-in gate; old Nous consent does
+not authorize Aino. No new collector, queue, scheduler or cloud storage is introduced.
+
+The complete local Go unit suite passes after fixing the repository-free rate-resolver fallback's
+unused cache janitors; its memory threshold was preserved. The complete integration suite and
+all API frontend tests pass. Production acceptance must still be recorded separately.

@@ -15,6 +15,25 @@ func (h *DesktopHandler) SetDiagnosticsService(diagnostics *service.DiagnosticsS
 	h.diagnostics = diagnostics
 }
 
+// UploadSharedMetrics accepts only the bounded, content-free Hermes counter contract.
+// It is intentionally pseudonymous: the desktop sender never supplies an account token.
+func (h *DesktopHandler) UploadSharedMetrics(c *gin.Context) {
+	svc := h.diagnosticService(c)
+	if svc == nil {
+		return
+	}
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, service.MaxSharedMetricsBytes)
+	raw, err := service.ReadSharedMetricsBody(c.Request.Body, c.GetHeader("Content-Encoding"))
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	if response.ErrorFrom(c, svc.UploadSharedMetrics(c.Request.Context(), raw)) {
+		return
+	}
+	c.Status(http.StatusAccepted)
+}
+
 func (h *DesktopHandler) diagnosticService(c *gin.Context) *service.DiagnosticsService {
 	c.Header("Cache-Control", "no-store")
 	if h.diagnostics == nil {

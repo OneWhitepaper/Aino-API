@@ -47,7 +47,7 @@ func newDesktopModelRig(t *testing.T) *desktopModelRig {
 	r.settings.SetDefaultSubscriptionGroupReader(groups)
 	models := service.NewDesktopModelService(r.settings, keys, billing, pricing, eligibility, service.NewCompositeRouteResolver(repository.NewCompositeModelRouteRepository(r.client)))
 	desktopHandler := handler.NewDesktopHandler(models)
-	routes.RegisterDesktopRoutes(r.router.Group("/api/v1"), &handler.Handlers{Desktop: desktopHandler}, middleware.NewJWTAuthMiddleware(r.auth, r.users, r.settings, nil), r.settings, middleware.NewPanelRateLimiter(r.redis, r.settings))
+	routes.RegisterDesktopRoutes(r.router.Group("/api/v1"), &handler.Handlers{Desktop: desktopHandler}, middleware.NewJWTAuthMiddleware(r.auth, r.users, r.settings, nil), r.settings, middleware.NewPanelRateLimiter(r.redis, r.settings), r.redis)
 	for _, key := range []string{"desktop.enabled", "desktop.models", "desktop.default_model_id", "desktop.credential_ttl_seconds"} {
 		before, err := r.settingRepo.GetValue(r.ctx, key)
 		t.Cleanup(func() {

@@ -15,6 +15,8 @@
       <template #table>
         <DataTable :columns="columns" :data="items" :loading="loading">
           <template #cell-id="{ value }"><code class="break-all text-xs">{{ value }}</code></template>
+          <template #cell-kind="{ value }">{{ t(value === 'usage_statistics' ? 'admin.diagnostics.statistics' : 'admin.diagnostics.logs') }}</template>
+          <template #cell-user_id="{ value }">{{ value || '—' }}</template>
           <template #cell-created_at="{ value }">{{ formatDateTime(value) }}</template>
           <template #cell-expires_at="{ value }">{{ formatDateTime(value) }}</template>
           <template #cell-actions="{ row }">
@@ -75,6 +77,7 @@ let detailRequest: AbortController | undefined
 
 const columns = computed(() => [
   { key: 'id', label: t('admin.diagnostics.id') },
+  { key: 'kind', label: t('admin.diagnostics.kind') },
   { key: 'user_id', label: t('admin.diagnostics.account') },
   { key: 'size_bytes', label: t('admin.diagnostics.size') },
   { key: 'created_at', label: t('admin.diagnostics.created') },

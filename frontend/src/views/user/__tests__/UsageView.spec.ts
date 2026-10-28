@@ -5,6 +5,10 @@ import UsageView from '../UsageView.vue'
 import Select, { type SelectOption } from '@/components/common/Select.vue'
 import DateRangePicker from '@/components/common/DateRangePicker.vue'
 import UsageTable from '@/components/admin/usage/UsageTable.vue'
+import UsageStatsCards from '@/components/admin/usage/UsageStatsCards.vue'
+import { getSiteCacheRate } from '@/api/usage'
+
+vi.mock('@/api/usage', () => ({ getSiteCacheRate: vi.fn().mockResolvedValue({ visible_to_users: false }) }))
 
 const {
   query,
@@ -158,7 +162,7 @@ function mountUsageView() {
         Select: true,
         DateRangePicker: true,
         Icon: true,
-        UsageStatsCards: chartStub,
+        UsageStatsCards: { ...chartStub, props: ['showSiteCacheRate', 'siteCacheRate', 'manageSiteCacheRate'] },
         UsageTable: { ...chartStub, props: ['columns'] },
         UserErrorRequestsTable: chartStub,
         ModelDistributionChart: chartStub,
@@ -171,6 +175,16 @@ function mountUsageView() {
 }
 
 describe('user UsageView', () => {
+  it('shows the site-wide card only when the server allows it, without admin controls', async () => {
+    vi.mocked(getSiteCacheRate).mockResolvedValueOnce({ visible_to_users: true, cache_hit_rate: 87.6 })
+    const wrapper = mountUsageView()
+    await flushPromises()
+    const summary = wrapper.findComponent(UsageStatsCards)
+    expect(summary.props('showSiteCacheRate')).toBe(true)
+    expect(summary.props('siteCacheRate')).toEqual({ visible_to_users: true, cache_hit_rate: 87.6 })
+    expect(summary.props('manageSiteCacheRate')).toBeUndefined()
+  })
+
   beforeEach(() => {
     query.mockReset()
     getStats.mockReset()

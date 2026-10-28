@@ -205,6 +205,19 @@
           </div>
         </template>
 
+        <template #cell-cache_hit_rate="{ row }">
+          <span
+            data-testid="cache-hit-rate"
+            :title="t('usage.cacheHitRateHint')"
+            class="inline-flex cursor-help items-center whitespace-nowrap rounded-md px-2 py-1 text-xs font-medium tabular-nums"
+            :class="row.cache_read_tokens > 0
+              ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300'
+              : 'bg-gray-100 text-gray-500 dark:bg-dark-700 dark:text-gray-400'"
+          >
+            {{ formatUsageCacheHitRate(row) }}
+          </span>
+        </template>
+
         <template #cell-cost="{ row }">
           <div class="text-sm">
             <div class="flex items-center gap-1.5">
@@ -541,6 +554,7 @@ import { useAppStore } from '@/stores/app'
 import { formatDateTime, formatReasoningEffort, reasoningEffortValuesEqual } from '@/utils/format'
 import { formatCacheTokens, formatMultiplier } from '@/utils/formatters'
 import { formatTokenPricePerMillion } from '@/utils/usagePricing'
+import { formatUsageCacheHitRate } from '@/utils/usageCache'
 import { getUsageServiceTierLabel } from '@/utils/usageServiceTier'
 import { resolveUsageRequestType } from '@/utils/usageRequestType'
 import {

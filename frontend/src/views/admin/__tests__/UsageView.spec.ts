@@ -4,6 +4,8 @@ import { defineComponent, ref } from 'vue'
 
 import UsageView from '../UsageView.vue'
 
+vi.mock('@/api/usage', () => ({ getSiteCacheRate: vi.fn().mockResolvedValue({ visible_to_users: false, cache_hit_rate: 80 }) }))
+
 const { list, exportList, getStats, getSnapshotV2, getById, getModelStats, listErrorLogs, routeQuery, aoaToSheet, sheetAddAoa, saveAs, xlsxWrite } = vi.hoisted(() => {
   vi.stubGlobal('localStorage', {
     getItem: vi.fn(() => null),
@@ -38,6 +40,7 @@ const messages: Record<string, string> = {
 	'usage.sentUpstreamModel': 'Sent upstream model',
 	'usage.upstreamResponseModel': 'Upstream response model',
 	'usage.upstreamModelMismatch': 'Upstream model mismatch',
+	'usage.cacheRate': 'Cache rate',
 	'common.yes': 'Yes',
 	'common.no': 'No',
 }
@@ -461,7 +464,7 @@ describe('admin UsageView distribution metric toggles', () => {
   })
 })
 
-describe('admin UsageView request ID column visibility', () => {
+describe('admin UsageView column visibility', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.mocked(localStorage.getItem).mockReset().mockReturnValue(null)
@@ -477,6 +480,29 @@ describe('admin UsageView request ID column visibility', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+  })
+
+  it('shows cache rate after tokens by default and persists the option to hide it', async () => {
+    const wrapper = mountRouteFilteredUsageView()
+    await flushPromises()
+
+    const columns = (wrapper.vm as any).visibleColumns as { key: string }[]
+    expect(columns[columns.findIndex(column => column.key === 'tokens') + 1]?.key).toBe('cache_hit_rate')
+
+    await wrapper.get('[data-testid="usage-column-settings"]').trigger('click')
+    await wrapper.get('[data-testid="usage-column-toggle-cache_hit_rate"]').trigger('click')
+
+    expect((wrapper.vm as any).visibleColumns).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ key: 'cache_hit_rate' })]),
+    )
+    expect(localStorage.setItem).toHaveBeenCalledWith(
+      'usage-hidden-columns', expect.stringContaining('cache_hit_rate'),
+    )
+
+    await wrapper.get('[data-testid="usage-column-toggle-cache_hit_rate"]').trigger('click')
+    expect((wrapper.vm as any).visibleColumns).toEqual(
+      expect.arrayContaining([expect.objectContaining({ key: 'cache_hit_rate', label: 'Cache rate' })]),
+    )
   })
 
   it('keeps request ID hidden by default and allows enabling it from column settings', async () => {
@@ -798,5 +824,26 @@ describe('admin UsageView model audit export', () => {
 		const row = sheetAddAoa.mock.calls[0][1][0]
 		expect(row.slice(4, 8)).toEqual(['gpt-5.6-sol', 'gpt-5.5', 'gpt-5.4', 'Yes'])
 		expect(saveAs).toHaveBeenCalledTimes(1)
+	})
+
+	it('exports the same cache rate as the table, including missing prompt usage', async () => {
+		exportList.mockResolvedValue({
+			items: [
+				{ created_at: '2026-10-28T00:00:00Z', model: 'claude', input_tokens: 200, output_tokens: 100_000, cache_read_tokens: 500, cache_creation_tokens: 300 },
+				{ created_at: '2026-10-28T00:00:00Z', model: 'image', input_tokens: 0, output_tokens: 1000, cache_read_tokens: 0, cache_creation_tokens: 0 },
+			],
+			total: 2, pages: 1,
+		})
+		const wrapper = mountRouteFilteredUsageView()
+		await flushPromises()
+		await (wrapper.vm as any).exportToExcel()
+		await flushPromises()
+
+		const headers = aoaToSheet.mock.calls[0][0][0]
+		const cacheRateIndex = headers.indexOf('Cache rate')
+		expect(cacheRateIndex).toBeGreaterThan(-1)
+		const rows = sheetAddAoa.mock.calls[0][1]
+		expect(rows.map((row: unknown[]) => row[cacheRateIndex])).toEqual(['50.0%', '—'])
+		expect(rows[0]).toHaveLength(headers.length)
 	})
 })

@@ -1,5 +1,5 @@
 <template>
-  <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+  <div class="grid grid-cols-2 gap-4" :class="showSiteCacheRate ? 'lg:grid-cols-3 xl:grid-cols-5' : 'lg:grid-cols-4'">
     <div class="card p-4 flex items-center gap-3">
       <div class="rounded-lg bg-blue-100 p-2 dark:bg-blue-900/30 text-blue-600">
         <Icon name="document" size="md" />
@@ -85,6 +85,37 @@
       </div>
       <div><p class="text-xs font-medium text-gray-500">{{ t('usage.avgDuration') }}</p><p class="text-xl font-bold">{{ formatDuration(stats?.average_duration_ms || 0) }}</p></div>
     </div>
+    <div
+      v-if="showSiteCacheRate"
+      data-testid="site-cache-rate-card"
+      class="card col-span-2 flex min-w-0 items-center gap-3 p-4 lg:col-span-1"
+      :title="t('usage.siteCacheRateDescription')"
+    >
+      <div class="shrink-0 rounded-lg bg-primary-50 p-2 text-primary-600 dark:bg-primary-900/30 dark:text-primary-400">
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+        </svg>
+      </div>
+      <div class="min-w-0 flex-1">
+        <p class="text-xs font-medium text-gray-500">{{ t('usage.siteCacheRate') }}</p>
+        <p data-testid="site-cache-rate-value" class="text-xl font-bold tabular-nums text-primary-600 dark:text-primary-400" :title="t('usage.cacheHitRateHint')" aria-live="polite">
+          {{ siteCacheRateLoading ? '…' : siteCacheRate?.cache_hit_rate != null ? `${siteCacheRate.cache_hit_rate.toFixed(1)}%` : '—' }}
+        </p>
+        <p class="text-xs text-gray-400">{{ t('usage.siteCacheRateRange') }}</p>
+        <div v-if="manageSiteCacheRate" class="mt-1.5 flex items-center justify-between gap-2">
+          <label for="site-cache-rate-visibility" class="text-xs text-gray-500 dark:text-gray-400">{{ t('usage.siteCacheRateUserVisible') }}</label>
+          <Toggle
+            id="site-cache-rate-visibility"
+            data-testid="site-cache-rate-visibility"
+            :model-value="siteCacheRate?.visible_to_users ?? false"
+            :disabled="siteCacheRateSaving || siteCacheRateLoading || !siteCacheRate"
+            :aria-label="t('usage.siteCacheRateUserVisible')"
+            class="disabled:cursor-wait disabled:opacity-50"
+            @update:model-value="$emit('updateSiteCacheVisibility', $event)"
+          />
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -93,16 +124,30 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { AdminUsageStatsResponse } from '@/api/admin/usage'
 import type { UsageStatsResponse } from '@/types'
+import type { SiteCacheRateResponse } from '@/api/usage'
 import Icon from '@/components/icons/Icon.vue'
+import Toggle from '@/components/common/Toggle.vue'
 
 const props = withDefaults(defineProps<{
   stats: (AdminUsageStatsResponse | UsageStatsResponse) | null
   showAccountCost?: boolean
   strikeStandardCost?: boolean
+  showSiteCacheRate?: boolean
+  siteCacheRate?: SiteCacheRateResponse | null
+  siteCacheRateLoading?: boolean
+  siteCacheRateSaving?: boolean
+  manageSiteCacheRate?: boolean
 }>(), {
   showAccountCost: true,
   strikeStandardCost: false,
+  showSiteCacheRate: false,
+  siteCacheRate: null,
+  siteCacheRateLoading: false,
+  siteCacheRateSaving: false,
+  manageSiteCacheRate: false,
 })
+
+defineEmits<{ updateSiteCacheVisibility: [visible: boolean] }>()
 
 const { t } = useI18n()
 

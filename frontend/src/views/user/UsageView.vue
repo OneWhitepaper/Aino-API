@@ -24,7 +24,14 @@
         </div>
 
         <div class="user-usage-summary">
-          <UsageStatsCards :stats="usageStats" :show-account-cost="false" :strike-standard-cost="true" />
+          <UsageStatsCards
+            :stats="usageStats"
+            :show-account-cost="false"
+            :strike-standard-cost="true"
+            :show-site-cache-rate="showSiteCacheRate"
+            :site-cache-rate="siteCacheRate"
+            :site-cache-rate-loading="siteCacheRateLoading"
+          />
         </div>
         <details class="user-disclosure">
           <summary>{{ t('userPages.analysis') }}<span>{{ t('userPages.analysisHint') }}</span></summary>
@@ -252,6 +259,7 @@ import TokenUsageTrend from '@/components/charts/TokenUsageTrend.vue'
 import Icon from '@/components/icons/Icon.vue'
 import UserErrorRequestsTable from '@/components/user/UserErrorRequestsTable.vue'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
+import { useSiteCacheRate } from '@/composables/useSiteCacheRate'
 import { formatReasoningEffort } from '@/utils/format'
 import { getBillingModeLabel, getDisplayBillingMode as resolveDisplayBillingMode } from '@/utils/billingMode'
 import { resolveUsageRequestType, requestTypeToLegacyStream } from '@/utils/usageRequestType'
@@ -364,6 +372,7 @@ const getGranularityForRange = (start: string, end: string): 'day' | 'hour' => {
 const defaultRange = getLast24HoursRangeDates()
 const startDate = ref(defaultRange.start)
 const endDate = ref(defaultRange.end)
+const { siteCacheRate, siteCacheRateLoading, showSiteCacheRate, refreshSiteCacheRate } = useSiteCacheRate(startDate, endDate)
 const granularity = ref<'day' | 'hour'>(getGranularityForRange(startDate.value, endDate.value))
 
 const modelDistributionMetric = ref<DistributionMetric>('tokens')
@@ -565,6 +574,7 @@ const applyFilters = () => {
 }
 
 const refreshData = () => {
+  void refreshSiteCacheRate()
   void loadLogs()
   void loadStats()
   void loadModelStats()
@@ -918,7 +928,10 @@ onMounted(() => {
   loadSavedErrColumns()
   document.addEventListener('click', handleColumnClickOutside)
   void loadFilterOptions()
-  refreshData()
+  void loadLogs()
+  void loadStats()
+  void loadModelStats()
+  void loadChartData()
 })
 
 onUnmounted(() => {

@@ -1649,7 +1649,13 @@ export async function resetWebSearchUsage(payload: {
   );
 }
 
+export async function updateSiteCacheRateVisibility(visible: boolean): Promise<{ visible_to_users: boolean }> {
+  const { data } = await apiClient.put('/admin/settings/site-cache-rate', { visible_to_users: visible })
+  return data
+}
+
 export const settingsAPI = {
+  updateSiteCacheRateVisibility,
   getSettings,
   updateSettings,
   sendTestSMS,

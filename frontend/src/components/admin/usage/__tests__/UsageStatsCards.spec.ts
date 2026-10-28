@@ -44,6 +44,32 @@ const stats = {
 }
 
 describe('UsageStatsCards', () => {
+  it('shows a separate site-wide rate without using the personal summary tokens', async () => {
+    const wrapper = mount(UsageStatsCards, {
+      props: { stats, showSiteCacheRate: true, siteCacheRate: { cache_hit_rate: 81.23, visible_to_users: false }, manageSiteCacheRate: true },
+      global: { stubs: { Icon: true } },
+    })
+    expect(wrapper.get('[data-testid="site-cache-rate-card"]').text()).toContain('81.2%')
+    expect(wrapper.classes()).toContain('xl:grid-cols-5')
+    const toggle = wrapper.get('[data-testid="site-cache-rate-visibility"]')
+    expect(toggle.attributes('aria-checked')).toBe('false')
+    await toggle.trigger('click')
+    expect(wrapper.emitted('updateSiteCacheVisibility')).toEqual([[true]])
+  })
+
+  it('hides the site card for users when disabled and never gives users a visibility toggle', async () => {
+    const wrapper = mount(UsageStatsCards, {
+      props: { stats, showSiteCacheRate: false, siteCacheRate: { cache_hit_rate: 98, visible_to_users: false } },
+      global: { stubs: { Icon: true } },
+    })
+    expect(wrapper.find('[data-testid="site-cache-rate-card"]').exists()).toBe(false)
+    await wrapper.setProps({ showSiteCacheRate: true, siteCacheRate: { cache_hit_rate: 0, visible_to_users: true } })
+    expect(wrapper.get('[data-testid="site-cache-rate-card"]').text()).toContain('0.0%')
+    expect(wrapper.find('[data-testid="site-cache-rate-visibility"]').exists()).toBe(false)
+    await wrapper.setProps({ siteCacheRate: { visible_to_users: true } })
+    expect(wrapper.get('[data-testid="site-cache-rate-card"]').text()).toContain('—')
+  })
+
   it('shows cache token breakdown values', () => {
     const wrapper = mount(UsageStatsCards, {
       props: {

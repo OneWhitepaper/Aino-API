@@ -80,6 +80,10 @@ func (s *UsageService) GetSiteCacheHitRate(ctx context.Context, startTime, endTi
 		if loaded.Err != nil {
 			return nil, loaded.Err
 		}
-		return loaded.Val.(siteCacheRateEntry).rate, nil
+		entry, ok := loaded.Val.(siteCacheRateEntry)
+		if !ok {
+			return nil, fmt.Errorf("unexpected site cache rate result type %T", loaded.Val)
+		}
+		return entry.rate, nil
 	}
 }

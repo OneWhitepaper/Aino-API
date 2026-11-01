@@ -80,7 +80,7 @@ func TestDesktopImageCredentialSeparatesInferenceRoutes(t *testing.T) {
 				rec := httptest.NewRecorder()
 				router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, path, nil))
 				want := http.StatusForbidden
-				if purpose == service.DesktopPurposeImage && path == "/v1/images/generations" || purpose == service.DesktopPurposeChat && (path == "/v1/chat/completions" || path == "/v1/responses" || path == "/v1/messages") {
+				if purpose == service.DesktopPurposeImage && (path == "/v1/images/generations" || path == "/v1/images/edits") || purpose == service.DesktopPurposeChat && (path == "/v1/chat/completions" || path == "/v1/responses" || path == "/v1/messages") {
 					want = http.StatusOK
 				}
 				require.Equal(t, want, rec.Code, rec.Body.String())

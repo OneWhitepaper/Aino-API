@@ -108,7 +108,7 @@ Redis 必须与生产身份一致地配置并可用；故障时应拒绝发码/�
 
 `GET /api/v1/desktop/models` 缺省或 `include_images=false` 只返回对话条目，兼容不能解析图片协议的已发布桌面。支持生图的新桌面必须显式请求 `GET /api/v1/desktop/models?include_images=true`，才能取得对话与生图条目；两者都保留既有用户分组和模型白名单过滤，查询参数不授予任何权限。空值等同缺省，非法布尔值返回 400。Bootstrap 的 `default_model_id` 仍只代表默认对话模型，新增的 `default_image_model_id` 单独代表默认生图模型。
 
-`POST /api/v1/desktop/credentials` 的可选 `purpose` 默认 `chat`；生图请求必须传 `image` 并选对应目录 ID。两种凭据独立复用，返回顶层 `purpose`，各自保留用户、设备、登录会话、分组、失效与模型白名单边界。首版 image 凭据只授权同步 `POST /v1/images/generations`，不授权对话、编辑、异步任务或批量接口；chat 凭据仍不能调用图片接口。用量关联可发送 `X-Aino-Purpose: image`，配合现有三个 UUID 关联头，私有头仍在转发前剥离。发布先执行迁移并部署兼容 API，再更新桌面；本节不代表已部署或完成付费生图验收。
+`POST /api/v1/desktop/credentials` 的可选 `purpose` 默认 `chat`；生图请求必须传 `image` 并选对应目录 ID。两种凭据独立复用，返回顶层 `purpose`，各自保留用户、设备、登录会话、分组、失效与模型白名单边界。image 凭据仅授权同步 `POST /v1/images/generations` 和 `POST /v1/images/edits`，不授权对话、异步任务或批量接口；chat 凭据仍不能调用图片接口。改图复用现有图片转发、账号调度和计费，原图由桌面发送至编辑接口，具体支持范围由所选模型决定。用量关联可发送 `X-Aino-Purpose: image`，配合现有三个 UUID 关联头，私有头仍在转发前剥离。发布先执行迁移并部署兼容 API，再更新桌面；本节不代表已部署或完成付费生图验收。
 
 组的 allowlist、用户授权/订阅和原价格服务仍是权威。可用目录不等于扩大用户分组权限。只给测试账户授予测试分组可以限制模型灰度；phone 灰度只由部署配置中的 canonical 手机号列表限制短信发码和验码，不是模型授权，也不能据此扩大模型分组权限。先在预发布验收。
 

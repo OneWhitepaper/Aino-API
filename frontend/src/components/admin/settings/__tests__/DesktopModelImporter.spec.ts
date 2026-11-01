@@ -56,7 +56,11 @@ describe('DesktopModelImporter', () => {
     expect(wrapper.find('[data-testid="desktop-import-choice"]').exists()).toBe(false)
     expect(wrapper.emitted('import')).toBeUndefined()
     const protocol = wrapper.findAllComponents(Select).find(select => select.props('id') === 'desktop-import-protocol')!
-    expect(protocol.props('modelValue')).toBe('anthropic_messages')
+    expect(protocol.props('modelValue')).toBe('auto')
+    await wrapper.get('[data-testid="desktop-import-fetch"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="desktop-import-confirm"]').trigger('click')
+    expect((wrapper.emitted('import')![0][0] as DesktopModelEntry[]).every(entry => entry.group_id === 18 && entry.api_mode === 'anthropic_messages')).toBe(true)
   })
 
   it('preserves the catalog on discovery failure and permits an explicit retry', async () => {
@@ -81,7 +85,7 @@ describe('DesktopModelImporter', () => {
     const wrapper = mountImporter(models)
     await selectGroup(wrapper, 17)
     const accounts = wrapper.findAllComponents(Select).find(select => select.props('id') === 'desktop-import-account')!
-    expect(accounts.props('options')).toHaveLength(2)
+    expect(accounts.props('options')).toHaveLength(3)
     accounts.vm.$emit('update:modelValue', 10)
     await flushPromises()
     await wrapper.get('[data-testid="desktop-import-fetch"]').trigger('click')
@@ -105,5 +109,62 @@ describe('DesktopModelImporter', () => {
     expect(imported.length).toBeGreaterThan(0)
     expect(imported.every(entry => entry.api_mode === 'images_generations' && entry.capabilities.image_generation === true && !entry.capabilities.tools)).toBe(true)
     expect(saved.api_mode).toBe('chat_completions')
+  })
+
+  it.each(['chat', 'image'] as const)('discovers the whole %s group by default and keeps deduplicated results when one source fails', async purpose => {
+    list.mockResolvedValueOnce({ items: [source, { ...source, id: 10 }, { ...source, id: 11 }], pages: 1 })
+    syncUpstreamModels.mockImplementation(async (id: number) => {
+      if (id === 10) throw new Error('unavailable account')
+      return { models: id === 9 ? ['allowed-shared', 'allowed-first'] : ['allowed-shared', 'allowed-last'] }
+    })
+    const wrapper = mount(DesktopModelImporter, { props: { groups, groupsLoading: false, models: [], purpose } })
+    await selectGroup(wrapper, 17)
+    expect((wrapper.get('[data-testid="desktop-import-fetch"]').element as HTMLButtonElement).disabled).toBe(false)
+    await wrapper.get('[data-testid="desktop-import-fetch"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="desktop-import-partial"]').text()).toContain('partialFailure')
+    expect(wrapper.findAll('[data-testid="desktop-import-choice"]')).toHaveLength(3)
+    await wrapper.get('[data-testid="desktop-import-confirm"]').trigger('click')
+    const imported = wrapper.emitted('import')![0][0] as DesktopModelEntry[]
+    expect(imported.map(entry => entry.model)).toEqual(['allowed-shared', 'allowed-first', 'allowed-last'])
+    expect(imported.every(entry => entry.group_id === 17 && !('account_id' in entry))).toBe(true)
+    expect(imported.every(entry => entry.api_mode === (purpose === 'image' ? 'images_generations' : 'chat_completions'))).toBe(true)
+    expect(wrapper.get('details').attributes('open')).toBeUndefined()
+  })
+
+  it('discards in-flight discovery when protocol changes and refetches using the selected protocol', async () => {
+    let resolve!: (value: { models: string[] }) => void
+    syncUpstreamModels.mockImplementationOnce(() => new Promise(done => { resolve = done }))
+    const wrapper = mountImporter()
+    await selectGroup(wrapper, 17)
+    await wrapper.get('[data-testid="desktop-import-fetch"]').trigger('click')
+    wrapper.findAllComponents(Select).find(select => select.props('id') === 'desktop-import-protocol')!.vm.$emit('update:modelValue', 'responses')
+    await flushPromises()
+    resolve({ models: ['allowed-stale'] })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="desktop-import-choice"]').exists()).toBe(false)
+    await wrapper.get('[data-testid="desktop-import-fetch"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="desktop-import-confirm"]').trigger('click')
+    const imported = wrapper.emitted('import')![0][0] as DesktopModelEntry[]
+    expect(imported.every(entry => entry.api_mode === 'responses' && entry.model !== 'allowed-stale')).toBe(true)
+  })
+
+  it('selects same-named models on different routes independently', async () => {
+    list.mockResolvedValueOnce({ items: [source, { ...source, id: 10, platform: 'anthropic' }], pages: 1 })
+    syncUpstreamModels.mockResolvedValue({ models: ['allowed-shared'] })
+    const wrapper = mount(DesktopModelImporter, { props: { groups: [{ ...groups[0], platform: 'composite' } as AdminGroup], groupsLoading: false, models: [] } })
+    await selectGroup(wrapper, 17)
+    await wrapper.get('[data-testid="desktop-import-fetch"]').trigger('click')
+    await flushPromises()
+    const choices = wrapper.findAll('[data-testid="desktop-import-choice"]')
+    expect(choices).toHaveLength(2)
+    await choices[0].setValue(false)
+    expect((choices[1].element as HTMLInputElement).checked).toBe(true)
+    await wrapper.get('[data-testid="desktop-import-confirm"]').trigger('click')
+    const imported = wrapper.emitted('import')![0][0] as DesktopModelEntry[]
+    expect(imported).toHaveLength(1)
+    expect(imported[0]).toMatchObject({ model: 'allowed-shared', group_id: 17, platform: 'anthropic', api_mode: 'anthropic_messages' })
   })
 })

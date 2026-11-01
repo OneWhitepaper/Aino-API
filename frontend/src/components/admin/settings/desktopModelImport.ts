@@ -1,5 +1,5 @@
 import type { DesktopModelEntry } from '@/api/admin/settings'
-import type { SyncUpstreamModelsResult } from '@/api/admin/accounts'
+import type { SyncUpstreamModelsResult, UpstreamModelSyncWarning } from '@/api/admin/accounts'
 import type { AccountListItem, AdminGroup } from '@/types'
 
 export const DESKTOP_MODEL_LIMIT = 200
@@ -126,4 +126,53 @@ export function prepareDesktopModelImport(existing: DesktopModelEntry[], selecte
     additions.push({ ...draft, id, sort_order: order++, agent_verified: false, capabilities: { ...draft.capabilities, tools: false } })
   }
   return additions
+}
+
+export interface DesktopGroupDiscoveryResult {
+  models: DesktopModelEntry[]
+  warnings: UpstreamModelSyncWarning[]
+  succeeded: number
+  failed: number
+}
+
+export async function discoverDesktopGroupModels(
+  group: AdminGroup,
+  accounts: Pick<AccountListItem, 'id' | 'platform' | 'type'>[],
+  apiMode: DesktopModelEntry['api_mode'] | 'auto',
+  sync: (accountID: number) => Promise<SyncUpstreamModelsResult>,
+  isCurrent: () => boolean = () => true
+): Promise<DesktopGroupDiscoveryResult> {
+  const catalogs: Array<SyncUpstreamModelsResult | null> = []
+  let next = 0
+  async function fetchSource(): Promise<void> {
+    while (next < accounts.length && isCurrent()) {
+      const index = next++
+      try {
+        catalogs[index] = await sync(accounts[index].id)
+      } catch {
+        catalogs[index] = null
+      }
+    }
+  }
+  // Bound upstream requests without changing the group's inference scheduler.
+  await Promise.all(Array.from({ length: Math.min(2, accounts.length) }, fetchSource))
+  const result: DesktopGroupDiscoveryResult = { models: [], warnings: [], succeeded: 0, failed: 0 }
+  if (!isCurrent()) return result
+  const routes = new Map<string, DesktopModelEntry[]>()
+  // Merge in source order so network timing cannot change imported metadata.
+  for (const [index, catalog] of catalogs.entries()) {
+    if (!catalog) { result.failed++; continue }
+    result.succeeded++
+    result.warnings.push(...catalog.warnings ?? [])
+    const source = accounts[index]
+    const protocol = apiMode !== 'auto' ? apiMode : source.platform === 'anthropic' ? 'anthropic_messages' : source.platform === 'openai' && source.type === 'oauth' ? 'responses' : 'chat_completions'
+    for (const model of buildDesktopModelDrafts(catalog, group, source, protocol)) {
+      const matchingName = routes.get(model.model) ?? []
+      if (matchingName.some(existing => sameDesktopModel(existing, model))) continue
+      matchingName.push(model)
+      routes.set(model.model, matchingName)
+      result.models.push(model)
+    }
+  }
+  return result
 }

@@ -91,9 +91,19 @@ func (s *APIKeyService) ValidateDesktopCredential(ctx context.Context, key *APIK
 	if !settings.Enabled {
 		return ErrDesktopCredentialRevoked
 	}
+	purpose := lease.Purpose
+	if purpose == "" {
+		purpose = DesktopPurposeChat
+	}
+	if purpose != DesktopPurposeChat && purpose != DesktopPurposeImage {
+		return ErrDesktopCredentialRevoked
+	}
+	if purpose == DesktopPurposeImage && !GroupAllowsImageGeneration(group) {
+		return ErrDesktopCredentialRevoked
+	}
 	models := []string{}
 	for _, entry := range settings.Models {
-		if entry.GroupID == group.ID && entry.AgentVerified && entry.Capabilities.Tools && group.ModelAllowlist.Allows(entry.Model) {
+		if entry.GroupID == group.ID && desktopModelSupportsPurpose(entry, purpose) && group.ModelAllowlist.Allows(entry.Model) {
 			models = append(models, entry.Model)
 		}
 	}
@@ -106,6 +116,7 @@ func (s *APIKeyService) ValidateDesktopCredential(ctx context.Context, key *APIK
 	groupCopy.FallbackGroupID = nil
 	groupCopy.FallbackGroupIDOnInvalidRequest = nil
 	*key = *fresh
+	key.DesktopPurpose = purpose
 	key.User, key.Group = user, &groupCopy
 	return nil
 }

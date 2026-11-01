@@ -20908,6 +20908,7 @@ type DesktopModelCredentialMutation struct {
 	token_version       *int64
 	addtoken_version    *int64
 	model_id            *string
+	purpose             *string
 	expires_at          *time.Time
 	revoked_at          *time.Time
 	revoke_reason       *string
@@ -21371,6 +21372,42 @@ func (m *DesktopModelCredentialMutation) ResetModelID() {
 	m.model_id = nil
 }
 
+// SetPurpose sets the "purpose" field.
+func (m *DesktopModelCredentialMutation) SetPurpose(s string) {
+	m.purpose = &s
+}
+
+// Purpose returns the value of the "purpose" field in the mutation.
+func (m *DesktopModelCredentialMutation) Purpose() (r string, exists bool) {
+	v := m.purpose
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPurpose returns the old "purpose" field's value of the DesktopModelCredential entity.
+// If the DesktopModelCredential object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DesktopModelCredentialMutation) OldPurpose(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPurpose is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPurpose requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPurpose: %w", err)
+	}
+	return oldValue.Purpose, nil
+}
+
+// ResetPurpose resets all changes to the "purpose" field.
+func (m *DesktopModelCredentialMutation) ResetPurpose() {
+	m.purpose = nil
+}
+
 // SetAPIKeyID sets the "api_key_id" field.
 func (m *DesktopModelCredentialMutation) SetAPIKeyID(i int64) {
 	m.api_key = &i
@@ -21656,7 +21693,7 @@ func (m *DesktopModelCredentialMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *DesktopModelCredentialMutation) Fields() []string {
-	fields := make([]string, 0, 13)
+	fields := make([]string, 0, 14)
 	if m.created_at != nil {
 		fields = append(fields, desktopmodelcredential.FieldCreatedAt)
 	}
@@ -21683,6 +21720,9 @@ func (m *DesktopModelCredentialMutation) Fields() []string {
 	}
 	if m.model_id != nil {
 		fields = append(fields, desktopmodelcredential.FieldModelID)
+	}
+	if m.purpose != nil {
+		fields = append(fields, desktopmodelcredential.FieldPurpose)
 	}
 	if m.api_key != nil {
 		fields = append(fields, desktopmodelcredential.FieldAPIKeyID)
@@ -21722,6 +21762,8 @@ func (m *DesktopModelCredentialMutation) Field(name string) (ent.Value, bool) {
 		return m.GroupID()
 	case desktopmodelcredential.FieldModelID:
 		return m.ModelID()
+	case desktopmodelcredential.FieldPurpose:
+		return m.Purpose()
 	case desktopmodelcredential.FieldAPIKeyID:
 		return m.APIKeyID()
 	case desktopmodelcredential.FieldExpiresAt:
@@ -21757,6 +21799,8 @@ func (m *DesktopModelCredentialMutation) OldField(ctx context.Context, name stri
 		return m.OldGroupID(ctx)
 	case desktopmodelcredential.FieldModelID:
 		return m.OldModelID(ctx)
+	case desktopmodelcredential.FieldPurpose:
+		return m.OldPurpose(ctx)
 	case desktopmodelcredential.FieldAPIKeyID:
 		return m.OldAPIKeyID(ctx)
 	case desktopmodelcredential.FieldExpiresAt:
@@ -21836,6 +21880,13 @@ func (m *DesktopModelCredentialMutation) SetField(name string, value ent.Value) 
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetModelID(v)
+		return nil
+	case desktopmodelcredential.FieldPurpose:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPurpose(v)
 		return nil
 	case desktopmodelcredential.FieldAPIKeyID:
 		v, ok := value.(int64)
@@ -21970,6 +22021,9 @@ func (m *DesktopModelCredentialMutation) ResetField(name string) error {
 		return nil
 	case desktopmodelcredential.FieldModelID:
 		m.ResetModelID()
+		return nil
+	case desktopmodelcredential.FieldPurpose:
+		m.ResetPurpose()
 		return nil
 	case desktopmodelcredential.FieldAPIKeyID:
 		m.ResetAPIKeyID()

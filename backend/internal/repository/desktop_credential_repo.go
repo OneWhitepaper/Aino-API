@@ -21,6 +21,9 @@ func NewDesktopCredentialRepository(client *dbent.Client) service.DesktopCredent
 // The user row serializes issuance across API instances, including the first
 // lease where there is no credential row to lock. The key and lease commit together.
 func (r *desktopCredentialRepository) IssueOrReuse(ctx context.Context, candidate *service.DesktopCredential, key *service.APIKey, ttl time.Duration) (*service.DesktopCredential, *service.APIKey, error) {
+	if candidate.Purpose == "" {
+		candidate.Purpose = service.DesktopPurposeChat
+	}
 	tx, err := r.client.Tx(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -40,6 +43,7 @@ func (r *desktopCredentialRepository) IssueOrReuse(ctx context.Context, candidat
 	scope := []predicate.DesktopModelCredential{
 		desktopmodelcredential.UserIDEQ(candidate.UserID), desktopmodelcredential.DeviceIDEQ(candidate.DeviceID),
 		desktopmodelcredential.ConnectionGrantIDEQ(candidate.ConnectionGrantID), desktopmodelcredential.SessionFamilyIDEQ(candidate.SessionFamilyID), desktopmodelcredential.GroupIDEQ(candidate.GroupID),
+		desktopmodelcredential.PurposeEQ(candidate.Purpose),
 	}
 	previous, err := tx.DesktopModelCredential.Query().Where(scope...).Order(dbent.Desc(desktopmodelcredential.FieldID)).First(ctx)
 	if err != nil && !dbent.IsNotFound(err) {
@@ -88,7 +92,7 @@ func (r *desktopCredentialRepository) IssueOrReuse(ctx context.Context, candidat
 	}
 	created, err := tx.DesktopModelCredential.Create().SetUserID(candidate.UserID).SetDeviceID(candidate.DeviceID).
 		SetConnectionGrantID(candidate.ConnectionGrantID).SetSessionFamilyID(candidate.SessionFamilyID).
-		SetTokenVersion(candidate.TokenVersion).SetGroupID(candidate.GroupID).SetModelID(candidate.ModelID).
+		SetTokenVersion(candidate.TokenVersion).SetGroupID(candidate.GroupID).SetModelID(candidate.ModelID).SetPurpose(candidate.Purpose).
 		SetAPIKeyID(key.ID).SetExpiresAt(candidate.ExpiresAt).Save(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -158,5 +162,5 @@ func (r *desktopCredentialRepository) revoke(ctx context.Context, scope predicat
 }
 
 func desktopCredentialFromEntity(e *dbent.DesktopModelCredential) *service.DesktopCredential {
-	return &service.DesktopCredential{ID: e.ID, UserID: e.UserID, DeviceID: e.DeviceID, ConnectionGrantID: e.ConnectionGrantID, SessionFamilyID: e.SessionFamilyID, TokenVersion: e.TokenVersion, GroupID: e.GroupID, ModelID: e.ModelID, APIKeyID: e.APIKeyID, ExpiresAt: e.ExpiresAt, RevokedAt: e.RevokedAt, RevokeReason: e.RevokeReason, CreatedAt: e.CreatedAt, UpdatedAt: e.UpdatedAt}
+	return &service.DesktopCredential{Purpose: e.Purpose, ID: e.ID, UserID: e.UserID, DeviceID: e.DeviceID, ConnectionGrantID: e.ConnectionGrantID, SessionFamilyID: e.SessionFamilyID, TokenVersion: e.TokenVersion, GroupID: e.GroupID, ModelID: e.ModelID, APIKeyID: e.APIKeyID, ExpiresAt: e.ExpiresAt, RevokedAt: e.RevokedAt, RevokeReason: e.RevokeReason, CreatedAt: e.CreatedAt, UpdatedAt: e.UpdatedAt}
 }

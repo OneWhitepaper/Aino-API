@@ -874,6 +874,7 @@ var (
 		{Name: "session_family_id", Type: field.TypeString, Size: 128},
 		{Name: "token_version", Type: field.TypeInt64},
 		{Name: "model_id", Type: field.TypeString, Size: 128},
+		{Name: "purpose", Type: field.TypeString, Size: 16, Default: "chat"},
 		{Name: "expires_at", Type: field.TypeTime},
 		{Name: "revoked_at", Type: field.TypeTime, Nullable: true},
 		{Name: "revoke_reason", Type: field.TypeString, Nullable: true, Size: 100},
@@ -889,28 +890,28 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "desktop_model_credentials_api_keys_desktop_model_credentials",
-				Columns:    []*schema.Column{DesktopModelCredentialsColumns[11]},
+				Columns:    []*schema.Column{DesktopModelCredentialsColumns[12]},
 				RefColumns: []*schema.Column{APIKeysColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "desktop_model_credentials_groups_desktop_model_credentials",
-				Columns:    []*schema.Column{DesktopModelCredentialsColumns[12]},
+				Columns:    []*schema.Column{DesktopModelCredentialsColumns[13]},
 				RefColumns: []*schema.Column{GroupsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "desktop_model_credentials_users_desktop_model_credentials",
-				Columns:    []*schema.Column{DesktopModelCredentialsColumns[13]},
+				Columns:    []*schema.Column{DesktopModelCredentialsColumns[14]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 		},
 		Indexes: []*schema.Index{
 			{
-				Name:    "desktopmodelcredential_user_id_device_id_connection_grant_id_session_family_id_group_id",
+				Name:    "desktopmodelcredential_user_id_device_id_connection_grant_id_session_family_id_group_id_purpose",
 				Unique:  true,
-				Columns: []*schema.Column{DesktopModelCredentialsColumns[13], DesktopModelCredentialsColumns[3], DesktopModelCredentialsColumns[4], DesktopModelCredentialsColumns[5], DesktopModelCredentialsColumns[12]},
+				Columns: []*schema.Column{DesktopModelCredentialsColumns[14], DesktopModelCredentialsColumns[3], DesktopModelCredentialsColumns[4], DesktopModelCredentialsColumns[5], DesktopModelCredentialsColumns[13], DesktopModelCredentialsColumns[8]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "revoked_at IS NULL",
 				},
@@ -923,17 +924,17 @@ var (
 			{
 				Name:    "desktopmodelcredential_user_id_device_id",
 				Unique:  false,
-				Columns: []*schema.Column{DesktopModelCredentialsColumns[13], DesktopModelCredentialsColumns[3]},
+				Columns: []*schema.Column{DesktopModelCredentialsColumns[14], DesktopModelCredentialsColumns[3]},
 			},
 			{
 				Name:    "desktopmodelcredential_api_key_id",
 				Unique:  true,
-				Columns: []*schema.Column{DesktopModelCredentialsColumns[11]},
+				Columns: []*schema.Column{DesktopModelCredentialsColumns[12]},
 			},
 			{
 				Name:    "desktopmodelcredential_user_id_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{DesktopModelCredentialsColumns[13], DesktopModelCredentialsColumns[1]},
+				Columns: []*schema.Column{DesktopModelCredentialsColumns[14], DesktopModelCredentialsColumns[1]},
 			},
 		},
 	}

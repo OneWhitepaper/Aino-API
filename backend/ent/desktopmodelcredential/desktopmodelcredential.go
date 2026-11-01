@@ -32,6 +32,8 @@ const (
 	FieldGroupID = "group_id"
 	// FieldModelID holds the string denoting the model_id field in the database.
 	FieldModelID = "model_id"
+	// FieldPurpose holds the string denoting the purpose field in the database.
+	FieldPurpose = "purpose"
 	// FieldAPIKeyID holds the string denoting the api_key_id field in the database.
 	FieldAPIKeyID = "api_key_id"
 	// FieldExpiresAt holds the string denoting the expires_at field in the database.
@@ -83,6 +85,7 @@ var Columns = []string{
 	FieldTokenVersion,
 	FieldGroupID,
 	FieldModelID,
+	FieldPurpose,
 	FieldAPIKeyID,
 	FieldExpiresAt,
 	FieldRevokedAt,
@@ -114,6 +117,10 @@ var (
 	SessionFamilyIDValidator func(string) error
 	// ModelIDValidator is a validator for the "model_id" field. It is called by the builders before save.
 	ModelIDValidator func(string) error
+	// DefaultPurpose holds the default value on creation for the "purpose" field.
+	DefaultPurpose string
+	// PurposeValidator is a validator for the "purpose" field. It is called by the builders before save.
+	PurposeValidator func(string) error
 	// RevokeReasonValidator is a validator for the "revoke_reason" field. It is called by the builders before save.
 	RevokeReasonValidator func(string) error
 )
@@ -169,6 +176,11 @@ func ByGroupID(opts ...sql.OrderTermOption) OrderOption {
 // ByModelID orders the results by the model_id field.
 func ByModelID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldModelID, opts...).ToFunc()
+}
+
+// ByPurpose orders the results by the purpose field.
+func ByPurpose(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPurpose, opts...).ToFunc()
 }
 
 // ByAPIKeyID orders the results by the api_key_id field.

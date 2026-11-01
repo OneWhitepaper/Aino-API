@@ -213,6 +213,7 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		"desktop.enabled":                 "false",
 		"desktop.models":                  "[]",
 		"desktop.default_model_id":        "",
+		"desktop.default_image_model_id":  "",
 		"desktop.credential_ttl_seconds":  "3600",
 
 		// Affiliate (邀请返利) feature (default disabled; opt-in)

@@ -667,7 +667,7 @@ func TestAPIContracts(t *testing.T) {
 					"page_size": 10,
 					"pages": 1,
 					"supported_desktop_purposes": [
-						"chat", "title", "compression", "vision", "delegation", "other_auxiliary",
+						"chat", "title", "compression", "vision", "delegation", "other_auxiliary", "image",
 						"session_summary", "approval", "mcp", "tts_audio_tags", "side_question"
 					]
 				}
@@ -777,6 +777,7 @@ func TestAPIContracts(t *testing.T) {
 						"enabled": false,
 						"models": [],
 						"default_model_id": null,
+						"default_image_model_id": null,
 						"credential_ttl_seconds": 3600
 					},
 					"phone_login_enabled": false,
@@ -1168,6 +1169,7 @@ func TestAPIContracts(t *testing.T) {
 						"enabled": false,
 						"models": [],
 						"default_model_id": null,
+						"default_image_model_id": null,
 						"credential_ttl_seconds": 3600
 					},
 					"phone_login_enabled": false,

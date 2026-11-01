@@ -142,6 +142,20 @@ func (_u *DesktopModelCredentialUpdate) SetNillableModelID(v *string) *DesktopMo
 	return _u
 }
 
+// SetPurpose sets the "purpose" field.
+func (_u *DesktopModelCredentialUpdate) SetPurpose(v string) *DesktopModelCredentialUpdate {
+	_u.mutation.SetPurpose(v)
+	return _u
+}
+
+// SetNillablePurpose sets the "purpose" field if the given value is not nil.
+func (_u *DesktopModelCredentialUpdate) SetNillablePurpose(v *string) *DesktopModelCredentialUpdate {
+	if v != nil {
+		_u.SetPurpose(*v)
+	}
+	return _u
+}
+
 // SetAPIKeyID sets the "api_key_id" field.
 func (_u *DesktopModelCredentialUpdate) SetAPIKeyID(v int64) *DesktopModelCredentialUpdate {
 	_u.mutation.SetAPIKeyID(v)
@@ -306,6 +320,11 @@ func (_u *DesktopModelCredentialUpdate) check() error {
 			return &ValidationError{Name: "model_id", err: fmt.Errorf(`ent: validator failed for field "DesktopModelCredential.model_id": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.Purpose(); ok {
+		if err := desktopmodelcredential.PurposeValidator(v); err != nil {
+			return &ValidationError{Name: "purpose", err: fmt.Errorf(`ent: validator failed for field "DesktopModelCredential.purpose": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.RevokeReason(); ok {
 		if err := desktopmodelcredential.RevokeReasonValidator(v); err != nil {
 			return &ValidationError{Name: "revoke_reason", err: fmt.Errorf(`ent: validator failed for field "DesktopModelCredential.revoke_reason": %w`, err)}
@@ -355,6 +374,9 @@ func (_u *DesktopModelCredentialUpdate) sqlSave(ctx context.Context) (_node int,
 	}
 	if value, ok := _u.mutation.ModelID(); ok {
 		_spec.SetField(desktopmodelcredential.FieldModelID, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Purpose(); ok {
+		_spec.SetField(desktopmodelcredential.FieldPurpose, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.ExpiresAt(); ok {
 		_spec.SetField(desktopmodelcredential.FieldExpiresAt, field.TypeTime, value)
@@ -589,6 +611,20 @@ func (_u *DesktopModelCredentialUpdateOne) SetNillableModelID(v *string) *Deskto
 	return _u
 }
 
+// SetPurpose sets the "purpose" field.
+func (_u *DesktopModelCredentialUpdateOne) SetPurpose(v string) *DesktopModelCredentialUpdateOne {
+	_u.mutation.SetPurpose(v)
+	return _u
+}
+
+// SetNillablePurpose sets the "purpose" field if the given value is not nil.
+func (_u *DesktopModelCredentialUpdateOne) SetNillablePurpose(v *string) *DesktopModelCredentialUpdateOne {
+	if v != nil {
+		_u.SetPurpose(*v)
+	}
+	return _u
+}
+
 // SetAPIKeyID sets the "api_key_id" field.
 func (_u *DesktopModelCredentialUpdateOne) SetAPIKeyID(v int64) *DesktopModelCredentialUpdateOne {
 	_u.mutation.SetAPIKeyID(v)
@@ -766,6 +802,11 @@ func (_u *DesktopModelCredentialUpdateOne) check() error {
 			return &ValidationError{Name: "model_id", err: fmt.Errorf(`ent: validator failed for field "DesktopModelCredential.model_id": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.Purpose(); ok {
+		if err := desktopmodelcredential.PurposeValidator(v); err != nil {
+			return &ValidationError{Name: "purpose", err: fmt.Errorf(`ent: validator failed for field "DesktopModelCredential.purpose": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.RevokeReason(); ok {
 		if err := desktopmodelcredential.RevokeReasonValidator(v); err != nil {
 			return &ValidationError{Name: "revoke_reason", err: fmt.Errorf(`ent: validator failed for field "DesktopModelCredential.revoke_reason": %w`, err)}
@@ -832,6 +873,9 @@ func (_u *DesktopModelCredentialUpdateOne) sqlSave(ctx context.Context) (_node *
 	}
 	if value, ok := _u.mutation.ModelID(); ok {
 		_spec.SetField(desktopmodelcredential.FieldModelID, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Purpose(); ok {
+		_spec.SetField(desktopmodelcredential.FieldPurpose, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.ExpiresAt(); ok {
 		_spec.SetField(desktopmodelcredential.FieldExpiresAt, field.TypeTime, value)

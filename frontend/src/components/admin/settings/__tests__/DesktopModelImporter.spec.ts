@@ -91,4 +91,19 @@ describe('DesktopModelImporter', () => {
     expect((wrapper.get('[data-testid="desktop-import-confirm"]').element as HTMLButtonElement).disabled).toBe(true)
     expect(wrapper.emitted('import')).toBeUndefined()
   })
+
+  it('keeps image imports on the Images API after account selection', async () => {
+    const wrapper = mount(DesktopModelImporter, { props: { groups, groupsLoading: false, models: [saved], purpose: 'image' } })
+    await selectGroup(wrapper, 17)
+    const protocol = wrapper.findAllComponents(Select).find(select => select.props('id') === 'desktop-import-protocol')!
+    expect(protocol.props('modelValue')).toBe('images_generations')
+    expect(protocol.props('options')).toEqual([{ value: 'images_generations', label: 'Images API' }])
+    await wrapper.get('[data-testid="desktop-import-fetch"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="desktop-import-confirm"]').trigger('click')
+    const imported = wrapper.emitted('import')![0][0] as DesktopModelEntry[]
+    expect(imported.length).toBeGreaterThan(0)
+    expect(imported.every(entry => entry.api_mode === 'images_generations' && entry.capabilities.image_generation === true && !entry.capabilities.tools)).toBe(true)
+    expect(saved.api_mode).toBe('chat_completions')
+  })
 })

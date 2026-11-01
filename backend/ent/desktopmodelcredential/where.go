@@ -100,6 +100,11 @@ func ModelID(v string) predicate.DesktopModelCredential {
 	return predicate.DesktopModelCredential(sql.FieldEQ(FieldModelID, v))
 }
 
+// Purpose applies equality check predicate on the "purpose" field. It's identical to PurposeEQ.
+func Purpose(v string) predicate.DesktopModelCredential {
+	return predicate.DesktopModelCredential(sql.FieldEQ(FieldPurpose, v))
+}
+
 // APIKeyID applies equality check predicate on the "api_key_id" field. It's identical to APIKeyIDEQ.
 func APIKeyID(v int64) predicate.DesktopModelCredential {
 	return predicate.DesktopModelCredential(sql.FieldEQ(FieldAPIKeyID, v))
@@ -538,6 +543,71 @@ func ModelIDEqualFold(v string) predicate.DesktopModelCredential {
 // ModelIDContainsFold applies the ContainsFold predicate on the "model_id" field.
 func ModelIDContainsFold(v string) predicate.DesktopModelCredential {
 	return predicate.DesktopModelCredential(sql.FieldContainsFold(FieldModelID, v))
+}
+
+// PurposeEQ applies the EQ predicate on the "purpose" field.
+func PurposeEQ(v string) predicate.DesktopModelCredential {
+	return predicate.DesktopModelCredential(sql.FieldEQ(FieldPurpose, v))
+}
+
+// PurposeNEQ applies the NEQ predicate on the "purpose" field.
+func PurposeNEQ(v string) predicate.DesktopModelCredential {
+	return predicate.DesktopModelCredential(sql.FieldNEQ(FieldPurpose, v))
+}
+
+// PurposeIn applies the In predicate on the "purpose" field.
+func PurposeIn(vs ...string) predicate.DesktopModelCredential {
+	return predicate.DesktopModelCredential(sql.FieldIn(FieldPurpose, vs...))
+}
+
+// PurposeNotIn applies the NotIn predicate on the "purpose" field.
+func PurposeNotIn(vs ...string) predicate.DesktopModelCredential {
+	return predicate.DesktopModelCredential(sql.FieldNotIn(FieldPurpose, vs...))
+}
+
+// PurposeGT applies the GT predicate on the "purpose" field.
+func PurposeGT(v string) predicate.DesktopModelCredential {
+	return predicate.DesktopModelCredential(sql.FieldGT(FieldPurpose, v))
+}
+
+// PurposeGTE applies the GTE predicate on the "purpose" field.
+func PurposeGTE(v string) predicate.DesktopModelCredential {
+	return predicate.DesktopModelCredential(sql.FieldGTE(FieldPurpose, v))
+}
+
+// PurposeLT applies the LT predicate on the "purpose" field.
+func PurposeLT(v string) predicate.DesktopModelCredential {
+	return predicate.DesktopModelCredential(sql.FieldLT(FieldPurpose, v))
+}
+
+// PurposeLTE applies the LTE predicate on the "purpose" field.
+func PurposeLTE(v string) predicate.DesktopModelCredential {
+	return predicate.DesktopModelCredential(sql.FieldLTE(FieldPurpose, v))
+}
+
+// PurposeContains applies the Contains predicate on the "purpose" field.
+func PurposeContains(v string) predicate.DesktopModelCredential {
+	return predicate.DesktopModelCredential(sql.FieldContains(FieldPurpose, v))
+}
+
+// PurposeHasPrefix applies the HasPrefix predicate on the "purpose" field.
+func PurposeHasPrefix(v string) predicate.DesktopModelCredential {
+	return predicate.DesktopModelCredential(sql.FieldHasPrefix(FieldPurpose, v))
+}
+
+// PurposeHasSuffix applies the HasSuffix predicate on the "purpose" field.
+func PurposeHasSuffix(v string) predicate.DesktopModelCredential {
+	return predicate.DesktopModelCredential(sql.FieldHasSuffix(FieldPurpose, v))
+}
+
+// PurposeEqualFold applies the EqualFold predicate on the "purpose" field.
+func PurposeEqualFold(v string) predicate.DesktopModelCredential {
+	return predicate.DesktopModelCredential(sql.FieldEqualFold(FieldPurpose, v))
+}
+
+// PurposeContainsFold applies the ContainsFold predicate on the "purpose" field.
+func PurposeContainsFold(v string) predicate.DesktopModelCredential {
+	return predicate.DesktopModelCredential(sql.FieldContainsFold(FieldPurpose, v))
 }
 
 // APIKeyIDEQ applies the EQ predicate on the "api_key_id" field.

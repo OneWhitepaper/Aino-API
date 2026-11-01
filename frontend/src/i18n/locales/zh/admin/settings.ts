@@ -24,6 +24,7 @@ export default {
           clearSelection: '清空选择',
           count: '获取 {total} 个，已选 {selected} 个，还可添加 {remaining} 个',
           reviewHint: '自动填写模型 ID、名称及已返回的能力参数。重复项自动跳过，价格沿用现有分组；工具调用能力和 Agent 验证需实际确认，新增模型默认待验证。',
+          imageReviewHint: '导入为生图模型，并固定使用 Images API。请确认来源模型支持文字生图及分组的图片生成权限；不参与文本模型或工具调用验证。',
           limit: '目录最多 200 个模型，当前还可添加 {remaining} 个，请减少选择。',
           confirm: '导入选中模型（{count}）',
           success: '已添加 {count} 个模型到当前表单，请核对后保存设置。',
@@ -33,8 +34,30 @@ export default {
         title: 'Aino 内置模型',
         description: '选择向桌面端开放的模型。用户仍须拥有对应分组或订阅权限。',
         enabled: '启用桌面内置模型',
-        pricingHint: '价格与用户倍率沿用分组、渠道及现有计费规则。请先完成真实工具调用和流式回复验证，再勾选已验证并启用。',
-        defaultModel: '默认模型',
+        pricingHint: '价格与用户倍率沿用分组、渠道及现有计费规则。对话模型须验证工具调用和流式回复；生图模型请选择 Images API，确认分组已开启图片生成权限。',
+        separateHint: '文本模型和生图模型分开管理，分别设置默认值。桌面端只展示 Aino 内置模型，价格和用户权限沿用现有分组与计费规则。',
+        catalogType: '模型类型',
+        catalog: {
+          chat: {
+            title: '文本模型',
+            description: '用于聊天、推理和工具调用。验证工具调用与流式回复后，才可设为默认文本模型。',
+            add: '添加文本模型',
+            empty: '尚未添加文本模型。添加并保存后，即可向有权限的桌面用户开放。'
+          },
+          image: {
+            title: '生图模型',
+            description: '用于对话中的图片生成，独立于文本模型。请先在分组中开启图片生成权限。',
+            add: '添加生图模型',
+            empty: '尚未添加生图模型。添加并保存后，即可在桌面端选择 Aino 内置生图模型。',
+            qualityTitle: '出图质量档位',
+            qualityHint: '仅勾选该模型接口实际支持的档位；不勾选则使用模型默认质量。这与文本模型的思考深度不同。',
+            qualityLabels: { auto: '自动', low: '低', medium: '中', high: '高', xhigh: '超高', max: '最高' },
+            billingHint: '使用 Images API 文字生图，按已有图片计费规则结算；不需要填写文本上下文、工具调用或 Agent 验证。'
+          }
+        },
+        defaultModel: '默认文本模型',
+        defaultImageModel: '默认生图模型',
+        imageModel: '图像生成 · 不参与对话主模型选择',
         noDefault: '不设默认，由用户选择',
         credentialTTL: '调用凭据有效期（秒，300–3600）',
         groupsFailed: '分组加载失败，已填写的模型配置仍保留。',

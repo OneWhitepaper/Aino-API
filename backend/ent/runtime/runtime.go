@@ -977,8 +977,14 @@ func init() {
 	desktopmodelcredentialDescModelID := desktopmodelcredentialFields[7].Descriptor()
 	// desktopmodelcredential.ModelIDValidator is a validator for the "model_id" field. It is called by the builders before save.
 	desktopmodelcredential.ModelIDValidator = desktopmodelcredentialDescModelID.Validators[0].(func(string) error)
+	// desktopmodelcredentialDescPurpose is the schema descriptor for purpose field.
+	desktopmodelcredentialDescPurpose := desktopmodelcredentialFields[8].Descriptor()
+	// desktopmodelcredential.DefaultPurpose holds the default value on creation for the purpose field.
+	desktopmodelcredential.DefaultPurpose = desktopmodelcredentialDescPurpose.Default.(string)
+	// desktopmodelcredential.PurposeValidator is a validator for the "purpose" field. It is called by the builders before save.
+	desktopmodelcredential.PurposeValidator = desktopmodelcredentialDescPurpose.Validators[0].(func(string) error)
 	// desktopmodelcredentialDescRevokeReason is the schema descriptor for revoke_reason field.
-	desktopmodelcredentialDescRevokeReason := desktopmodelcredentialFields[11].Descriptor()
+	desktopmodelcredentialDescRevokeReason := desktopmodelcredentialFields[12].Descriptor()
 	// desktopmodelcredential.RevokeReasonValidator is a validator for the "revoke_reason" field. It is called by the builders before save.
 	desktopmodelcredential.RevokeReasonValidator = desktopmodelcredentialDescRevokeReason.Validators[0].(func(string) error)
 	errorpassthroughruleMixin := schema.ErrorPassthroughRule{}.Mixin()

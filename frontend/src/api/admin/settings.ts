@@ -435,18 +435,19 @@ export interface DesktopModelEntry {
   display_name: string;
   provider_label: string;
   platform: Exclude<import('@/types').GroupPlatform, 'composite'>;
-  api_mode: 'chat_completions' | 'responses' | 'anthropic_messages';
+  api_mode: 'chat_completions' | 'responses' | 'anthropic_messages' | 'images_generations';
   sort_order: number;
   agent_verified: boolean;
   context_window: number | null;
   max_output_tokens: number | null;
-  capabilities: { tools: boolean; vision: boolean; reasoning: boolean };
+  capabilities: { tools: boolean; vision: boolean; reasoning: boolean; image_generation?: boolean; image_quality_options?: string[] };
 }
 
 export interface DesktopSettings {
   enabled: boolean;
   models: DesktopModelEntry[];
   default_model_id: string | null;
+  default_image_model_id?: string | null;
   credential_ttl_seconds: number;
 }
 

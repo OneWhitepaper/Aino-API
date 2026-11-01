@@ -17,6 +17,64 @@ function settings(): DesktopSettings {
 enableAutoUnmount(afterEach)
 
 describe('DesktopModelsSection', () => {
+  it('offers an image default separately and exposes the Images protocol without Agent verification', async () => {
+    const value = { ...settings(), default_image_model_id: 'image', models: [{ id: 'image', group_id: 17, model: 'fixture-image', display_name: 'Image', provider_label: 'Aino', platform: 'openai', api_mode: 'images_generations', sort_order: 0, agent_verified: false, context_window: null, max_output_tokens: null, capabilities: { tools: false, vision: false, reasoning: false, image_generation: true } }] } as unknown as DesktopSettings
+    const wrapper = mount(DesktopModelsSection, { props: { modelValue: value } })
+    await flushPromises()
+    const chatDefault = wrapper.findAllComponents({ name: 'Select' }).find(select => select.props('id') === 'desktop-default-model')!
+    expect(chatDefault.props('options')).not.toContainEqual({ value: 'image', label: 'Image' })
+    await wrapper.get('[data-testid="desktop-model-purpose-image"]').trigger('click')
+    const imageDefault = wrapper.findAllComponents({ name: 'Select' }).find(select => select.props('id') === 'desktop-default-image-model')
+    expect(imageDefault).toBeDefined()
+    expect(imageDefault!.props('options')).toContainEqual({ value: 'image', label: 'Image' })
+    await imageDefault!.vm.$emit('update:modelValue', 'image')
+    expect(wrapper.emitted('update:modelValue')!.at(-1)![0]).toMatchObject({ default_image_model_id: 'image' })
+    await wrapper.get('[data-testid="desktop-model-remove"]').trigger('click')
+    expect(wrapper.emitted('update:modelValue')!.at(-1)![0]).toMatchObject({ default_image_model_id: null })
+  })
+
+  it('separates text and image catalogs while keeping unsaved edits and defaults in both', async () => {
+    const chat = { id: 'chat', group_id: 17, model: 'chat-wire', display_name: 'Text model', provider_label: 'Aino', platform: 'openai', api_mode: 'responses', sort_order: 0, agent_verified: true, context_window: 32000, max_output_tokens: 4000, capabilities: { tools: true, vision: false, reasoning: false } }
+    const image = { ...chat, id: 'image', model: 'image-wire', display_name: 'Image model', api_mode: 'images_generations', agent_verified: false, capabilities: { tools: false, vision: false, reasoning: false, image_generation: true } }
+    const value = { ...settings(), models: [chat, image], default_model_id: 'chat', default_image_model_id: 'image' } as DesktopSettings
+    const wrapper = mount(DesktopModelsSection, { attachTo: document.body, props: { modelValue: value, 'onUpdate:modelValue': (next: DesktopSettings) => wrapper.setProps({ modelValue: next }) } })
+    await flushPromises()
+    const cards = () => wrapper.findAll('[data-testid="desktop-model-card"]').filter(card => card.isVisible())
+    expect(cards().map(card => card.text())).toHaveLength(1)
+    expect(cards()[0].text()).toContain('Text model')
+    await wrapper.get('[data-testid="desktop-model-purpose-image"]').trigger('click')
+    expect(cards()).toHaveLength(1)
+    expect(cards()[0].text()).toContain('Image model')
+    await cards()[0].get('[data-testid="desktop-model-toggle"]').trigger('click')
+    await cards()[0].get('[data-testid="desktop-model-name"]').setValue('Edited image')
+    const protocol = wrapper.findAllComponents({ name: 'Select' }).find(select => select.props('id') === 'desktop-protocol-1')!
+    expect(protocol.props('options')).toEqual([{ value: 'images_generations', label: 'Images API' }])
+    expect(cards()[0].findAll('[data-image-quality]')).toHaveLength(6)
+    await cards()[0].get('[data-image-quality="high"]').setValue(true)
+    expect(wrapper.props('modelValue').models[1].capabilities.image_quality_options).toEqual(['high'])
+    await cards()[0].get('[data-image-quality="high"]').setValue(false)
+    expect(wrapper.props('modelValue').models[1].capabilities.image_quality_options).toEqual([])
+    await wrapper.get('[data-testid="desktop-model-purpose-chat"]').trigger('click')
+    expect(cards()[0].text()).toContain('Text model')
+    expect(wrapper.props('modelValue')).toMatchObject({ default_model_id: 'chat', default_image_model_id: 'image', models: [chat, { ...image, display_name: 'Edited image' }] })
+    await wrapper.get('[data-testid="desktop-model-purpose-image"]').trigger('click')
+    await wrapper.get('[data-testid="desktop-model-add"]').trigger('click')
+    expect(wrapper.props('modelValue').models[2]).toMatchObject({ api_mode: 'images_generations', capabilities: { image_generation: true, tools: false } })
+    expect(wrapper.props('modelValue').models[0]).toEqual(chat)
+  })
+
+  it('reveals an invalid field in the other catalog instead of trapping save on a hidden tab', async () => {
+    const value = { ...settings(), models: [{ id: 'image', group_id: 17, model: 'image-wire', display_name: '', provider_label: 'Aino', platform: 'openai', api_mode: 'images_generations', sort_order: 0, agent_verified: false, context_window: null, max_output_tokens: null, capabilities: { tools: false, vision: false, reasoning: false, image_generation: true } }] } as DesktopSettings
+    const wrapper = mount(DesktopModelsSection, { attachTo: document.body, props: { modelValue: value } })
+    await flushPromises()
+    expect(wrapper.get('[data-testid="desktop-model-name"]').isVisible()).toBe(false)
+    const input = wrapper.get('[data-testid="desktop-model-name"]').element as HTMLInputElement
+    expect(input.checkValidity()).toBe(false)
+    await flushPromises()
+    expect(wrapper.get('[data-testid="desktop-model-purpose-image"]').attributes('aria-selected')).toBe('true')
+    expect(wrapper.get('[data-testid="desktop-model-name"]').isVisible()).toBe(true)
+    expect(document.activeElement).toBe(input)
+  })
   beforeEach(() => {
     getAll.mockReset().mockResolvedValue([{ id: 17, name: 'Fixture group', platform: 'openai', status: 'active' }])
   })

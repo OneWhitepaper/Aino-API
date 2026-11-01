@@ -103,7 +103,7 @@ export function buildDesktopModelDrafts(
       api_mode: apiMode,
       sort_order: index,
       agent_verified: false,
-      capabilities: { tools: false, vision: metadata?.input_modalities?.includes('image') === true, reasoning: metadata?.reasoning === true },
+      capabilities: { tools: false, vision: metadata?.input_modalities?.includes('image') === true, reasoning: metadata?.reasoning === true, ...(apiMode === 'images_generations' ? { image_generation: true } : {}) },
       context_window: contextWindow,
       max_output_tokens: contextWindow && outputLimit && outputLimit > contextWindow ? null : outputLimit
     }

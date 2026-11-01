@@ -14,13 +14,15 @@ import (
 
 const DesktopAPIVersion = 1
 
-var desktopSettingKeys = []string{"desktop.enabled", "desktop.models", "desktop.default_model_id", "desktop.credential_ttl_seconds"}
+var desktopSettingKeys = []string{"desktop.enabled", "desktop.models", "desktop.default_model_id", "desktop.default_image_model_id", "desktop.credential_ttl_seconds"}
 var desktopCatalogID = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$`)
 
 type PlatformModelCapabilities struct {
-	Tools     bool `json:"tools"`
-	Vision    bool `json:"vision"`
-	Reasoning bool `json:"reasoning"`
+	ImageQualityOptions []string `json:"image_quality_options,omitempty"`
+	ImageGeneration     bool     `json:"image_generation"`
+	Tools               bool     `json:"tools"`
+	Vision              bool     `json:"vision"`
+	Reasoning           bool     `json:"reasoning"`
 }
 
 // DesktopModelEntry selects an existing group; it never defines independent prices.
@@ -40,6 +42,7 @@ type DesktopModelEntry struct {
 }
 
 type DesktopSettings struct {
+	DefaultImageModelID  *string             `json:"default_image_model_id"`
 	Enabled              bool                `json:"enabled"`
 	Models               []DesktopModelEntry `json:"models"`
 	DefaultModelID       *string             `json:"default_model_id"`
@@ -75,6 +78,9 @@ func desktopSettingsFromValues(values map[string]string) (DesktopSettings, error
 	if raw := values["desktop.default_model_id"]; raw != "" {
 		settings.DefaultModelID = &raw
 	}
+	if raw := values["desktop.default_image_model_id"]; raw != "" {
+		settings.DefaultImageModelID = &raw
+	}
 	if raw, ok := values["desktop.credential_ttl_seconds"]; ok {
 		settings.CredentialTTLSeconds, err = strconv.Atoi(raw)
 		if err != nil {
@@ -107,13 +113,22 @@ func validateDesktopSettings(settings DesktopSettings) error {
 			return invalidDesktopSettings("model IDs must be unique and select an existing group")
 		}
 		seen[entry.ID] = true
+		if err := validateDesktopImageQualities(entry); err != nil {
+			return err
+		}
 		for _, value := range []string{entry.Model, entry.DisplayName, entry.ProviderLabel} {
 			if strings.TrimSpace(value) == "" || len(value) > 256 || strings.IndexFunc(value, unicode.IsControl) >= 0 {
 				return invalidDesktopSettings("model names and labels must be nonempty text")
 			}
 		}
-		if !map[string]bool{"chat_completions": true, "responses": true, "anthropic_messages": true}[entry.APIMode] {
+		if !map[string]bool{"chat_completions": true, "responses": true, "anthropic_messages": true, "images_generations": true}[entry.APIMode] {
 			return invalidDesktopSettings("unsupported model protocol")
+		}
+		if entry.APIMode == "images_generations" && (!entry.Capabilities.ImageGeneration || entry.Platform != PlatformOpenAI && entry.Platform != PlatformGrok) {
+			return invalidDesktopSettings("image models require image generation capability and an OpenAI or Grok image platform")
+		}
+		if entry.APIMode != "images_generations" && entry.Capabilities.ImageGeneration {
+			return invalidDesktopSettings("image generation capability requires the Images API protocol")
 		}
 		if !isConcreteRequestPlatform(entry.Platform) {
 			return invalidDesktopSettings("select a concrete model platform")
@@ -124,12 +139,18 @@ func validateDesktopSettings(settings DesktopSettings) error {
 		if entry.ContextWindow != nil && entry.MaxOutputTokens != nil && *entry.MaxOutputTokens > *entry.ContextWindow {
 			return invalidDesktopSettings("output limit exceeds context window")
 		}
-		if settings.DefaultModelID != nil && *settings.DefaultModelID == entry.ID && (!entry.AgentVerified || !entry.Capabilities.Tools) {
+		if settings.DefaultModelID != nil && *settings.DefaultModelID == entry.ID && (entry.APIMode == "images_generations" || !entry.AgentVerified || !entry.Capabilities.Tools) {
 			return invalidDesktopSettings("default model must have verified Agent tool and streaming support")
+		}
+		if settings.DefaultImageModelID != nil && *settings.DefaultImageModelID == entry.ID && entry.APIMode != "images_generations" {
+			return invalidDesktopSettings("default image model must use the Images API protocol")
 		}
 	}
 	if settings.DefaultModelID != nil && !seen[*settings.DefaultModelID] {
 		return invalidDesktopSettings("default model is not in the catalog")
+	}
+	if settings.DefaultImageModelID != nil && !seen[*settings.DefaultImageModelID] {
+		return invalidDesktopSettings("default image model is not in the catalog")
 	}
 	return nil
 }
@@ -154,8 +175,11 @@ func (s *SettingService) validateDesktopGroupReferences(ctx context.Context, set
 		if !group.ModelAllowlist.Allows(entry.Model) {
 			return invalidDesktopSettings("catalog model is not allowed by its group")
 		}
-		if settings.DefaultModelID != nil && *settings.DefaultModelID == entry.ID && !group.IsActive() {
+		if (settings.DefaultModelID != nil && *settings.DefaultModelID == entry.ID || settings.DefaultImageModelID != nil && *settings.DefaultImageModelID == entry.ID) && !group.IsActive() {
 			return invalidDesktopSettings("default model must belong to an active group")
+		}
+		if entry.APIMode == "images_generations" && !GroupAllowsImageGeneration(group) {
+			return invalidDesktopSettings("image model group must allow image generation")
 		}
 	}
 	return nil
@@ -179,10 +203,15 @@ func (s *SettingService) buildDesktopSettingsUpdates(settings DesktopSettings) (
 	if settings.DefaultModelID != nil {
 		defaultID = *settings.DefaultModelID
 	}
+	defaultImageID := ""
+	if settings.DefaultImageModelID != nil {
+		defaultImageID = *settings.DefaultImageModelID
+	}
 	return map[string]string{
 		"desktop.enabled":                strconv.FormatBool(settings.Enabled),
 		"desktop.models":                 string(models),
 		"desktop.default_model_id":       defaultID,
+		"desktop.default_image_model_id": defaultImageID,
 		"desktop.credential_ttl_seconds": strconv.Itoa(settings.CredentialTTLSeconds),
 	}, nil
 }

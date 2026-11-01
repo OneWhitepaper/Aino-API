@@ -95,6 +95,20 @@ func (_c *DesktopModelCredentialCreate) SetModelID(v string) *DesktopModelCreden
 	return _c
 }
 
+// SetPurpose sets the "purpose" field.
+func (_c *DesktopModelCredentialCreate) SetPurpose(v string) *DesktopModelCredentialCreate {
+	_c.mutation.SetPurpose(v)
+	return _c
+}
+
+// SetNillablePurpose sets the "purpose" field if the given value is not nil.
+func (_c *DesktopModelCredentialCreate) SetNillablePurpose(v *string) *DesktopModelCredentialCreate {
+	if v != nil {
+		_c.SetPurpose(*v)
+	}
+	return _c
+}
+
 // SetAPIKeyID sets the "api_key_id" field.
 func (_c *DesktopModelCredentialCreate) SetAPIKeyID(v int64) *DesktopModelCredentialCreate {
 	_c.mutation.SetAPIKeyID(v)
@@ -199,6 +213,10 @@ func (_c *DesktopModelCredentialCreate) defaults() {
 		v := desktopmodelcredential.DefaultUpdatedAt()
 		_c.mutation.SetUpdatedAt(v)
 	}
+	if _, ok := _c.mutation.Purpose(); !ok {
+		v := desktopmodelcredential.DefaultPurpose
+		_c.mutation.SetPurpose(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -248,6 +266,14 @@ func (_c *DesktopModelCredentialCreate) check() error {
 	if v, ok := _c.mutation.ModelID(); ok {
 		if err := desktopmodelcredential.ModelIDValidator(v); err != nil {
 			return &ValidationError{Name: "model_id", err: fmt.Errorf(`ent: validator failed for field "DesktopModelCredential.model_id": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.Purpose(); !ok {
+		return &ValidationError{Name: "purpose", err: errors.New(`ent: missing required field "DesktopModelCredential.purpose"`)}
+	}
+	if v, ok := _c.mutation.Purpose(); ok {
+		if err := desktopmodelcredential.PurposeValidator(v); err != nil {
+			return &ValidationError{Name: "purpose", err: fmt.Errorf(`ent: validator failed for field "DesktopModelCredential.purpose": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.APIKeyID(); !ok {
@@ -330,6 +356,10 @@ func (_c *DesktopModelCredentialCreate) createSpec() (*DesktopModelCredential, *
 	if value, ok := _c.mutation.ModelID(); ok {
 		_spec.SetField(desktopmodelcredential.FieldModelID, field.TypeString, value)
 		_node.ModelID = value
+	}
+	if value, ok := _c.mutation.Purpose(); ok {
+		_spec.SetField(desktopmodelcredential.FieldPurpose, field.TypeString, value)
+		_node.Purpose = value
 	}
 	if value, ok := _c.mutation.ExpiresAt(); ok {
 		_spec.SetField(desktopmodelcredential.FieldExpiresAt, field.TypeTime, value)
@@ -545,6 +575,18 @@ func (u *DesktopModelCredentialUpsert) SetModelID(v string) *DesktopModelCredent
 // UpdateModelID sets the "model_id" field to the value that was provided on create.
 func (u *DesktopModelCredentialUpsert) UpdateModelID() *DesktopModelCredentialUpsert {
 	u.SetExcluded(desktopmodelcredential.FieldModelID)
+	return u
+}
+
+// SetPurpose sets the "purpose" field.
+func (u *DesktopModelCredentialUpsert) SetPurpose(v string) *DesktopModelCredentialUpsert {
+	u.Set(desktopmodelcredential.FieldPurpose, v)
+	return u
+}
+
+// UpdatePurpose sets the "purpose" field to the value that was provided on create.
+func (u *DesktopModelCredentialUpsert) UpdatePurpose() *DesktopModelCredentialUpsert {
+	u.SetExcluded(desktopmodelcredential.FieldPurpose)
 	return u
 }
 
@@ -775,6 +817,20 @@ func (u *DesktopModelCredentialUpsertOne) SetModelID(v string) *DesktopModelCred
 func (u *DesktopModelCredentialUpsertOne) UpdateModelID() *DesktopModelCredentialUpsertOne {
 	return u.Update(func(s *DesktopModelCredentialUpsert) {
 		s.UpdateModelID()
+	})
+}
+
+// SetPurpose sets the "purpose" field.
+func (u *DesktopModelCredentialUpsertOne) SetPurpose(v string) *DesktopModelCredentialUpsertOne {
+	return u.Update(func(s *DesktopModelCredentialUpsert) {
+		s.SetPurpose(v)
+	})
+}
+
+// UpdatePurpose sets the "purpose" field to the value that was provided on create.
+func (u *DesktopModelCredentialUpsertOne) UpdatePurpose() *DesktopModelCredentialUpsertOne {
+	return u.Update(func(s *DesktopModelCredentialUpsert) {
+		s.UpdatePurpose()
 	})
 }
 
@@ -1181,6 +1237,20 @@ func (u *DesktopModelCredentialUpsertBulk) SetModelID(v string) *DesktopModelCre
 func (u *DesktopModelCredentialUpsertBulk) UpdateModelID() *DesktopModelCredentialUpsertBulk {
 	return u.Update(func(s *DesktopModelCredentialUpsert) {
 		s.UpdateModelID()
+	})
+}
+
+// SetPurpose sets the "purpose" field.
+func (u *DesktopModelCredentialUpsertBulk) SetPurpose(v string) *DesktopModelCredentialUpsertBulk {
+	return u.Update(func(s *DesktopModelCredentialUpsert) {
+		s.SetPurpose(v)
+	})
+}
+
+// UpdatePurpose sets the "purpose" field to the value that was provided on create.
+func (u *DesktopModelCredentialUpsertBulk) UpdatePurpose() *DesktopModelCredentialUpsertBulk {
+	return u.Update(func(s *DesktopModelCredentialUpsert) {
+		s.UpdatePurpose()
 	})
 }
 

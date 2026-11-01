@@ -38,6 +38,8 @@ type DesktopModelCredential struct {
 	GroupID int64 `json:"group_id,omitempty"`
 	// ModelID holds the value of the "model_id" field.
 	ModelID string `json:"model_id,omitempty"`
+	// Purpose holds the value of the "purpose" field.
+	Purpose string `json:"purpose,omitempty"`
 	// APIKeyID holds the value of the "api_key_id" field.
 	APIKeyID int64 `json:"api_key_id,omitempty"`
 	// ExpiresAt holds the value of the "expires_at" field.
@@ -105,7 +107,7 @@ func (*DesktopModelCredential) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case desktopmodelcredential.FieldID, desktopmodelcredential.FieldUserID, desktopmodelcredential.FieldTokenVersion, desktopmodelcredential.FieldGroupID, desktopmodelcredential.FieldAPIKeyID:
 			values[i] = new(sql.NullInt64)
-		case desktopmodelcredential.FieldDeviceID, desktopmodelcredential.FieldConnectionGrantID, desktopmodelcredential.FieldSessionFamilyID, desktopmodelcredential.FieldModelID, desktopmodelcredential.FieldRevokeReason:
+		case desktopmodelcredential.FieldDeviceID, desktopmodelcredential.FieldConnectionGrantID, desktopmodelcredential.FieldSessionFamilyID, desktopmodelcredential.FieldModelID, desktopmodelcredential.FieldPurpose, desktopmodelcredential.FieldRevokeReason:
 			values[i] = new(sql.NullString)
 		case desktopmodelcredential.FieldCreatedAt, desktopmodelcredential.FieldUpdatedAt, desktopmodelcredential.FieldExpiresAt, desktopmodelcredential.FieldRevokedAt:
 			values[i] = new(sql.NullTime)
@@ -183,6 +185,12 @@ func (_m *DesktopModelCredential) assignValues(columns []string, values []any) e
 				return fmt.Errorf("unexpected type %T for field model_id", values[i])
 			} else if value.Valid {
 				_m.ModelID = value.String
+			}
+		case desktopmodelcredential.FieldPurpose:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field purpose", values[i])
+			} else if value.Valid {
+				_m.Purpose = value.String
 			}
 		case desktopmodelcredential.FieldAPIKeyID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -286,6 +294,9 @@ func (_m *DesktopModelCredential) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("model_id=")
 	builder.WriteString(_m.ModelID)
+	builder.WriteString(", ")
+	builder.WriteString("purpose=")
+	builder.WriteString(_m.Purpose)
 	builder.WriteString(", ")
 	builder.WriteString("api_key_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.APIKeyID))

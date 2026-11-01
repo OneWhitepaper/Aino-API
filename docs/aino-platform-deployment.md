@@ -50,6 +50,7 @@ Go 默认、unit 和 integration 是不同门禁；`make test` 还包含 golangc
 | `242_desktop_usage_correlation.sql` | 用量关联与结算字段 |
 | `243_desktop_usage_indexes_notx.sql` | 并发查询索引，非事务执行 |
 | `244_payment_client_order_id.sql` | 桌面订单持久幂等及恢复字段 |
+| `250_desktop_image_credential_purpose.sql` | 区分 chat/image 托管凭据；现有凭据默认 chat，不扩大权限 |
 
 先对隔离旧数据副本启动新服务，核对迁移 checksum、原用户 ID、余额、订阅、普通 Key、订单和 email/OAuth 登录。备份必须可恢复。已应用的 SQL 不改内容/文件名/编号，不混入 Down SQL；checksum 不符先停发布核对实际已应用版本，不能强行改表中 checksum。
 
@@ -94,9 +95,20 @@ Redis 必须与生产身份一致地配置并可用；故障时应拒绝发码/�
 | `desktop.enabled` | 默认 false |
 | `desktop.models` | 默认空；每项引用真实现有 group_id，不另造价格表 |
 | `desktop.default_model_id` | 空表示无默认；必须是当前目录条目 |
+| `desktop.default_image_model_id` | 独立的默认生图模型；必须使用 `images_generations` 且声明生图能力，不参与对话主模型选择 |
 | `desktop.credential_ttl_seconds` | 默认 3600，校验范围 300–3600 |
 
-目录项字段：`id`、`group_id`、`model`、`display_name`、`provider_label`、`platform`、`api_mode`、`sort_order`、`agent_verified`、`context_window`、`max_output_tokens`、`capabilities`（tools/vision/reasoning）。协议仅 `chat_completions` / `responses` / `anthropic_messages`。未知上下文/输出限制为 null；能力未实测不要标 true，默认模型必须有已验证 Agent 工具/流式支持。
+目录项字段：`id`、`group_id`、`model`、`display_name`、`provider_label`、`platform`、`api_mode`、`sort_order`、`agent_verified`、`context_window`、`max_output_tokens`、`capabilities`（tools/vision/reasoning/image_generation）。对话协议为 `chat_completions` / `responses` / `anthropic_messages`。未知上下文/输出限制为 null；能力未实测不要标 true，默认对话模型必须有已验证 Agent 工具/流式支持。
+
+生图目录选择 `images_generations`，声明 `capabilities.image_generation: true`，实际平台为 OpenAI 或 Grok，并开启原分组的图片生成权限。管理页选择 Images API 后会填写生图能力，无需将纯生图模型假标为支持工具。目录响应的 `purpose` 为 `image`；旧对话条目为 `chat`。图片价格返回 `unit: billing_rules`、空 token 单价和空阶梯，表示按现有尺寸、质量及用量等计费规则结算，不构造固定 token 报价。余额、订阅、额度、审核、并发和扣费全部沿用图片接口。
+
+生图目录的可选 `capabilities.image_quality_options` 声明接口已确认支持的画质档位：`auto`、`low`、`medium`、`high`、`xhigh`、`max`。管理员仅勾选该接口实际支持的值；空列表表示使用模型默认质量。未知值、重复值及文本模型声明画质档位都会被拒绝。画质通过 Images API 的 `quality` 参数传递，与文本推理深度独立；更新档位本身不触发付费出图。
+
+管理后台的「Aino 内置模型」分为「文本模型」和「生图模型」两个标签页，分别维护列表、新增/导入和默认值。切换标签不会清空另一类未保存配置；保存仍使用同一目录设置服务。生图页固定 Images API，不显示文本上下文、工具调用或 Agent 验证字段；默认生图模型与默认文本模型互不替代。模型保存后仅向原有分组/订阅授权的用户开放，桌面生图选择只呈现 Aino 内置模型。
+
+`GET /api/v1/desktop/models` 缺省或 `include_images=false` 只返回对话条目，兼容不能解析图片协议的已发布桌面。支持生图的新桌面必须显式请求 `GET /api/v1/desktop/models?include_images=true`，才能取得对话与生图条目；两者都保留既有用户分组和模型白名单过滤，查询参数不授予任何权限。空值等同缺省，非法布尔值返回 400。Bootstrap 的 `default_model_id` 仍只代表默认对话模型，新增的 `default_image_model_id` 单独代表默认生图模型。
+
+`POST /api/v1/desktop/credentials` 的可选 `purpose` 默认 `chat`；生图请求必须传 `image` 并选对应目录 ID。两种凭据独立复用，返回顶层 `purpose`，各自保留用户、设备、登录会话、分组、失效与模型白名单边界。首版 image 凭据只授权同步 `POST /v1/images/generations`，不授权对话、编辑、异步任务或批量接口；chat 凭据仍不能调用图片接口。用量关联可发送 `X-Aino-Purpose: image`，配合现有三个 UUID 关联头，私有头仍在转发前剥离。发布先执行迁移并部署兼容 API，再更新桌面；本节不代表已部署或完成付费生图验收。
 
 组的 allowlist、用户授权/订阅和原价格服务仍是权威。可用目录不等于扩大用户分组权限。只给测试账户授予测试分组可以限制模型灰度；phone 灰度只由部署配置中的 canonical 手机号列表限制短信发码和验码，不是模型授权，也不能据此扩大模型分组权限。先在预发布验收。
 

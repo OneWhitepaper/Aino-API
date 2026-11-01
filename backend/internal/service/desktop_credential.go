@@ -17,6 +17,7 @@ var (
 )
 
 type DesktopCredential struct {
+	Purpose                                      string
 	ID                                           int64
 	UserID                                       int64
 	DeviceID, ConnectionGrantID, SessionFamilyID string
@@ -73,6 +74,12 @@ func NewDesktopCredentialService(repo DesktopCredentialRepository, keys *APIKeyS
 }
 
 func (s *DesktopCredentialService) IssueOrReuseLease(ctx context.Context, req DesktopCredentialRequest) (*DesktopCredentialResponse, error) {
+	if req.Purpose == "" {
+		req.Purpose = DesktopPurposeChat
+	}
+	if req.Purpose != DesktopPurposeChat && req.Purpose != DesktopPurposeImage {
+		return nil, infraerrors.BadRequest("INVALID_REQUEST", "unsupported desktop credential purpose")
+	}
 	if req.UserID <= 0 || len(req.SessionFamilyID) == 0 || len(req.SessionFamilyID) > 128 || req.ModelID == "" {
 		return nil, infraerrors.BadRequest("INVALID_REQUEST", "authenticated session and model are required")
 	}
@@ -94,6 +101,9 @@ func (s *DesktopCredentialService) IssueOrReuseLease(ctx context.Context, req De
 	if err != nil {
 		return nil, err
 	}
+	if resolved.Model.Purpose != req.Purpose {
+		return nil, infraerrors.Forbidden("DESKTOP_CREDENTIAL_SCOPE", "selected model does not support the requested purpose")
+	}
 	settings, err := s.models.settings.GetDesktopSettings(ctx)
 	if err != nil {
 		return nil, err
@@ -108,7 +118,7 @@ func (s *DesktopCredentialService) IssueOrReuseLease(ctx context.Context, req De
 		return nil, err
 	}
 	groupID := resolved.GroupID
-	candidate := &DesktopCredential{UserID: user.ID, DeviceID: req.DeviceID, ConnectionGrantID: req.ConnectionGrantID, SessionFamilyID: req.SessionFamilyID, TokenVersion: resolvedTokenVersion(user), GroupID: groupID, ModelID: req.ModelID, ExpiresAt: expires}
+	candidate := &DesktopCredential{Purpose: req.Purpose, UserID: user.ID, DeviceID: req.DeviceID, ConnectionGrantID: req.ConnectionGrantID, SessionFamilyID: req.SessionFamilyID, TokenVersion: resolvedTokenVersion(user), GroupID: groupID, ModelID: req.ModelID, ExpiresAt: expires}
 	key := &APIKey{UserID: user.ID, Name: "Aino desktop", Key: rawKey, GroupID: &groupID, Status: StatusActive, ExpiresAt: &expires, DesktopManaged: true}
 	lease, key, err := s.repo.IssueOrReuse(ctx, candidate, key, ttl)
 	if err != nil {
@@ -128,15 +138,17 @@ func (s *DesktopCredentialService) IssueOrReuseLease(ctx context.Context, req De
 		return nil, err
 	}
 	s.keys.InvalidateAuthCacheByKey(ctx, key.Key)
-	return &DesktopCredentialResponse{CredentialID: strconv.FormatInt(lease.ID, 10), APIKey: key.Key, BaseURL: "https://api.agentera.com.cn/v1", ExpiresAt: lease.ExpiresAt, Model: resolved.Model}, nil
+	return &DesktopCredentialResponse{Purpose: req.Purpose, CredentialID: strconv.FormatInt(lease.ID, 10), APIKey: key.Key, BaseURL: "https://api.agentera.com.cn/v1", ExpiresAt: lease.ExpiresAt, Model: resolved.Model}, nil
 }
 
 type DesktopCredentialRequest struct {
+	Purpose                                               string `json:"purpose"`
 	UserID                                                int64
 	DeviceID, ConnectionGrantID, SessionFamilyID, ModelID string
 }
 
 type DesktopCredentialResponse struct {
+	Purpose      string        `json:"purpose"`
 	CredentialID string        `json:"credential_id"`
 	APIKey       string        `json:"api_key"`
 	BaseURL      string        `json:"base_url"`

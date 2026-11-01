@@ -24,7 +24,7 @@ func ValidDesktopUsageID(value string) bool {
 	return err == nil && id != uuid.Nil && strings.EqualFold(id.String(), value)
 }
 
-var desktopUsagePurposes = []string{"chat", "title", "compression", "vision", "delegation", "other_auxiliary"}
+var desktopUsagePurposes = []string{"chat", "title", "compression", "vision", "delegation", "other_auxiliary", "image"}
 var desktopUsageTasks = []string{"session_summary", "approval", "mcp", "tts_audio_tags", "side_question"}
 
 func ValidDesktopUsagePurpose(value string) bool {

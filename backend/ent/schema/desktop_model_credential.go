@@ -39,6 +39,7 @@ func (DesktopModelCredential) Fields() []ent.Field {
 		field.Int64("token_version"),
 		field.Int64("group_id"),
 		field.String("model_id").MaxLen(128),
+		field.String("purpose").MaxLen(16).Default("chat"),
 		field.Int64("api_key_id"),
 		field.Time("expires_at"),
 		field.Time("revoked_at").Optional().Nillable(),
@@ -64,7 +65,7 @@ func (DesktopModelCredential) Edges() []ent.Edge {
 
 func (DesktopModelCredential) Indexes() []ent.Index {
 	return []ent.Index{
-		index.Fields("user_id", "device_id", "connection_grant_id", "session_family_id", "group_id").Unique().Annotations(entsql.IndexWhere("revoked_at IS NULL")),
+		index.Fields("user_id", "device_id", "connection_grant_id", "session_family_id", "group_id", "purpose").Unique().Annotations(entsql.IndexWhere("revoked_at IS NULL")),
 		index.Fields("session_family_id"),
 		index.Fields("user_id", "device_id"),
 		index.Fields("api_key_id").Unique(),

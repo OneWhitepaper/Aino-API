@@ -54,17 +54,30 @@ func (h *DesktopHandler) GetBootstrap(c *gin.Context) {
 	response.Success(c, bootstrap)
 }
 
-// ListModels returns only catalog entries authorized for the current user.
+// ListModels keeps the legacy chat catalog unless the client opts into images.
 func (h *DesktopHandler) ListModels(c *gin.Context) {
 	subject, ok := middleware.GetAuthSubjectFromContext(c)
 	if !ok {
 		response.Unauthorized(c, "User not authenticated")
 		return
 	}
+	includeImages, ok := parseBoolQueryWithDefault(c, "include_images", false)
+	if !ok {
+		return
+	}
 	models, err := h.models.ListForUser(c.Request.Context(), subject.UserID)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
+	}
+	if !includeImages {
+		chatModels := make([]service.PlatformModel, 0, len(models))
+		for _, model := range models {
+			if model.Purpose == service.DesktopPurposeChat {
+				chatModels = append(chatModels, model)
+			}
+		}
+		models = chatModels
 	}
 	response.Success(c, models)
 }
@@ -79,6 +92,7 @@ func (h *DesktopHandler) ProvisionCredential(c *gin.Context) {
 	}
 
 	var req struct {
+		Purpose           string `json:"purpose"`
 		DeviceID          string `json:"device_id" binding:"required"`
 		ConnectionGrantID string `json:"connection_grant_id" binding:"required"`
 		ModelID           string `json:"model_id" binding:"required"`
@@ -96,6 +110,7 @@ func (h *DesktopHandler) ProvisionCredential(c *gin.Context) {
 	}
 
 	credReq := service.DesktopCredentialRequest{
+		Purpose:           req.Purpose,
 		UserID:            subject.UserID,
 		DeviceID:          req.DeviceID,
 		ConnectionGrantID: req.ConnectionGrantID,

@@ -29,6 +29,9 @@ func enforceDesktopCredential(c *gin.Context, keys *service.APIKeyService, key *
 		"POST /v1/messages": true, "POST /v1/messages/count_tokens": true,
 		"GET /v1/models": true, "GET /v1/models/:model": true, "GET /v1/usage": true, "GET /v1/sub2api/billing": true,
 	}
+	if key.DesktopPurpose == service.DesktopPurposeImage {
+		allowed = map[string]bool{"POST /v1/images/generations": true}
+	}
 	if !allowed[c.Request.Method+" "+c.FullPath()] || strings.EqualFold(c.GetHeader("Upgrade"), "websocket") {
 		AbortWithError(c, http.StatusForbidden, "DESKTOP_CREDENTIAL_SCOPE", "This endpoint is outside desktop inference authorization")
 		return false

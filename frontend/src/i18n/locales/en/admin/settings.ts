@@ -24,6 +24,7 @@ export default {
           clearSelection: 'Clear selection',
           count: '{total} fetched, {selected} selected, room for {remaining} more',
           reviewHint: 'Fill model IDs, names and returned metadata automatically. Existing entries are skipped and group pricing applies. Confirm actual tool support and Agent behavior; imported models remain unverified.',
+          imageReviewHint: 'Import as image models using the Images API. Confirm text-to-image support and group image permissions; these entries remain separate from text models and tool-call verification.',
           limit: 'The catalog supports 200 models. Select at most {remaining} more.',
           confirm: 'Import selected ({count})',
           success: 'Added {count} models to this form. Review them and save settings.',
@@ -33,8 +34,30 @@ export default {
         title: 'Aino built-in models',
         description: 'Choose models offered in the desktop app. Existing group and subscription permissions still apply.',
         enabled: 'Enable desktop built-in models',
-        pricingHint: 'Prices and user rates come from existing group, channel and billing rules. Verify real Agent tool calls and streaming before marking a model verified and enabling the catalog.',
-        defaultModel: 'Default model',
+        pricingHint: 'Prices and user rates follow existing group, channel and billing rules. Verify tool calls and streaming for chat models. For image models, select Images API and enable image generation for their group.',
+        separateHint: 'Manage text and image models separately, each with its own default. Desktop presents Aino built-in models; existing group permissions and billing rules still apply.',
+        catalogType: 'Model type',
+        catalog: {
+          chat: {
+            title: 'Text models',
+            description: 'For conversations, reasoning and tool calls. Verify tool calls and streaming before choosing a default text model.',
+            add: 'Add text model',
+            empty: 'No text models yet. Add and save a model to make it available to authorized desktop users.'
+          },
+          image: {
+            title: 'Image models',
+            description: 'For image generation in conversations, independent of text models. Enable image generation for the group first.',
+            add: 'Add image model',
+            empty: 'No image models yet. Add and save a model to offer it as an Aino built-in image model on desktop.',
+            qualityTitle: 'Image quality levels',
+            qualityHint: 'Select only levels supported by this model endpoint. Leave empty to use its default. Independent of text reasoning.',
+            qualityLabels: { auto: 'Auto', low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Very high', max: 'Maximum' },
+            billingHint: 'Uses the Images API for text-to-image and existing image billing rules. Text context, tool-call capabilities and Agent verification are not required.'
+          }
+        },
+        defaultModel: 'Default text model',
+        defaultImageModel: 'Default image model',
+        imageModel: 'Image generation · separate from the chat model',
         noDefault: 'No default; let the user choose',
         credentialTTL: 'Inference credential lifetime (seconds, 300–3600)',
         groupsFailed: 'Could not load groups. Your model configuration has been preserved.',

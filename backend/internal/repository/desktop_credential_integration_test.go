@@ -51,7 +51,7 @@ func newDesktopCredentialRig(t *testing.T) *desktopCredentialRig {
 		key, _ := middleware.GetAPIKeyFromContext(c)
 		c.JSON(200, gin.H{"group_id": key.GroupID})
 	})
-	r.router.POST("/v1/images/generations", gin.HandlerFunc(middleware.NewAPIKeyAuthMiddleware(r.keys, nil, &config.Config{})), func(c *gin.Context) { c.JSON(200, gin.H{"ok": true}) })
+	r.router.POST("/v1/images/generations", gin.HandlerFunc(middleware.NewAPIKeyAuthMiddleware(r.keys, nil, &config.Config{})), middleware.GroupModelAllowlist(), func(c *gin.Context) { c.JSON(200, gin.H{"ok": true}) })
 	r.router.GET("/v1beta/models", middleware.APIKeyAuthWithSubscriptionGoogle(r.keys, nil, &config.Config{}), func(c *gin.Context) { c.JSON(200, gin.H{"ok": true}) })
 	authHandler := handler.NewAuthHandler(&config.Config{}, r.auth, r.users, r.settings, nil, nil, nil, nil)
 	r.router.POST("/logout", authHandler.Logout)

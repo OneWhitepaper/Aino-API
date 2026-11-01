@@ -44,7 +44,7 @@
           </span>
         </label>
       </div>
-      <p class="text-sm text-gray-500 dark:text-gray-400">{{ t('admin.settings.desktop.import.reviewHint') }}</p>
+      <p class="text-sm text-gray-500 dark:text-gray-400">{{ t(purpose === 'image' ? 'admin.settings.desktop.import.imageReviewHint' : 'admin.settings.desktop.import.reviewHint') }}</p>
       <p v-if="selectedDrafts.length > remaining" role="alert" class="text-sm text-amber-700 dark:text-amber-400">{{ t('admin.settings.desktop.import.limit', { remaining }) }}</p>
       <button type="button" class="btn btn-primary" data-testid="desktop-import-confirm" :disabled="!selectedDrafts.length || selectedDrafts.length > remaining" @click="importSelected">{{ t('admin.settings.desktop.import.confirm', { count: selectedDrafts.length }) }}</button>
     </template>
@@ -61,12 +61,12 @@ import type { DesktopModelEntry } from '@/api/admin/settings'
 import type { AccountListItem, AdminGroup } from '@/types'
 import { buildDesktopModelDrafts, DESKTOP_MODEL_LIMIT, modelAllowedForImport, prepareDesktopModelImport, sameDesktopModel } from './desktopModelImport'
 
-const props = defineProps<{ groups: AdminGroup[]; groupsLoading: boolean; models: DesktopModelEntry[] }>()
+const props = withDefaults(defineProps<{ groups: AdminGroup[]; groupsLoading: boolean; models: DesktopModelEntry[]; purpose?: 'chat' | 'image' }>(), { purpose: 'chat' })
 const emit = defineEmits<{ import: [models: DesktopModelEntry[]] }>()
 const { t } = useI18n()
 const groupID = ref<number | null>(null)
 const accountID = ref<number | null>(null)
-const apiMode = ref<DesktopModelEntry['api_mode']>('chat_completions')
+const apiMode = ref<DesktopModelEntry['api_mode']>(props.purpose === 'image' ? 'images_generations' : 'chat_completions')
 const accounts = ref<AccountListItem[]>([])
 const accountsLoading = ref(false)
 const accountsError = ref(false)
@@ -80,13 +80,14 @@ let accountsRequest = 0
 let modelsRequest = 0
 const group = computed(() => props.groups.find(item => item.id === groupID.value))
 const account = computed(() => accounts.value.find(item => item.id === accountID.value))
-const groupOptions = computed(() => props.groups.map(item => ({ value: item.id, label: `${item.name} · ${item.platform}` })))
+const groupOptions = computed(() => props.groups.filter(item => props.purpose !== 'image' || ['openai', 'grok', 'composite'].includes(item.platform)).map(item => ({ value: item.id, label: `${item.name} · ${item.platform}` })))
 const accountOptions = computed(() => accounts.value.map(item => ({ value: item.id, label: `${item.name} · ${item.platform} · ${item.type}` })))
-const protocolOptions = [
+const protocolOptions = computed(() => [
   { value: 'chat_completions', label: 'Chat Completions' },
   { value: 'responses', label: 'Responses' },
-  { value: 'anthropic_messages', label: 'Anthropic Messages' }
-]
+  { value: 'anthropic_messages', label: 'Anthropic Messages' },
+  { value: 'images_generations', label: 'Images API' }
+].filter(option => (option.value === 'images_generations') === (props.purpose === 'image')))
 const candidates = computed(() => catalog.value && group.value && account.value ? buildDesktopModelDrafts(catalog.value, group.value, account.value, apiMode.value) : [])
 const visibleCandidates = computed(() => candidates.value.filter(entry => `${entry.model} ${entry.display_name}`.toLowerCase().includes(search.value.trim().toLowerCase())))
 const selectedDrafts = computed(() => candidates.value.filter(entry => selected.value.has(entry.model) && !unavailableReason(entry)))
@@ -128,7 +129,7 @@ async function loadAccounts(): Promise<void> {
       pages = result.pages
       page++
     } while (page <= pages)
-    accounts.value = items.filter(item => selectedGroup.platform === 'composite' || item.platform === selectedGroup.platform)
+    accounts.value = items.filter(item => (selectedGroup.platform === 'composite' || item.platform === selectedGroup.platform) && (props.purpose !== 'image' || ['openai', 'grok'].includes(item.platform)))
     if (accounts.value.length === 1) accountID.value = accounts.value[0].id
   } catch {
     if (request === accountsRequest) accountsError.value = true
@@ -178,7 +179,7 @@ function importSelected(): void {
 watch(groupID, loadAccounts)
 watch(accountID, () => {
   resetCatalog()
-  apiMode.value = account.value?.platform === 'anthropic' ? 'anthropic_messages' : account.value?.platform === 'openai' && account.value.type === 'oauth' ? 'responses' : 'chat_completions'
+  apiMode.value = props.purpose === 'image' ? 'images_generations' : account.value?.platform === 'anthropic' ? 'anthropic_messages' : account.value?.platform === 'openai' && account.value.type === 'oauth' ? 'responses' : 'chat_completions'
 })
 onBeforeUnmount(() => { accountsRequest++; modelsRequest++ })
 </script>

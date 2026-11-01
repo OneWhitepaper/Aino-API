@@ -12,10 +12,11 @@ import (
 )
 
 type DesktopBootstrap struct {
-	APIVersion     int     `json:"api_version"`
-	DefaultModelID *string `json:"default_model_id"`
-	ModelsEnabled  bool    `json:"models_enabled"`
-	WalletCurrency string  `json:"wallet_currency"`
+	DefaultImageModelID *string `json:"default_image_model_id"`
+	APIVersion          int     `json:"api_version"`
+	DefaultModelID      *string `json:"default_model_id"`
+	ModelsEnabled       bool    `json:"models_enabled"`
+	WalletCurrency      string  `json:"wallet_currency"`
 }
 
 type PlatformModelPricing struct {
@@ -62,6 +63,7 @@ type PlatformPeakPricing struct {
 }
 
 type PlatformModel struct {
+	Purpose         string                    `json:"purpose"`
 	ID              string                    `json:"id"`
 	Model           string                    `json:"model"`
 	DisplayName     string                    `json:"display_name"`
@@ -110,8 +112,11 @@ func (s *DesktopModelService) Bootstrap(ctx context.Context, userID int64) (*Des
 	for _, model := range models {
 		if model.IsDefault {
 			id := model.ID
-			result.DefaultModelID = &id
-			break
+			if model.Purpose == DesktopPurposeImage {
+				result.DefaultImageModelID = &id
+			} else {
+				result.DefaultModelID = &id
+			}
 		}
 	}
 	return result, nil
@@ -180,13 +185,13 @@ func (s *DesktopModelService) resolveCatalog(ctx context.Context, userID int64) 
 		if group == nil || !group.ModelAllowlist.Allows(entry.Model) {
 			continue
 		}
-		model := PlatformModel{ID: entry.ID, Model: entry.Model, DisplayName: entry.DisplayName, ProviderLabel: entry.ProviderLabel, APIMode: entry.APIMode, State: "available", ContextWindow: entry.ContextWindow, MaxOutputTokens: entry.MaxOutputTokens, Capabilities: entry.Capabilities, BillingSource: "balance"}
+		model := PlatformModel{Purpose: desktopModelPurpose(entry), ID: entry.ID, Model: entry.Model, DisplayName: entry.DisplayName, ProviderLabel: entry.ProviderLabel, APIMode: entry.APIMode, State: "available", ContextWindow: entry.ContextWindow, MaxOutputTokens: entry.MaxOutputTokens, Capabilities: entry.Capabilities, BillingSource: "balance"}
 		if group.IsSubscriptionType() {
 			model.BillingSource = "subscription"
 		}
 		routeMatches := group.Platform == entry.Platform
 		if group.Platform == PlatformComposite {
-			endpoint := map[string]string{"chat_completions": CompositeRouteEndpointChatCompletions, "responses": CompositeRouteEndpointResponses, "anthropic_messages": CompositeRouteEndpointMessages}[entry.APIMode]
+			endpoint := map[string]string{"chat_completions": CompositeRouteEndpointChatCompletions, "responses": CompositeRouteEndpointResponses, "anthropic_messages": CompositeRouteEndpointMessages, "images_generations": CompositeRouteEndpointImages}[entry.APIMode]
 			decision, routeErr := s.routes.Resolve(ctx, group.ID, entry.Model, endpoint)
 			routeMatches = routeErr == nil && decision.Matched && decision.TargetPlatform == entry.Platform
 		}
@@ -194,14 +199,20 @@ func (s *DesktopModelService) resolveCatalog(ctx context.Context, userID int64) 
 		switch {
 		case !routeMatches:
 			setPlatformModelState(&model, "unavailable", "DESKTOP_MODEL_PLATFORM_MISMATCH")
-		case !entry.AgentVerified || !entry.Capabilities.Tools:
+		case model.Purpose == DesktopPurposeImage && !GroupAllowsImageGeneration(group):
+			setPlatformModelState(&model, "unavailable", "IMAGE_GENERATION_NOT_ALLOWED")
+		case !desktopModelSupportsPurpose(entry, model.Purpose):
 			setPlatformModelState(&model, "unavailable", "DESKTOP_MODEL_NOT_VERIFIED")
-		case !model.Pricing.DetailAvailable:
+		case model.Purpose != DesktopPurposeImage && !model.Pricing.DetailAvailable:
 			setPlatformModelState(&model, "unavailable", "DESKTOP_MODEL_PRICING_UNAVAILABLE")
 		default:
 			s.applyEligibility(ctx, user, group, entry.Platform, &model)
 		}
-		model.IsDefault = model.State == "available" && settings.DefaultModelID != nil && *settings.DefaultModelID == entry.ID
+		defaultID := settings.DefaultModelID
+		if model.Purpose == DesktopPurposeImage {
+			defaultID = settings.DefaultImageModelID
+		}
+		model.IsDefault = model.State == "available" && defaultID != nil && *defaultID == entry.ID
 		result = append(result, ResolvedPlatformModel{GroupID: group.ID, Platform: entry.Platform, Model: model})
 	}
 	return result, nil
@@ -255,6 +266,12 @@ func (s *DesktopModelService) modelPricing(ctx context.Context, entry DesktopMod
 		rate = override
 	}
 	result := PlatformModelPricing{Currency: "USD", Unit: "per_million_tokens", EffectiveUserRate: decimal.NewFromFloat(rate * group.PeakMultiplierAt(time.Now())).String(), Tiers: []PlatformPricingTier{}}
+	if desktopModelPurpose(entry) == DesktopPurposeImage {
+		// Image costs depend on request size, quality and upstream usage. Preserve
+		// the shared billing path without presenting a fabricated token tariff.
+		result.Unit = "billing_rules"
+		return result
+	}
 	schedule, err := s.billing.ResolveContextPricingSchedule(ctx, s.pricing, ContextPricingScheduleInput{Model: entry.Model, Group: group, Platform: entry.Platform})
 	if err != nil || schedule == nil || len(schedule.Tiers) == 0 {
 		return result

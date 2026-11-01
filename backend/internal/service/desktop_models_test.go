@@ -14,6 +14,25 @@ type desktopSettingsRepo struct {
 	values map[string]string
 }
 
+func TestDesktopImageCatalogRoundTripAndSeparateDefault(t *testing.T) {
+	raw := `{"enabled":true,"credential_ttl_seconds":900,"default_image_model_id":"image","models":[{"id":"image","group_id":11,"model":"fixture-image","display_name":"Image","provider_label":"Aino","platform":"openai","api_mode":"images_generations","capabilities":{"image_generation":true}}]}`
+	var settings DesktopSettings
+	require.NoError(t, json.Unmarshal([]byte(raw), &settings))
+	svc := NewSettingService(&desktopSettingsRepo{values: map[string]string{}}, &config.Config{})
+	updates, err := svc.buildDesktopSettingsUpdates(settings)
+	require.NoError(t, err, "image models must not require Agent tool verification")
+	require.Equal(t, "image", updates["desktop.default_image_model_id"])
+	loaded, err := desktopSettingsFromValues(updates)
+	require.NoError(t, err)
+	encoded, err := json.Marshal(loaded)
+	require.NoError(t, err)
+	require.Contains(t, string(encoded), `"image_generation":true`)
+	require.Contains(t, string(encoded), `"default_image_model_id":"image"`)
+	id := "image"
+	settings.DefaultModelID = &id
+	require.Error(t, validateDesktopSettings(settings), "image model cannot become the chat default")
+}
+
 func (r *desktopSettingsRepo) GetMultiple(_ context.Context, keys []string) (map[string]string, error) {
 	values := make(map[string]string)
 	for _, key := range keys {

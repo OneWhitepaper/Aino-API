@@ -20,6 +20,7 @@ func TestDesktopUsageTaskIsValidatedPrivateAndRequestScoped(t *testing.T) {
 		ordinary                   bool
 		wantStatus                 int
 	}{
+		{name: "image", purpose: "image", wantPurpose: "image", wantStatus: http.StatusOK},
 		{name: "legacy", purpose: "other_auxiliary", wantPurpose: "other_auxiliary", wantStatus: http.StatusOK},
 		{name: "summary", purpose: "other_auxiliary", tasks: []string{"session_summary"}, wantPurpose: "session_summary", wantStatus: http.StatusOK},
 		{name: "approval", purpose: "other_auxiliary", tasks: []string{"approval"}, wantPurpose: "approval", wantStatus: http.StatusOK},

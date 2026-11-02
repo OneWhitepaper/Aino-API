@@ -140,7 +140,20 @@ func extractVideoUpstreamModelIDs(body []byte) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	videoIDs := map[string]bool{}
+	// Some Videos API gateways publish Seedance aliases with only a generic
+	// "openai" endpoint type. Recognize the confirmed aliases without adding
+	// provider-specific models to every new account's default suggestions.
+	videoIDs := map[string]bool{
+		"sd2.0-720p-official":      true,
+		"sd2.0-720p-fast-official": true,
+		"sd2.0-720p-mini-official": true,
+		"sd2.0-1080p-official":     true,
+		"sd2.5-720p-official":      true,
+		"video-ultra-720p":         true,
+		"video-ultra-720p-fast":    true,
+		"video-ultra-720p-mini":    true,
+		"video-ultra2.5-720p":      true,
+	}
 	for _, id := range DefaultVideoModelIDs() {
 		videoIDs[id] = true
 	}
@@ -149,9 +162,12 @@ func extractVideoUpstreamModelIDs(body []byte) ([]string, error) {
 		entries = gjson.ParseBytes(body)
 	}
 	for _, entry := range entries.Array() {
-		for _, endpoint := range entry.Get("supported_endpoints").Array() {
-			if endpoint.String() == "videos" || strings.HasPrefix(endpoint.String(), "/v1/videos") {
-				videoIDs[entry.Get("id").String()] = true
+		for _, field := range []string{"supported_endpoints", "supported_endpoint_types"} {
+			for _, endpoint := range entry.Get(field).Array() {
+				name := strings.ToLower(strings.TrimSpace(endpoint.String()))
+				if name == "video" || name == "videos" || name == "video_generation" || name == "/v1/videos" || strings.HasPrefix(name, "/v1/videos/") {
+					videoIDs[entry.Get("id").String()] = true
+				}
 			}
 		}
 		for _, modality := range entry.Get("output_modalities").Array() {

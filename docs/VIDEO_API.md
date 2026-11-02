@@ -8,8 +8,11 @@
 1. 在账号管理中添加平台为 `video` 的 API Key 账号，填写实际上游的 Base URL
    与 API Key。协议为 `Videos API`；不会自动安装上游地址或销售价格。
 2. 使用“从上游同步模型”，按需设置模型白名单或公开模型到上游模型的映射。
-   内置识别 `veo-3.1`、`veo-3.1-fast`、`veo-3.1-lite`、`omni-flash`；
-   上游声明视频输出能力的自定义模型也可同步。
+   内置识别 `veo-3.1`、`veo-3.1-fast`、`veo-3.1-lite`、`omni-flash`，
+   以及已知的 Seedance `sd2.0-*`、`sd2.5-720p-official`、`video-ultra*` 视频别名；
+   上游通过 `supported_endpoints`、`supported_endpoint_types` 或 `output_modalities`
+   声明视频能力的自定义模型也可同步。只有通用 `openai` 或“创建任务”标签的未知模型
+   不会自动当作视频模型，可在确认其协议后手动添加。
 3. 将账号加入 `video` 或 `composite` 分组，在分组中配置对应模型和分辨率的
    每秒价格。创建任务前必须存在可用的视频价格，显式填写 0 表示免费。
    组合分组还需启用媒体生成权限；公开别名可通过组合路由指向 `video`。

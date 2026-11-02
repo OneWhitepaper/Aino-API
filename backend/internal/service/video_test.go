@@ -241,3 +241,47 @@ func TestVideoModelSyncDoesNotAdvertiseTextModels(t *testing.T) {
 	require.NoError(t, err)
 	require.ElementsMatch(t, []string{"veo-3.1", "omni-flash", "custom-movie"}, models)
 }
+
+func TestVideoModelSyncRecognizesSeedanceGatewayAliases(t *testing.T) {
+	// This gateway uses generic OpenAI endpoint tags even for some video models.
+	body := `{"object":"list","success":true,"data":[
+		{"id":"sd2.5-720p-official","object":"model","supported_endpoint_types":["openai","创建任务","查询任务"]},
+		{"id":"video-ultra-720p","object":"model","supported_endpoint_types":["openai","创建任务","查询任务"]},
+		{"id":"video-ultra2.5-720p","object":"model","supported_endpoint_types":["openai"]},
+		{"id":"sd2.0-720p-mini-official","object":"model","supported_endpoint_types":["openai","创建任务","查询任务"]},
+		{"id":"sd2.0-720p-fast-official","object":"model","supported_endpoint_types":["openai","查询任务","创建任务"]},
+		{"id":"video-ultra-720p-mini","object":"model","supported_endpoint_types":["openai","创建任务","查询任务"]},
+		{"id":"sd2.0-720p-official","object":"model","supported_endpoint_types":["openai","创建任务","查询任务"]},
+		{"id":"video-ultra-720p-fast","object":"model","supported_endpoint_types":["openai","创建任务","查询任务"]},
+		{"id":"sd2.0-1080p-official","object":"model","supported_endpoint_types":["openai"]},
+		{"id":"gpt-6","object":"model","supported_endpoint_types":["openai"]},
+		{"id":"image-task","object":"model","supported_endpoint_types":["创建任务","查询任务"]}
+	]}`
+	upstream := &grokMediaContentUpstreamStub{response: grokMediaContentStatusResponse(body)}
+	s := &AccountTestService{httpUpstream: upstream, cfg: &config.Config{}}
+	models, _, err := s.fetchUpstreamModelList(context.Background(), videoTestAccount())
+	require.NoError(t, err)
+	require.ElementsMatch(t, []string{
+		"sd2.5-720p-official", "video-ultra-720p", "video-ultra2.5-720p",
+		"sd2.0-720p-mini-official", "sd2.0-720p-fast-official", "video-ultra-720p-mini",
+		"sd2.0-720p-official", "video-ultra-720p-fast", "sd2.0-1080p-official",
+	}, models)
+}
+
+func TestVideoModelSyncRecognizesVideoEndpointTypes(t *testing.T) {
+	body := `{"data":[
+		{"id":"custom-video","supported_endpoint_types":["video"]},
+		{"id":"custom-videos","supported_endpoint_types":["videos"]},
+		{"id":"custom-generation","supported_endpoint_types":["video_generation"]},
+		{"id":"custom-path","supported_endpoint_types":["/v1/videos"]},
+		{"id":"custom-output","output_modalities":["video"]},
+		{"id":"video-understanding","input_modalities":["video"],"supported_endpoint_types":["openai"]}
+	]}`
+	upstream := &grokMediaContentUpstreamStub{response: grokMediaContentStatusResponse(body)}
+	s := &AccountTestService{httpUpstream: upstream, cfg: &config.Config{}}
+	models, _, err := s.fetchUpstreamModelList(context.Background(), videoTestAccount())
+	require.NoError(t, err)
+	require.ElementsMatch(t, []string{
+		"custom-video", "custom-videos", "custom-generation", "custom-path", "custom-output",
+	}, models)
+}

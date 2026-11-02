@@ -34,6 +34,32 @@ type ainoNativeProtocol struct {
 	streamShutdowns                             atomic.Int64
 	compressionRequests                         atomic.Int64
 	compressionHandoffRequests                  atomic.Int64
+	images                                      ainoNativeImageState
+}
+
+type ainoNativeMessage struct {
+	Role       string          `json:"role"`
+	Content    json.RawMessage `json:"content"`
+	ToolCallID string          `json:"tool_call_id"`
+	ToolCalls  []struct {
+		ID       string `json:"id"`
+		Function struct {
+			Name      string `json:"name"`
+			Arguments string `json:"arguments"`
+		} `json:"function"`
+	} `json:"tool_calls"`
+}
+
+type ainoNativeChatRequest struct {
+	Model    string              `json:"model"`
+	Stream   bool                `json:"stream"`
+	Messages []ainoNativeMessage `json:"messages"`
+	Tools    []struct {
+		Function struct {
+			Name       string         `json:"name"`
+			Parameters map[string]any `json:"parameters"`
+		} `json:"function"`
+	} `json:"tools"`
 }
 
 func (p *ainoNativeProtocol) closeActiveStream() {
@@ -108,7 +134,7 @@ func registerNativeProtocolCleanup(t *testing.T, protocol *ainoNativeProtocol, c
 }
 
 func (p *ainoNativeProtocol) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	if req.URL.Path != "/v1/chat/completions" || req.Header.Get("Authorization") != "Bearer fixture-upstream-key" {
+	if req.Header.Get("Authorization") != "Bearer fixture-upstream-key" {
 		http.Error(w, "unexpected fixture upstream request", 400)
 		return
 	}
@@ -118,28 +144,15 @@ func (p *ainoNativeProtocol) ServeHTTP(w http.ResponseWriter, req *http.Request)
 			return
 		}
 	}
-	var body struct {
-		Model    string `json:"model"`
-		Stream   bool   `json:"stream"`
-		Messages []struct {
-			Role       string          `json:"role"`
-			Content    json.RawMessage `json:"content"`
-			ToolCallID string          `json:"tool_call_id"`
-			ToolCalls  []struct {
-				ID       string `json:"id"`
-				Function struct {
-					Name      string `json:"name"`
-					Arguments string `json:"arguments"`
-				} `json:"function"`
-			} `json:"tool_calls"`
-		} `json:"messages"`
-		Tools []struct {
-			Function struct {
-				Name       string         `json:"name"`
-				Parameters map[string]any `json:"parameters"`
-			} `json:"function"`
-		} `json:"tools"`
+	if req.URL.Path == "/v1/images/generations" || req.URL.Path == "/v1/images/edits" {
+		p.serveNativeImage(w, req)
+		return
 	}
+	if req.URL.Path != "/v1/chat/completions" {
+		http.Error(w, "unexpected fixture upstream route", http.StatusBadRequest)
+		return
+	}
+	var body ainoNativeChatRequest
 	if json.NewDecoder(req.Body).Decode(&body) != nil || body.Model != "fixture-tool-model" || len(body.Messages) == 0 {
 		http.Error(w, "invalid native fixture protocol", 400)
 		return
@@ -179,6 +192,9 @@ func (p *ainoNativeProtocol) ServeHTTP(w http.ResponseWriter, req *http.Request)
 		emit(map[string]any{}, "stop", usage)
 		_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
 		flusher.Flush()
+		return
+	}
+	if p.serveNativeImageTool(w, &body) {
 		return
 	}
 	hasRead := false
@@ -293,18 +309,7 @@ func (p *ainoNativeProtocol) ServeHTTP(w http.ResponseWriter, req *http.Request)
 	}
 }
 
-func isNativeCompressionRequest(messages []struct {
-	Role       string          `json:"role"`
-	Content    json.RawMessage `json:"content"`
-	ToolCallID string          `json:"tool_call_id"`
-	ToolCalls  []struct {
-		ID       string `json:"id"`
-		Function struct {
-			Name      string `json:"name"`
-			Arguments string `json:"arguments"`
-		} `json:"function"`
-	} `json:"tool_calls"`
-}) bool {
+func isNativeCompressionRequest(messages []ainoNativeMessage) bool {
 	if len(messages) != 1 || messages[0].Role != "user" {
 		return false
 	}

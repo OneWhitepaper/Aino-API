@@ -1,5 +1,15 @@
 export default {
     accounts: {
+      video: {
+        apiKeyDescription: 'Connect a video service using its Base URL and API key. Supports text and image to video.',
+        protocol: 'Video protocol',
+        protocolHint: 'Create, query and download through /v1/videos. Users use the site URL and their site API key.',
+        baseUrlHint: 'Enter a Videos API compatible upstream URL, optionally ending in /v1. No provider URL is filled automatically.',
+        baseUrlRequired: 'Enter the video service Base URL',
+        testConnectivity: 'Check connection (no generation)',
+        testGeneration: 'Generate a real test video (uses upstream credits)',
+        testHint: 'Connection checks verify the key and model list. A generation test submits and polls a real job and uses upstream credits.'
+      },
       title: 'Account Management',
       description: 'Manage AI platform accounts and credentials',
       createAccount: 'Create Account',

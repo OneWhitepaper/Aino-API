@@ -157,6 +157,13 @@ export default {
     lastUsedIP: 'Last Used IP',
     useKey: 'Use Key',
     useKeyModal: {
+      video: {
+        description: 'Call the video API with this site URL and your site API key. The example model must be enabled and priced in your group.',
+        create: '1. Create a video task',
+        status: '2. Check task status',
+        download: '3. Download the video',
+        hint: 'Replace VIDEO_ID with the id from creation. Poll every 5–10 seconds and download after completed. Use the same API key; tasks remain queryable for 24 hours. Billing occurs on the first completed status or download. Failed tasks and repeated polls do not add charges.'
+      },
       title: 'Use API Key',
       description:
         'Add the following environment variables to your terminal profile or run directly in terminal to configure API access.',

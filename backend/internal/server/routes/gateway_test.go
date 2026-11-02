@@ -357,6 +357,20 @@ func TestGatewayRoutesCompositeVideoGenerationAllowed(t *testing.T) {
 	require.NotContains(t, w.Body.String(), "not supported")
 }
 
+func TestGatewayRoutesVideoPlatformAndCompositeCreate(t *testing.T) {
+	for _, platform := range []string{"video", service.PlatformComposite} {
+		router := newGatewayRoutesTestRouter(platform)
+		for _, path := range []string{"/v1/videos", "/v1/videos/generations", "/videos"} {
+			req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{"model":"veo-3.1","prompt":"waves"}`))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+			require.NotEqual(t, http.StatusNotFound, w.Code, "%s %s: %s", platform, path, w.Body.String())
+			require.NotContains(t, w.Body.String(), "not supported")
+		}
+	}
+}
+
 func TestGatewayRoutesCompositeOpenAIOnlyEndpointsRequireOpenAITarget(t *testing.T) {
 	router := newGatewayRoutesTestRouter(service.PlatformComposite)
 

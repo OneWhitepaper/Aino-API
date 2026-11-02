@@ -42,6 +42,14 @@
       </div>
 
       <!-- Grok: mode first, then optional model / mode params -->
+      <div v-if="isVideoAccount" class="space-y-1.5">
+        <label class="text-sm font-medium text-gray-700 dark:text-gray-300" for="video-test-mode">{{ t('admin.accounts.video.protocol') }}</label>
+        <select id="video-test-mode" v-model="videoTestMode" class="input" :disabled="status === 'connecting'" data-testid="video-test-mode">
+          <option value="default">{{ t('admin.accounts.video.testConnectivity') }}</option>
+          <option value="video">{{ t('admin.accounts.video.testGeneration') }}</option>
+        </select>
+        <p class="input-hint">{{ t('admin.accounts.video.testHint') }}</p>
+      </div>
       <div v-if="isGrokAccount" class="space-y-1.5">
         <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
           {{ t('admin.accounts.grok.testMode') }}
@@ -414,6 +422,8 @@ const generatedAudios = ref<PreviewMedia[]>([])
 const generatedVideos = ref<PreviewMedia[]>([])
 const previewImageUrl = ref('')
 const testMode = ref<'default' | 'compact'>('default')
+const videoTestMode = ref<'default' | 'video'>('default')
+const isVideoAccount = computed(() => props.account?.platform === 'video')
 const grokTestMode = ref<'text' | 'image' | 'video' | 'search' | 'tts' | 'stt' | 'realtime'>('text')
 const uploadImageDataURL = ref('')
 const uploadImagePreview = ref('')
@@ -497,6 +507,7 @@ const modelOptionsForMode = computed(() => {
 })
 
 const supportsPromptInput = computed(() => {
+  if (isVideoAccount.value) return videoTestMode.value === 'video'
   if (!isGrokAccount.value) {
     return supportsImageTest.value
   }
@@ -597,6 +608,7 @@ const clearMediaUploads = () => {
 }
 
 const promptInputLabel = computed(() => {
+  if (isVideoAccount.value) return t('admin.accounts.videoPromptLabel')
   if (supportsGrokVideoTest.value || grokTestMode.value === 'video') {
     return t('admin.accounts.videoPromptLabel')
   }
@@ -613,6 +625,7 @@ const promptInputLabel = computed(() => {
 })
 
 const promptInputPlaceholder = computed(() => {
+  if (isVideoAccount.value) return t('admin.accounts.videoPromptPlaceholder')
   if (grokTestMode.value === 'video') {
     return t('admin.accounts.videoPromptPlaceholder')
   }
@@ -629,6 +642,7 @@ const promptInputPlaceholder = computed(() => {
 })
 
 const promptInputHint = computed(() => {
+  if (isVideoAccount.value) return t('admin.accounts.video.testHint')
   if (grokTestMode.value === 'video') {
     return t('admin.accounts.videoTestHint')
   }
@@ -651,6 +665,7 @@ const promptInputHint = computed(() => {
 })
 
 const testModeSummary = computed(() => {
+  if (isVideoAccount.value) return t(videoTestMode.value === 'video' ? 'admin.accounts.video.testGeneration' : 'admin.accounts.video.testConnectivity')
   if (isGrokAccount.value) {
     switch (grokTestMode.value) {
       case 'video':
@@ -739,6 +754,7 @@ watch(
     if (newVal && props.account) {
       testPrompt.value = ''
       testMode.value = 'default'
+      videoTestMode.value = 'default'
       grokTestMode.value = 'text'
       resetState()
       await loadAvailableModels()
@@ -857,6 +873,7 @@ const startTest = async () => {
     if (isOpenAIAccount.value) {
       requestBody.mode = testMode.value
     }
+    if (isVideoAccount.value) requestBody.mode = videoTestMode.value
     if (isGrokAccount.value) {
       // Always send explicit Grok mode. search/tts/stt/realtime are standalone
       // endpoints (no free-form model select). text/image/video use optional model.

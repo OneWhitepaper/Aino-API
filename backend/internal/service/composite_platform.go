@@ -107,6 +107,8 @@ func DetectModelPlatform(model string) (string, bool) {
 			return PlatformGemini, true
 		case "xai", "x-ai", "grok":
 			return PlatformGrok, true
+		case "video":
+			return PlatformVideo, true
 		case "kimi", "moonshot":
 			return PlatformKimi, true
 		case "zhipu", "glm", "bigmodel":
@@ -124,6 +126,8 @@ func DetectModelPlatform(model string) (string, bool) {
 	}
 
 	switch {
+	case strings.HasPrefix(normalized, "veo-"), normalized == "omni-flash":
+		return PlatformVideo, true
 	case strings.HasPrefix(normalized, "anthropic.claude-"),
 		strings.HasPrefix(normalized, "claude-"):
 		return PlatformAnthropic, true

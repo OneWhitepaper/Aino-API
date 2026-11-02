@@ -1046,6 +1046,10 @@
           v-if="supportsVideoPricingPlatform(createForm.platform)"
           class="border-t pt-4"
         >
+          <label v-if="createForm.platform === 'video'" class="mb-3 flex items-center gap-2 text-sm">
+            <input v-model="createForm.allow_image_generation" type="checkbox" class="rounded text-primary-600" />
+            {{ t('admin.groups.videoPricing.allowGeneration') }}
+          </label>
           <label
             class="block mb-2 font-medium text-gray-700 dark:text-gray-300"
           >
@@ -1127,7 +1131,7 @@
             </p>
             <div class="mt-3 space-y-3">
               <div
-                v-for="family in videoModelPriceFamilyRows(createForm.video_model_prices)"
+                v-for="family in videoModelPriceFamilyRows(createForm.video_model_prices, createForm.platform)"
                 :key="family.key"
                 class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_repeat(3,minmax(0,7rem))] sm:items-end"
               >
@@ -1144,6 +1148,7 @@
                   </span>
                   <input
                     v-model.number="createForm.video_model_prices[family.key][resolution.key]"
+                    :disabled="!supportsVideoModelResolution(family.key, resolution.key)"
                     type="number"
                     step="0.001"
                     min="0"
@@ -1152,6 +1157,10 @@
                   />
                 </label>
               </div>
+            </div>
+            <div class="mt-3 flex gap-2">
+              <input v-model="newCreateVideoPriceModel" class="input min-w-0 flex-1" :placeholder="t('admin.groups.videoPricing.modelPlaceholder')" />
+              <button type="button" class="btn btn-secondary whitespace-nowrap" @click="addVideoModelPrice(createForm.video_model_prices, newCreateVideoPriceModel); newCreateVideoPriceModel = ''">{{ t('common.add') }}</button>
             </div>
           </div>
           <p class="mt-3 text-xs text-gray-500 dark:text-gray-400">
@@ -2686,6 +2695,10 @@
           v-if="supportsVideoPricingPlatform(editForm.platform)"
           class="border-t pt-4"
         >
+          <label v-if="editForm.platform === 'video'" class="mb-3 flex items-center gap-2 text-sm">
+            <input v-model="editForm.allow_image_generation" type="checkbox" class="rounded text-primary-600" />
+            {{ t('admin.groups.videoPricing.allowGeneration') }}
+          </label>
           <label
             class="block mb-2 font-medium text-gray-700 dark:text-gray-300"
           >
@@ -2767,7 +2780,7 @@
             </p>
             <div class="mt-3 space-y-3">
               <div
-                v-for="family in videoModelPriceFamilyRows(editForm.video_model_prices)"
+                v-for="family in videoModelPriceFamilyRows(editForm.video_model_prices, editForm.platform)"
                 :key="family.key"
                 class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_repeat(3,minmax(0,7rem))] sm:items-end"
               >
@@ -2784,6 +2797,7 @@
                   </span>
                   <input
                     v-model.number="editForm.video_model_prices[family.key][resolution.key]"
+                    :disabled="!supportsVideoModelResolution(family.key, resolution.key)"
                     type="number"
                     step="0.001"
                     min="0"
@@ -2792,6 +2806,10 @@
                   />
                 </label>
               </div>
+            </div>
+            <div class="mt-3 flex gap-2">
+              <input v-model="newEditVideoPriceModel" class="input min-w-0 flex-1" :placeholder="t('admin.groups.videoPricing.modelPlaceholder')" />
+              <button type="button" class="btn btn-secondary whitespace-nowrap" @click="addVideoModelPrice(editForm.video_model_prices, newEditVideoPriceModel); newEditVideoPriceModel = ''">{{ t('common.add') }}</button>
             </div>
           </div>
           <p class="mt-3 text-xs text-gray-500 dark:text-gray-400">
@@ -4375,6 +4393,8 @@ import {
   videoPricingI18nKey,
 } from "./groupsImagePricing";
 import {
+  addVideoModelPrice,
+  supportsVideoModelResolution,
   createVideoModelPricesForm,
   grokVideoPriceResolutions,
   serializeVideoModelPrices,
@@ -4383,6 +4403,8 @@ import {
 
 const supportsLivePlatform = (platform: string): boolean =>
   platform === "openai" || platform === "composite";
+const newCreateVideoPriceModel = ref('');
+const newEditVideoPriceModel = ref('');
 
 const emptyGroupPricing = (): PricingFormEntry => ({
   models: [],
@@ -6093,6 +6115,7 @@ const handleEdit = async (group: AdminGroup) => {
   editForm.video_price_1080p = group.video_price_1080p;
   editForm.video_model_prices = createVideoModelPricesForm(
     group.video_model_prices,
+    group.platform,
   );
   editForm.web_search_price_per_call = group.web_search_price_per_call ?? null;
   editForm.search_price_per_1k = group.search_price_per_1k ?? null;
@@ -6662,6 +6685,14 @@ const confirmDelete = async () => {
 };
 
 // 监听 subscription_type 变化，订阅模式时 is_exclusive 默认为 true；标准模式清空高峰配置
+watch(() => createForm.platform, (platform) => {
+  createForm.video_model_prices = createVideoModelPricesForm(serializeVideoModelPrices(createForm.video_model_prices), platform)
+})
+
+watch(() => editForm.platform, (platform) => {
+  editForm.video_model_prices = createVideoModelPricesForm(serializeVideoModelPrices(editForm.video_model_prices), platform)
+})
+
 watch(
   () => createForm.subscription_type,
   (newVal) => {

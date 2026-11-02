@@ -296,6 +296,8 @@ func defaultModelsListCandidateIDs(platform string) []string {
 		return ids
 	case PlatformGrok:
 		return xai.DefaultModelIDs()
+	case PlatformVideo:
+		return DefaultVideoModelIDs()
 	case PlatformOpenCodeGo:
 		return DefaultOpenCodeGoModelIDs()
 	case PlatformTypeSafe:
@@ -317,7 +319,7 @@ func defaultModelsListCandidateIDs(platform string) []string {
 // gates OpenAI image generation there.
 func DefaultAllowImageGenerationForPlatform(platform string) bool {
 	switch platform {
-	case PlatformGrok, PlatformGemini, PlatformAntigravity:
+	case PlatformGrok, PlatformGemini, PlatformAntigravity, PlatformVideo:
 		return true
 	default:
 		return false

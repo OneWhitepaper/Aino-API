@@ -1507,6 +1507,9 @@ func (a *Account) IsOpenAIApiKey() bool {
 // 适用 openai、国产 OpenAI 兼容供应商（kimi/zhipu/deepseek）与 OpenCode Go；
 // grok 走 GetGrokBaseURL，此处对 grok 返回 "" 以保持原有行为。
 func (a *Account) GetOpenAIBaseURL() string {
+	if a != nil && a.Platform == PlatformVideo {
+		return strings.TrimSpace(a.GetCredential("base_url"))
+	}
 	if !a.IsOpenAI() && !a.IsMultiProtocolAPIKey() {
 		return ""
 	}
@@ -1848,6 +1851,9 @@ func (a *Account) GetOpenAIProtocolAPIKey() string {
 	if a == nil {
 		return ""
 	}
+	if a.Platform == PlatformVideo && a.Type == AccountTypeAPIKey {
+		return a.GetCredential("api_key")
+	}
 	if a.IsMultiProtocolAPIKey() {
 		if a.Type != AccountTypeAPIKey {
 			return ""
@@ -1916,6 +1922,11 @@ func (a *Account) GetOpenAISessionID() string {
 func (a *Account) SupportsOpenAIEndpointCapability(capability OpenAIEndpointCapability) bool {
 	if a == nil {
 		return false
+	}
+	if a.Platform == PlatformVideo {
+		return (capability == "" || capability == OpenAIEndpointCapabilityVideoGeneration) &&
+			a.Type == AccountTypeAPIKey && strings.TrimSpace(a.GetCredential("base_url")) != "" &&
+			strings.TrimSpace(a.GetCredential("api_key")) != ""
 	}
 	if capability == OpenAIEndpointCapabilitySeedance {
 		configured, _ := a.openAIEndpointCapabilitySet()

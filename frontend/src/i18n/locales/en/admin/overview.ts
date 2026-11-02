@@ -1090,15 +1090,17 @@ export default {
         notConfigured: 'Not configured'
       },
       videoPricing: {
+        allowGeneration: 'Allow video generation',
+        modelPlaceholder: 'Custom public model name or mapped alias',
         title: 'Video Generation Pricing',
         description:
-          'Configure Grok video generation prices in USD per second of output video. Leave empty to use the default per-second rates (grok-imagine-video: $0.05/s 480p, $0.07/s 720p; video-1.5: $0.08/s 480p, $0.14/s 720p, $0.25/s 1080p).',
+          'Set video prices in USD per output second. The video platform requires a model price or a flat resolution price before generation. Grok models retain their built-in default rates.',
         modelOverridesTitle: 'Per-model video price overrides',
-        modelOverridesDescription: 'Each populated cell overrides the flat resolution price for that model family. Preview and legacy aliases for video-1.5 use the same family; empty cells fall back to the flat resolution price.',
+        modelOverridesDescription: 'Model prices override flat resolution prices. Configure the model name requested by users; empty cells fall back to flat prices. Omni Flash supports 720p only.',
         independentMultiplier: 'Use independent video multiplier',
         videoMultiplier: 'Video multiplier',
         modeHint:
-          'Videos are billed per second: per-second price × duration (1-15s, default 8s). By default the current effective group multiplier applies; independent mode uses the video multiplier instead.',
+          'Videos are billed per output second. Veo defaults to 8s and Omni Flash to 3s. The effective group multiplier applies by default; independent mode uses the video multiplier instead.',
         finalPricePreview: 'Final per-second price preview',
         notConfigured: 'Not configured'
       },

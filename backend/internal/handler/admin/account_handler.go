@@ -2900,6 +2900,23 @@ func (h *AccountHandler) GetAvailableModels(c *gin.Context) {
 		return
 	}
 
+	if account.Platform == service.PlatformVideo {
+		ids := service.DefaultVideoModelIDs()
+		if mapping := account.GetModelMapping(); len(mapping) > 0 {
+			ids = make([]string, 0, len(mapping))
+			for id := range mapping {
+				ids = append(ids, id)
+			}
+			sort.Strings(ids)
+		}
+		models := make([]gin.H, 0, len(ids))
+		for _, id := range ids {
+			models = append(models, gin.H{"id": id, "display_name": id})
+		}
+		response.Success(c, models)
+		return
+	}
+
 	// Handle Grok accounts
 	if account.Platform == service.PlatformGrok {
 		defaultModels := xai.DefaultModels()

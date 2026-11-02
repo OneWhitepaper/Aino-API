@@ -119,6 +119,22 @@ describe('AccountTestModal', () => {
     vi.restoreAllMocks()
   })
 
+  it('video defaults to connection check and requires an explicit generation mode', async () => {
+    getAvailableModels.mockResolvedValue([{ id: 'veo-3.1', display_name: 'veo-3.1' }])
+    const wrapper = mountModal({ id: 91, name: 'Video', platform: 'video', type: 'apikey', status: 'active' })
+    await wrapper.setProps({ show: true })
+    await flushPromises()
+    const mode = wrapper.find<HTMLSelectElement>('[data-testid="video-test-mode"]')
+    expect(mode.exists()).toBe(true)
+    expect(mode.element.value).toBe('default')
+    await mode.setValue('video')
+    const startButton = wrapper.findAll('button').find(button => button.text().includes('admin.accounts.startTest'))!
+    await startButton.trigger('click')
+    await flushPromises()
+    const [, request] = (global.fetch as any).mock.calls[0]
+    expect(JSON.parse(request.body)).toMatchObject({ model_id: 'veo-3.1', mode: 'video' })
+  })
+
   it('gemini 图片模型测试会携带提示词并渲染图片预览', async () => {
     const wrapper = mountModal()
     await wrapper.setProps({ show: true })

@@ -21,6 +21,7 @@
         </div>
       </div>
 
+      <VideoAPIUsage v-else-if="platform === 'video'" :api-key="apiKey" :base-url="baseUrl" />
       <!-- Platform-specific content -->
       <template v-else>
         <!-- Description -->
@@ -271,6 +272,7 @@ import { ref, computed, h, watch, type Component } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { saveAs } from 'file-saver'
 import BaseDialog from '@/components/common/BaseDialog.vue'
+import VideoAPIUsage from './VideoAPIUsage.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { useClipboard } from '@/composables/useClipboard'
 import { buildCodexModelCatalogUrl, fetchCodexModelsManifest } from '@/api/codex'
@@ -1337,6 +1339,7 @@ function generateRoutedCodexFiles(
     typesafe: 'TypeSafe / Jev',
     command_code: 'Command Code',
     cline: 'Cline',
+    video: 'video',
     composite: 'Composite'
   }
   const label = labels[platform]

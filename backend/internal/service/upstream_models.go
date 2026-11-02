@@ -634,7 +634,7 @@ func upstreamModelRegistryBaseURL(account *Account) string {
 		return ""
 	}
 	switch {
-	case account.IsOpenAI() || account.IsMultiProtocolAPIKey():
+	case account.IsOpenAI() || account.IsMultiProtocolAPIKey() || account.Platform == PlatformVideo:
 		return account.GetOpenAIFormatBaseURL()
 	case account.IsGrok():
 		return account.GetGrokBaseURL()
@@ -767,6 +767,8 @@ func (s *AccountTestService) fetchUpstreamModelList(ctx context.Context, account
 	extractModels := extractUpstreamModelIDs
 	if account.IsGrok() {
 		extractModels = extractGrokUpstreamModelIDs
+	} else if account.Platform == PlatformVideo {
+		extractModels = extractVideoUpstreamModelIDs
 	}
 	models, err := extractModels(body)
 	if err != nil {
@@ -902,12 +904,17 @@ func listVertexGeminiPublisherModels(location string, fetchPage func(page int, l
 }
 
 func (s *AccountTestService) buildUpstreamModelsRequest(ctx context.Context, account *Account) (*http.Request, error) {
+	if account.Platform == PlatformVideo {
+		if err := validateVideoCredentials(account.Type, account.Credentials); err != nil {
+			return nil, newUpstreamModelSyncConfigError(err.Error(), nil)
+		}
+	}
 	switch {
 	case account.Platform == PlatformAntigravity:
 		return s.buildAntigravityAPIKeyModelsRequest(ctx, account)
 	case account.IsGrok():
 		return s.buildGrokUpstreamModelsRequest(ctx, account)
-	case account.IsOpenAI() || account.IsMultiProtocolAPIKey():
+	case account.IsOpenAI() || account.IsMultiProtocolAPIKey() || account.Platform == PlatformVideo:
 		// 多协议 API Key 供应商（国产厂商与聚合平台）复用 OpenAI /v1/models 探测。
 		return s.buildOpenAIUpstreamModelsRequest(ctx, account)
 	case account.IsGemini():

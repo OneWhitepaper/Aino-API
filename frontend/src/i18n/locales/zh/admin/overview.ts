@@ -1087,15 +1087,17 @@ export default {
         notConfigured: '未配置'
       },
       videoPricing: {
+        allowGeneration: '允许视频生成',
+        modelPlaceholder: '自定义公开模型名或映射别名',
         title: '视频生成计费',
         description:
-          '配置 Grok 视频生成的每秒单价（USD/秒），留空则使用默认每秒价（grok-imagine-video：480p $0.05/s、720p $0.07/s；video-1.5：480p $0.08/s、720p $0.14/s、1080p $0.25/s）',
+          '配置视频生成的每秒单价（USD/秒）。video 平台必须配置模型价格或通用分辨率价格才能生成；Grok 模型沿用其内置默认价格。',
         modelOverridesTitle: '按模型覆盖视频价格',
-        modelOverridesDescription: '已填写的单元格会覆盖该模型族的平面分辨率价格。video-1.5 的 preview 与 legacy 别名共用同一模型族；留空则回退到平面分辨率价格。',
+        modelOverridesDescription: '已填写的单元格优先于通用分辨率价格。按用户请求的模型名配置；留空则回退到通用价格。Omni Flash 仅支持 720p。',
         independentMultiplier: '视频倍率独立',
         videoMultiplier: '视频独立倍率',
         modeHint:
-          '视频按秒计费：费用 = 每秒价格 × 时长（1-15 秒，未指定默认 8 秒）。默认叠加当前分组有效倍率；开启独立倍率后改用视频独立倍率。',
+          '视频按秒计费：费用 = 每秒价格 × 生成时长。Veo 默认 8 秒，Omni Flash 默认 3 秒。默认叠加当前分组有效倍率；开启独立倍率后改用视频独立倍率。',
         finalPricePreview: '最终每秒价格预览',
         notConfigured: '未配置'
       },

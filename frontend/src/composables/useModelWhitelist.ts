@@ -496,6 +496,7 @@ export const commonErrorCodes = [
 // 按平台获取模型
 export function getModelsByPlatform(platform: string): string[] {
   switch (platform) {
+    case 'video': return ['veo-3.1', 'veo-3.1-fast', 'veo-3.1-lite', 'omni-flash']
     case 'openai': return openaiModels
     case 'anthropic':
     case 'claude': return claudeModels

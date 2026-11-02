@@ -1,5 +1,15 @@
 export default {
     accounts: {
+      video: {
+        apiKeyDescription: '使用视频服务的 Base URL 和 API Key，支持文生视频与图生视频。',
+        protocol: '视频协议',
+        protocolHint: '创建、查询、下载统一使用 /v1/videos；用户使用本站地址和本站密钥。',
+        baseUrlHint: '填写兼容 Videos API 的上游地址，支持包含 /v1。不会自动填写供应商地址。',
+        baseUrlRequired: '请填写视频服务的 Base URL',
+        testConnectivity: '连接检测（不生成视频）',
+        testGeneration: '真实生成测试（消耗上游额度）',
+        testHint: '连接检测验证密钥和模型列表；真实生成会提交任务并查询结果，消耗上游额度。'
+      },
       title: '账号管理',
       description: '管理 AI 平台账号和 Cookie',
       createAccount: '添加账号',

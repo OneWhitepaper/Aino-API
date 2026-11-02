@@ -157,6 +157,13 @@ export default {
     lastUsedIP: '最近使用 IP',
     useKey: '使用密钥',
     useKeyModal: {
+      video: {
+        description: '使用本站地址和 API 密钥调用视频接口。示例中的模型需已在分组开放并配置价格。',
+        create: '1. 创建视频任务',
+        status: '2. 查询任务状态',
+        download: '3. 下载视频',
+        hint: '将 VIDEO_ID 替换为创建响应中的 id。建议每 5–10 秒查询一次；completed 后下载。使用创建时的同一把密钥，任务查询保留 24 小时。生成完成后首次查询或下载计费，失败任务和重复查询不重复扣费。'
+      },
       title: '使用 API 密钥',
       description: '将以下环境变量添加到您的终端配置文件或直接在终端中运行。',
       copy: '复制',

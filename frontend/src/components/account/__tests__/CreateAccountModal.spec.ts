@@ -165,6 +165,32 @@ async function selectButtonByText(wrapper: ReturnType<typeof mountModal>, text: 
   await button?.trigger('click')
 }
 
+describe('video account creation through the existing form', () => {
+  beforeEach(() => {
+    createAccountMock.mockReset().mockResolvedValue({ id: 91 })
+    probeUpstreamBillingMock.mockReset().mockResolvedValue({ success: true })
+  })
+
+  it('requires a custom URL and submits video credentials and selected models', async () => {
+    const wrapper = mountModal()
+    await wrapper.get('[data-testid="platform-button-video"]').trigger('click')
+    await wrapper.get('form#create-account-form input[type="text"]').setValue('视频生成-01')
+    await wrapper.get('form#create-account-form input[type="password"]').setValue('video-key')
+    await wrapper.get('form#create-account-form').trigger('submit.prevent')
+    await flushPromises()
+    expect(createAccountMock).not.toHaveBeenCalled()
+    await wrapper.get('[data-testid="video-base-url"]').setValue('https://provider.example/v1')
+    await wrapper.get('[data-testid="model-whitelist-selector"]').trigger('click')
+    await wrapper.get('form#create-account-form').trigger('submit.prevent')
+    await flushPromises()
+    expect(createAccountMock).toHaveBeenCalledWith(expect.objectContaining({
+      platform: 'video', type: 'apikey',
+      credentials: expect.objectContaining({ base_url: 'https://provider.example/v1', api_key: 'video-key', video_protocol: 'videos', model_mapping: { 'public-glm': 'public-glm' } })
+    }))
+    expect(wrapper.emitted('created')).toHaveLength(1)
+  })
+})
+
 async function submitApiKeyAccount(
   platform: 'openai' | 'anthropic',
   enableLongContextBilling = false,
@@ -660,7 +686,7 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
     const labels = (testid: string) =>
       wrapper.get(`[data-testid="${testid}"]`).findAll('button').map(button => button.text().trim())
     expect(labels('platform-row-cn')).toEqual(['Kimi', 'Zhipu GLM', 'DeepSeek', 'MiniMax'])
-    expect(labels('platform-row-aggregators')).toEqual(['OpenCode', 'Command Code', 'Cline'])
+    expect(labels('platform-row-aggregators')).toEqual(['video', 'OpenCode', 'Command Code', 'Cline'])
   })
 
   it('creates a Cline account without an account type and with only the Chat Completions endpoint', async () => {

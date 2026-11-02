@@ -321,14 +321,14 @@ func ParseVideoRequest(contentType string, body []byte) (GrokMediaRequestInfo, e
 		return info, fmt.Errorf("too many video reference images (maximum %d)", limit)
 	}
 	if strings.HasPrefix(info.Model, "veo-3.1") && info.DurationSeconds != 4 && info.DurationSeconds != 6 && info.DurationSeconds != 8 {
-		return info, fmt.Errorf("Veo seconds must be 4, 6 or 8")
+		return info, fmt.Errorf("veo seconds must be 4, 6 or 8")
 	}
 	if info.Model == "omni-flash" {
 		if info.DurationSeconds < 3 || info.DurationSeconds > 10 || info.Resolution != "720p" {
-			return info, fmt.Errorf("Omni Flash requires 3–10 seconds and 720p")
+			return info, fmt.Errorf("omni flash requires 3–10 seconds and 720p")
 		}
 		if first > 0 || last > 0 || root.Get("audio").Bool() || root.Get("generate_audio").Bool() {
-			return info, fmt.Errorf("Omni Flash supports reference images only, without generated audio")
+			return info, fmt.Errorf("omni flash supports reference images only, without generated audio")
 		}
 	}
 	return info, nil
@@ -451,7 +451,7 @@ func (s *OpenAIGatewayService) ForwardVideo(ctx context.Context, c *gin.Context,
 	if err != nil {
 		return nil, fmt.Errorf("video upstream request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	responseBody, err := ReadUpstreamResponseBody(resp.Body, s.cfg, c, openAITooLargeError)
 	if err != nil {
 		return nil, err
@@ -502,7 +502,7 @@ func (s *OpenAIGatewayService) ForwardVideo(ctx context.Context, c *gin.Context,
 		if err != nil {
 			return nil, err
 		}
-		defer contentResp.Body.Close()
+		defer func() { _ = contentResp.Body.Close() }()
 		if contentResp.StatusCode != 200 && contentResp.StatusCode != 206 && contentResp.StatusCode != 416 {
 			return nil, fmt.Errorf("video download upstream status %d", contentResp.StatusCode)
 		}

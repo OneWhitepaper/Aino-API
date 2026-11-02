@@ -88,7 +88,7 @@ func (s *AccountTestService) testVideoAccountConnection(c *gin.Context, account 
 		return s.doUpstreamModelsRequest(req, upstreamModelsProxyURL(account), account)
 	}
 	readJSON := func(resp *http.Response) ([]byte, error) {
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		data, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 		if err != nil {
 			return nil, err
@@ -138,7 +138,7 @@ func (s *AccountTestService) testVideoAccountConnection(c *gin.Context, account 
 			if err != nil {
 				return s.sendErrorAndEnd(c, "Video completed, but downloading failed (task ID: "+id+")")
 			}
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 			if resp.StatusCode != http.StatusOK {
 				body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 				return s.sendErrorAndEnd(c, fmt.Sprintf("Video download returned HTTP %d%s", resp.StatusCode, videoAccountTestErrorDetail(account, body, resp.Header)))

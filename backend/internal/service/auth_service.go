@@ -96,6 +96,7 @@ type AuthService struct {
 	affiliateService      *AffiliateService
 	defaultSubAssigner    DefaultSubscriptionAssigner
 	userPlatformQuotaRepo UserPlatformQuotaRepository
+	mcpGrantRevoker       MCPGrantRevoker
 }
 
 type CaptchaProof struct {
@@ -103,6 +104,11 @@ type CaptchaProof struct {
 	TurnstileToken string
 	TencentTicket  string
 	TencentRandstr string
+}
+
+// MCPGrantRevoker revokes MCP authorizations, which outlive browser sessions.
+type MCPGrantRevoker interface {
+	RevokeAllGrants(ctx context.Context, userID int64) error
 }
 
 type DefaultSubscriptionAssigner interface {
@@ -173,6 +179,10 @@ func (s *AuthService) SMSService() *SMSService {
 		return nil
 	}
 	return s.smsService
+}
+
+func (s *AuthService) SetMCPGrantRevoker(revoker MCPGrantRevoker) {
+	s.mcpGrantRevoker = revoker
 }
 
 // Register 用户注册，返回token和用户
@@ -1960,19 +1970,26 @@ func (s *AuthService) RevokeSessionFamily(ctx context.Context, familyID string) 
 	return nil
 }
 
-// RevokeAllUserSessions 撤销用户的所有会话（所有Refresh Token）
+// RevokeAllUserSessions 撤销用户的所有浏览器、桌面和 MCP 会话。
 // 用于密码更改或用户主动登出所有设备
 func (s *AuthService) RevokeAllUserSessions(ctx context.Context, userID int64) error {
-	if s.refreshTokenCache == nil {
-		return nil // No-op if cache not configured
-	}
-	if err := s.refreshTokenCache.DeleteUserRefreshTokens(ctx, userID); err != nil {
-		return err
+	var errs []error
+	if s.refreshTokenCache != nil {
+		if err := s.refreshTokenCache.DeleteUserRefreshTokens(ctx, userID); err != nil {
+			errs = append(errs, fmt.Errorf("revoke refresh sessions: %w", err))
+		}
 	}
 	if s.desktopRevoker != nil {
-		return s.desktopRevoker.RevokeUser(ctx, userID, "all_sessions_revoked")
+		if err := s.desktopRevoker.RevokeUser(ctx, userID, "all_sessions_revoked"); err != nil {
+			errs = append(errs, fmt.Errorf("revoke desktop credentials: %w", err))
+		}
 	}
-	return nil
+	if s.mcpGrantRevoker != nil {
+		if err := s.mcpGrantRevoker.RevokeAllGrants(ctx, userID); err != nil {
+			errs = append(errs, fmt.Errorf("revoke MCP grants: %w", err))
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // RevokeAllUserTokens invalidates both stateless access tokens and refresh sessions.

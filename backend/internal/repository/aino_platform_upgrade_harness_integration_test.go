@@ -113,3 +113,47 @@ func TestAinoV028UpgradePreservesManagedCredentialsAndClientOrders(t *testing.T)
 	require.NoError(t, db.QueryRowContext(ctx, "SELECT i18n::text FROM groups WHERE id=$1", groupID).Scan(&i18n))
 	require.Equal(t, "{}", i18n)
 }
+
+func TestAinoMCPUpgradePreservesExistingDataAndChecksums(t *testing.T) {
+	additions := map[string]bool{
+		"247_scoped_admin_api_keys.sql":     true,
+		"248_group_image_count_billing.sql": true,
+		"249_mcp_oauth.sql":                 true,
+	}
+	db := newAinoHistoricalDatabase(t, func(name string) bool { return !additions[name] })
+	ctx := context.Background()
+	var userID, groupID int64
+	require.NoError(t, db.QueryRowContext(ctx, "INSERT INTO users(email,password_hash,balance) VALUES('mcp-upgrade@example.test','fixture',37.5) RETURNING id").Scan(&userID))
+	require.NoError(t, db.QueryRowContext(ctx, "INSERT INTO groups(name,platform,rate_multiplier,description) VALUES('DeepSeek RMB','openai',0.49,'高峰时段：官方 2 元，本站收 0.98 元。' || chr(10) || '其他时段：官方 1 元，本站收 0.49 元。') RETURNING id").Scan(&groupID))
+	_, err := db.ExecContext(ctx, "INSERT INTO auth_identities(user_id,provider_type,provider_key,provider_subject,verified_at) VALUES($1,'phone','phone','+8613900000098',now())", userID)
+	require.NoError(t, err)
+	var before string
+	require.NoError(t, db.QueryRowContext(ctx, "SELECT string_agg(filename || ':' || checksum,',' ORDER BY filename) FROM schema_migrations").Scan(&before))
+	for range 2 {
+		require.NoError(t, ApplyMigrations(ctx, db))
+	}
+	var after string
+	require.NoError(t, db.QueryRowContext(ctx, "SELECT string_agg(filename || ':' || checksum,',' ORDER BY filename) FROM schema_migrations WHERE filename NOT IN ('247_scoped_admin_api_keys.sql','248_group_image_count_billing.sql','249_mcp_oauth.sql')").Scan(&after))
+	require.Equal(t, before, after, "every existing migration checksum must remain unchanged")
+	for name := range additions {
+		var count int
+		require.NoError(t, db.QueryRowContext(ctx, "SELECT count(*) FROM schema_migrations WHERE filename=$1", name).Scan(&count))
+		require.Equal(t, 1, count)
+	}
+	var balance, multiplier float64
+	var phone, description string
+	var imageCountBilling bool
+	require.NoError(t, db.QueryRowContext(ctx, "SELECT balance FROM users WHERE id=$1", userID).Scan(&balance))
+	require.Equal(t, 37.5, balance)
+	require.NoError(t, db.QueryRowContext(ctx, "SELECT provider_subject FROM auth_identities WHERE user_id=$1 AND provider_type='phone'", userID).Scan(&phone))
+	require.Equal(t, "+8613900000098", phone)
+	require.NoError(t, db.QueryRowContext(ctx, "SELECT rate_multiplier,description,image_count_billing FROM groups WHERE id=$1", groupID).Scan(&multiplier, &description, &imageCountBilling))
+	require.Equal(t, 0.49, multiplier)
+	require.Contains(t, description, "\n其他时段")
+	require.False(t, imageCountBilling, "existing groups retain their previous image billing mode")
+	for _, table := range []string{"mcp_oauth_grants", "mcp_oauth_codes", "mcp_oauth_credentials", "scoped_admin_api_keys"} {
+		var exists bool
+		require.NoError(t, db.QueryRowContext(ctx, "SELECT to_regclass($1) IS NOT NULL", table).Scan(&exists))
+		require.True(t, exists, table)
+	}
+}

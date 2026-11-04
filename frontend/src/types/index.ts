@@ -777,12 +777,14 @@ export interface CompositeRouteDecision {
 
 export interface ApiKey {
   desktop_managed?: boolean
+  desktop_credential_type?: string
+  desktop_device_id?: string
   id: number
   user_id: number
   key: string
   name: string
   group_id: number | null
-  status: 'active' | 'inactive' | 'quota_exhausted' | 'expired'
+  status: 'active' | 'inactive' | 'disabled' | 'quota_exhausted' | 'expired'
   ip_whitelist: string[]
   ip_blacklist: string[]
   last_used_at: string | null

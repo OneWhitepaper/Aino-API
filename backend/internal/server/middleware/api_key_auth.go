@@ -32,6 +32,10 @@ func NewAPIKeyAuthMiddleware(apiKeyService *service.APIKeyService, subscriptionS
 // usage 允许过期/配额耗尽的 Key 查询自身用量，billing 用于读取当前 Key 的倍率配置，
 // 异步生图查询允许已耗尽额度的 Key 拉取自身任务结果。
 func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscriptionService *service.SubscriptionService, cfg *config.Config) gin.HandlerFunc {
+	return apiKeyAuthWithDeviceRouting(apiKeyService, subscriptionService, cfg, nil, nil)
+}
+
+func apiKeyAuthWithDeviceRouting(apiKeyService *service.APIKeyService, subscriptionService *service.SubscriptionService, cfg *config.Config, models desktopModelRouter, tasks *service.ImageTaskService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// ── 1. 提取 API Key ──────────────────────────────────────────
 		if rejectInvalidAuthAbuse(c, apiKeyService) {
@@ -117,11 +121,6 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 		if !enforceDesktopCredential(c, apiKeyService, apiKey) {
 			return
 		}
-		var correlationOK bool
-		apiKey, correlationOK = bindDesktopUsage(c, apiKey)
-		if !correlationOK {
-			return
-		}
 
 		// apiKey 已加载（含 User/Group）。即便后续因分组停用/Key 停用/用户停用/
 		// IP 限制等早退中断，也让 Ops 错误日志能回退取到 user/group/platform。
@@ -166,10 +165,22 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 			AbortWithError(c, 401, "USER_INACTIVE", "User account is not active")
 			return
 		}
-		if abortIfAPIKeyGroupUnavailable(c, apiKey) {
+		deviceTaskRead := apiKey.DesktopCredentialType == service.DesktopCredentialTypeDevice && isAsyncImageTaskRead(c.Request.Method, c.Request.URL.Path)
+		var routeOK bool
+		apiKey, routeOK = resolveDesktopDeviceRoute(c, apiKey, models, tasks)
+		if !routeOK {
 			return
 		}
-		if abortIfAPIKeyGroupNotAllowed(c, apiKey) {
+		var correlationOK bool
+		apiKey, correlationOK = bindDesktopUsage(c, apiKey)
+		if !correlationOK {
+			return
+		}
+		SetOpsFallbackAPIKey(c, apiKey)
+		if !deviceTaskRead && abortIfAPIKeyGroupUnavailable(c, apiKey) {
+			return
+		}
+		if apiKey.DesktopCredentialType != service.DesktopCredentialTypeDevice && abortIfAPIKeyGroupNotAllowed(c, apiKey) {
 			return
 		}
 		ctx := context.WithValue(c.Request.Context(), ctxkey.UserID, apiKey.User.ID)
@@ -199,11 +210,11 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 
 		// ── 5. 按端点需要加载订阅 ───────────────────────────────────
 
-		var subscription *service.UserSubscription
+		subscription, _ := GetSubscriptionFromContext(c)
 		isSubscriptionType := apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
 
 		// 倍率自省不需要订阅数据；/v1/usage 仍保留原有订阅读取行为。
-		if isSubscriptionType && subscriptionService != nil && !billingInfoRequest {
+		if isSubscriptionType && subscriptionService != nil && !billingInfoRequest && !deviceTaskRead {
 			sub, subErr := subscriptionService.GetActiveSubscription(
 				c.Request.Context(),
 				apiKey.User.ID,
@@ -220,6 +231,10 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 			}
 		}
 
+		if apiKey.DesktopCredentialType == service.DesktopCredentialTypeDevice && isSubscriptionType && subscriptionService == nil && !skipBilling {
+			AbortWithError(c, http.StatusServiceUnavailable, "DESKTOP_BILLING_UNAVAILABLE", "Subscription billing is unavailable")
+			return
+		}
 		// ── 6. 计费执行（skipBilling 时整块跳过） ────────────────────
 
 		if !skipBilling {

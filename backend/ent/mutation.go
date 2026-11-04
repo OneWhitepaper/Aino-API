@@ -117,6 +117,11 @@ type APIKeyMutation struct {
 	updated_at                       *time.Time
 	deleted_at                       *time.Time
 	desktop_managed                  *bool
+	desktop_credential_type          *string
+	desktop_device_id                *string
+	desktop_key_version              *int
+	adddesktop_key_version           *int
+	key_hash_type                    *string
 	key                              *string
 	name                             *string
 	status                           *string
@@ -414,6 +419,170 @@ func (m *APIKeyMutation) OldDesktopManaged(ctx context.Context) (v bool, err err
 // ResetDesktopManaged resets all changes to the "desktop_managed" field.
 func (m *APIKeyMutation) ResetDesktopManaged() {
 	m.desktop_managed = nil
+}
+
+// SetDesktopCredentialType sets the "desktop_credential_type" field.
+func (m *APIKeyMutation) SetDesktopCredentialType(s string) {
+	m.desktop_credential_type = &s
+}
+
+// DesktopCredentialType returns the value of the "desktop_credential_type" field in the mutation.
+func (m *APIKeyMutation) DesktopCredentialType() (r string, exists bool) {
+	v := m.desktop_credential_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDesktopCredentialType returns the old "desktop_credential_type" field's value of the APIKey entity.
+// If the APIKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *APIKeyMutation) OldDesktopCredentialType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDesktopCredentialType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDesktopCredentialType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDesktopCredentialType: %w", err)
+	}
+	return oldValue.DesktopCredentialType, nil
+}
+
+// ResetDesktopCredentialType resets all changes to the "desktop_credential_type" field.
+func (m *APIKeyMutation) ResetDesktopCredentialType() {
+	m.desktop_credential_type = nil
+}
+
+// SetDesktopDeviceID sets the "desktop_device_id" field.
+func (m *APIKeyMutation) SetDesktopDeviceID(s string) {
+	m.desktop_device_id = &s
+}
+
+// DesktopDeviceID returns the value of the "desktop_device_id" field in the mutation.
+func (m *APIKeyMutation) DesktopDeviceID() (r string, exists bool) {
+	v := m.desktop_device_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDesktopDeviceID returns the old "desktop_device_id" field's value of the APIKey entity.
+// If the APIKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *APIKeyMutation) OldDesktopDeviceID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDesktopDeviceID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDesktopDeviceID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDesktopDeviceID: %w", err)
+	}
+	return oldValue.DesktopDeviceID, nil
+}
+
+// ResetDesktopDeviceID resets all changes to the "desktop_device_id" field.
+func (m *APIKeyMutation) ResetDesktopDeviceID() {
+	m.desktop_device_id = nil
+}
+
+// SetDesktopKeyVersion sets the "desktop_key_version" field.
+func (m *APIKeyMutation) SetDesktopKeyVersion(i int) {
+	m.desktop_key_version = &i
+	m.adddesktop_key_version = nil
+}
+
+// DesktopKeyVersion returns the value of the "desktop_key_version" field in the mutation.
+func (m *APIKeyMutation) DesktopKeyVersion() (r int, exists bool) {
+	v := m.desktop_key_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDesktopKeyVersion returns the old "desktop_key_version" field's value of the APIKey entity.
+// If the APIKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *APIKeyMutation) OldDesktopKeyVersion(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDesktopKeyVersion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDesktopKeyVersion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDesktopKeyVersion: %w", err)
+	}
+	return oldValue.DesktopKeyVersion, nil
+}
+
+// AddDesktopKeyVersion adds i to the "desktop_key_version" field.
+func (m *APIKeyMutation) AddDesktopKeyVersion(i int) {
+	if m.adddesktop_key_version != nil {
+		*m.adddesktop_key_version += i
+	} else {
+		m.adddesktop_key_version = &i
+	}
+}
+
+// AddedDesktopKeyVersion returns the value that was added to the "desktop_key_version" field in this mutation.
+func (m *APIKeyMutation) AddedDesktopKeyVersion() (r int, exists bool) {
+	v := m.adddesktop_key_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetDesktopKeyVersion resets all changes to the "desktop_key_version" field.
+func (m *APIKeyMutation) ResetDesktopKeyVersion() {
+	m.desktop_key_version = nil
+	m.adddesktop_key_version = nil
+}
+
+// SetKeyHashType sets the "key_hash_type" field.
+func (m *APIKeyMutation) SetKeyHashType(s string) {
+	m.key_hash_type = &s
+}
+
+// KeyHashType returns the value of the "key_hash_type" field in the mutation.
+func (m *APIKeyMutation) KeyHashType() (r string, exists bool) {
+	v := m.key_hash_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldKeyHashType returns the old "key_hash_type" field's value of the APIKey entity.
+// If the APIKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *APIKeyMutation) OldKeyHashType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldKeyHashType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldKeyHashType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldKeyHashType: %w", err)
+	}
+	return oldValue.KeyHashType, nil
+}
+
+// ResetKeyHashType resets all changes to the "key_hash_type" field.
+func (m *APIKeyMutation) ResetKeyHashType() {
+	m.key_hash_type = nil
 }
 
 // SetUserID sets the "user_id" field.
@@ -1628,7 +1797,7 @@ func (m *APIKeyMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *APIKeyMutation) Fields() []string {
-	fields := make([]string, 0, 24)
+	fields := make([]string, 0, 28)
 	if m.created_at != nil {
 		fields = append(fields, apikey.FieldCreatedAt)
 	}
@@ -1640,6 +1809,18 @@ func (m *APIKeyMutation) Fields() []string {
 	}
 	if m.desktop_managed != nil {
 		fields = append(fields, apikey.FieldDesktopManaged)
+	}
+	if m.desktop_credential_type != nil {
+		fields = append(fields, apikey.FieldDesktopCredentialType)
+	}
+	if m.desktop_device_id != nil {
+		fields = append(fields, apikey.FieldDesktopDeviceID)
+	}
+	if m.desktop_key_version != nil {
+		fields = append(fields, apikey.FieldDesktopKeyVersion)
+	}
+	if m.key_hash_type != nil {
+		fields = append(fields, apikey.FieldKeyHashType)
 	}
 	if m.user != nil {
 		fields = append(fields, apikey.FieldUserID)
@@ -1717,6 +1898,14 @@ func (m *APIKeyMutation) Field(name string) (ent.Value, bool) {
 		return m.DeletedAt()
 	case apikey.FieldDesktopManaged:
 		return m.DesktopManaged()
+	case apikey.FieldDesktopCredentialType:
+		return m.DesktopCredentialType()
+	case apikey.FieldDesktopDeviceID:
+		return m.DesktopDeviceID()
+	case apikey.FieldDesktopKeyVersion:
+		return m.DesktopKeyVersion()
+	case apikey.FieldKeyHashType:
+		return m.KeyHashType()
 	case apikey.FieldUserID:
 		return m.UserID()
 	case apikey.FieldKey:
@@ -1774,6 +1963,14 @@ func (m *APIKeyMutation) OldField(ctx context.Context, name string) (ent.Value, 
 		return m.OldDeletedAt(ctx)
 	case apikey.FieldDesktopManaged:
 		return m.OldDesktopManaged(ctx)
+	case apikey.FieldDesktopCredentialType:
+		return m.OldDesktopCredentialType(ctx)
+	case apikey.FieldDesktopDeviceID:
+		return m.OldDesktopDeviceID(ctx)
+	case apikey.FieldDesktopKeyVersion:
+		return m.OldDesktopKeyVersion(ctx)
+	case apikey.FieldKeyHashType:
+		return m.OldKeyHashType(ctx)
 	case apikey.FieldUserID:
 		return m.OldUserID(ctx)
 	case apikey.FieldKey:
@@ -1850,6 +2047,34 @@ func (m *APIKeyMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetDesktopManaged(v)
+		return nil
+	case apikey.FieldDesktopCredentialType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDesktopCredentialType(v)
+		return nil
+	case apikey.FieldDesktopDeviceID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDesktopDeviceID(v)
+		return nil
+	case apikey.FieldDesktopKeyVersion:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDesktopKeyVersion(v)
+		return nil
+	case apikey.FieldKeyHashType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetKeyHashType(v)
 		return nil
 	case apikey.FieldUserID:
 		v, ok := value.(int64)
@@ -1999,6 +2224,9 @@ func (m *APIKeyMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *APIKeyMutation) AddedFields() []string {
 	var fields []string
+	if m.adddesktop_key_version != nil {
+		fields = append(fields, apikey.FieldDesktopKeyVersion)
+	}
 	if m.addquota != nil {
 		fields = append(fields, apikey.FieldQuota)
 	}
@@ -2031,6 +2259,8 @@ func (m *APIKeyMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *APIKeyMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case apikey.FieldDesktopKeyVersion:
+		return m.AddedDesktopKeyVersion()
 	case apikey.FieldQuota:
 		return m.AddedQuota()
 	case apikey.FieldQuotaUsed:
@@ -2056,6 +2286,13 @@ func (m *APIKeyMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *APIKeyMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case apikey.FieldDesktopKeyVersion:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddDesktopKeyVersion(v)
+		return nil
 	case apikey.FieldQuota:
 		v, ok := value.(float64)
 		if !ok {
@@ -2207,6 +2444,18 @@ func (m *APIKeyMutation) ResetField(name string) error {
 		return nil
 	case apikey.FieldDesktopManaged:
 		m.ResetDesktopManaged()
+		return nil
+	case apikey.FieldDesktopCredentialType:
+		m.ResetDesktopCredentialType()
+		return nil
+	case apikey.FieldDesktopDeviceID:
+		m.ResetDesktopDeviceID()
+		return nil
+	case apikey.FieldDesktopKeyVersion:
+		m.ResetDesktopKeyVersion()
+		return nil
+	case apikey.FieldKeyHashType:
+		m.ResetKeyHashType()
 		return nil
 	case apikey.FieldUserID:
 		m.ResetUserID()

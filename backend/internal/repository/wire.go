@@ -117,6 +117,7 @@ var ProviderSet = wire.NewSet(
 	NewUserPlatformQuotaRepository,     // T14: user × platform quota
 	NewUserPlatformQuotaServiceAdapter, // T14: adapter → service.UserPlatformQuotaRepository
 	NewDesktopCredentialRepository,     // B2: desktop model credentials
+	NewDesktopDeviceKeyRepository,
 
 	// Cache implementations
 	NewGatewayCache,

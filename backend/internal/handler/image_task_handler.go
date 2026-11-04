@@ -62,6 +62,9 @@ func (h *AsyncImageHandler) Submit(c *gin.Context) {
 	if apiKey.Group != nil {
 		platform = apiKey.Group.Platform
 	}
+	if target, ok := service.ResolvedTargetPlatformFromContext(c.Request.Context()); ok {
+		platform = target
+	}
 	if platform != service.PlatformOpenAI && platform != service.PlatformGrok {
 		imageTaskJSONError(c, http.StatusNotFound, "not_found_error", "Images API is not supported for this platform")
 		return
@@ -101,7 +104,8 @@ func (h *AsyncImageHandler) Submit(c *gin.Context) {
 	}
 
 	taskCtx, recorder, cancel := newAsyncImageContext(c, body, h.tasks.ExecutionTimeout())
-	task, err := h.tasks.Create(c.Request.Context(), service.ImageTaskOwner{UserID: apiKey.UserID, APIKeyID: apiKey.ID})
+	subscription, _ := middleware2.GetSubscriptionFromContext(c)
+	task, err := h.tasks.Create(c.Request.Context(), service.ImageTaskOwner{UserID: apiKey.UserID, APIKeyID: apiKey.ID}, service.ImageTaskRouteFromRequest(apiKey, subscription, platform))
 	if err != nil {
 		cancel()
 		imageTaskError(c, err)

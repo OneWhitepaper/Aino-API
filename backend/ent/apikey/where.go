@@ -75,6 +75,26 @@ func DesktopManaged(v bool) predicate.APIKey {
 	return predicate.APIKey(sql.FieldEQ(FieldDesktopManaged, v))
 }
 
+// DesktopCredentialType applies equality check predicate on the "desktop_credential_type" field. It's identical to DesktopCredentialTypeEQ.
+func DesktopCredentialType(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldDesktopCredentialType, v))
+}
+
+// DesktopDeviceID applies equality check predicate on the "desktop_device_id" field. It's identical to DesktopDeviceIDEQ.
+func DesktopDeviceID(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldDesktopDeviceID, v))
+}
+
+// DesktopKeyVersion applies equality check predicate on the "desktop_key_version" field. It's identical to DesktopKeyVersionEQ.
+func DesktopKeyVersion(v int) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldDesktopKeyVersion, v))
+}
+
+// KeyHashType applies equality check predicate on the "key_hash_type" field. It's identical to KeyHashTypeEQ.
+func KeyHashType(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldKeyHashType, v))
+}
+
 // UserID applies equality check predicate on the "user_id" field. It's identical to UserIDEQ.
 func UserID(v int64) predicate.APIKey {
 	return predicate.APIKey(sql.FieldEQ(FieldUserID, v))
@@ -303,6 +323,241 @@ func DesktopManagedEQ(v bool) predicate.APIKey {
 // DesktopManagedNEQ applies the NEQ predicate on the "desktop_managed" field.
 func DesktopManagedNEQ(v bool) predicate.APIKey {
 	return predicate.APIKey(sql.FieldNEQ(FieldDesktopManaged, v))
+}
+
+// DesktopCredentialTypeEQ applies the EQ predicate on the "desktop_credential_type" field.
+func DesktopCredentialTypeEQ(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldDesktopCredentialType, v))
+}
+
+// DesktopCredentialTypeNEQ applies the NEQ predicate on the "desktop_credential_type" field.
+func DesktopCredentialTypeNEQ(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNEQ(FieldDesktopCredentialType, v))
+}
+
+// DesktopCredentialTypeIn applies the In predicate on the "desktop_credential_type" field.
+func DesktopCredentialTypeIn(vs ...string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldIn(FieldDesktopCredentialType, vs...))
+}
+
+// DesktopCredentialTypeNotIn applies the NotIn predicate on the "desktop_credential_type" field.
+func DesktopCredentialTypeNotIn(vs ...string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNotIn(FieldDesktopCredentialType, vs...))
+}
+
+// DesktopCredentialTypeGT applies the GT predicate on the "desktop_credential_type" field.
+func DesktopCredentialTypeGT(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldGT(FieldDesktopCredentialType, v))
+}
+
+// DesktopCredentialTypeGTE applies the GTE predicate on the "desktop_credential_type" field.
+func DesktopCredentialTypeGTE(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldGTE(FieldDesktopCredentialType, v))
+}
+
+// DesktopCredentialTypeLT applies the LT predicate on the "desktop_credential_type" field.
+func DesktopCredentialTypeLT(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldLT(FieldDesktopCredentialType, v))
+}
+
+// DesktopCredentialTypeLTE applies the LTE predicate on the "desktop_credential_type" field.
+func DesktopCredentialTypeLTE(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldLTE(FieldDesktopCredentialType, v))
+}
+
+// DesktopCredentialTypeContains applies the Contains predicate on the "desktop_credential_type" field.
+func DesktopCredentialTypeContains(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldContains(FieldDesktopCredentialType, v))
+}
+
+// DesktopCredentialTypeHasPrefix applies the HasPrefix predicate on the "desktop_credential_type" field.
+func DesktopCredentialTypeHasPrefix(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldHasPrefix(FieldDesktopCredentialType, v))
+}
+
+// DesktopCredentialTypeHasSuffix applies the HasSuffix predicate on the "desktop_credential_type" field.
+func DesktopCredentialTypeHasSuffix(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldHasSuffix(FieldDesktopCredentialType, v))
+}
+
+// DesktopCredentialTypeEqualFold applies the EqualFold predicate on the "desktop_credential_type" field.
+func DesktopCredentialTypeEqualFold(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEqualFold(FieldDesktopCredentialType, v))
+}
+
+// DesktopCredentialTypeContainsFold applies the ContainsFold predicate on the "desktop_credential_type" field.
+func DesktopCredentialTypeContainsFold(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldContainsFold(FieldDesktopCredentialType, v))
+}
+
+// DesktopDeviceIDEQ applies the EQ predicate on the "desktop_device_id" field.
+func DesktopDeviceIDEQ(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldDesktopDeviceID, v))
+}
+
+// DesktopDeviceIDNEQ applies the NEQ predicate on the "desktop_device_id" field.
+func DesktopDeviceIDNEQ(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNEQ(FieldDesktopDeviceID, v))
+}
+
+// DesktopDeviceIDIn applies the In predicate on the "desktop_device_id" field.
+func DesktopDeviceIDIn(vs ...string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldIn(FieldDesktopDeviceID, vs...))
+}
+
+// DesktopDeviceIDNotIn applies the NotIn predicate on the "desktop_device_id" field.
+func DesktopDeviceIDNotIn(vs ...string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNotIn(FieldDesktopDeviceID, vs...))
+}
+
+// DesktopDeviceIDGT applies the GT predicate on the "desktop_device_id" field.
+func DesktopDeviceIDGT(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldGT(FieldDesktopDeviceID, v))
+}
+
+// DesktopDeviceIDGTE applies the GTE predicate on the "desktop_device_id" field.
+func DesktopDeviceIDGTE(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldGTE(FieldDesktopDeviceID, v))
+}
+
+// DesktopDeviceIDLT applies the LT predicate on the "desktop_device_id" field.
+func DesktopDeviceIDLT(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldLT(FieldDesktopDeviceID, v))
+}
+
+// DesktopDeviceIDLTE applies the LTE predicate on the "desktop_device_id" field.
+func DesktopDeviceIDLTE(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldLTE(FieldDesktopDeviceID, v))
+}
+
+// DesktopDeviceIDContains applies the Contains predicate on the "desktop_device_id" field.
+func DesktopDeviceIDContains(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldContains(FieldDesktopDeviceID, v))
+}
+
+// DesktopDeviceIDHasPrefix applies the HasPrefix predicate on the "desktop_device_id" field.
+func DesktopDeviceIDHasPrefix(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldHasPrefix(FieldDesktopDeviceID, v))
+}
+
+// DesktopDeviceIDHasSuffix applies the HasSuffix predicate on the "desktop_device_id" field.
+func DesktopDeviceIDHasSuffix(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldHasSuffix(FieldDesktopDeviceID, v))
+}
+
+// DesktopDeviceIDEqualFold applies the EqualFold predicate on the "desktop_device_id" field.
+func DesktopDeviceIDEqualFold(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEqualFold(FieldDesktopDeviceID, v))
+}
+
+// DesktopDeviceIDContainsFold applies the ContainsFold predicate on the "desktop_device_id" field.
+func DesktopDeviceIDContainsFold(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldContainsFold(FieldDesktopDeviceID, v))
+}
+
+// DesktopKeyVersionEQ applies the EQ predicate on the "desktop_key_version" field.
+func DesktopKeyVersionEQ(v int) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldDesktopKeyVersion, v))
+}
+
+// DesktopKeyVersionNEQ applies the NEQ predicate on the "desktop_key_version" field.
+func DesktopKeyVersionNEQ(v int) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNEQ(FieldDesktopKeyVersion, v))
+}
+
+// DesktopKeyVersionIn applies the In predicate on the "desktop_key_version" field.
+func DesktopKeyVersionIn(vs ...int) predicate.APIKey {
+	return predicate.APIKey(sql.FieldIn(FieldDesktopKeyVersion, vs...))
+}
+
+// DesktopKeyVersionNotIn applies the NotIn predicate on the "desktop_key_version" field.
+func DesktopKeyVersionNotIn(vs ...int) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNotIn(FieldDesktopKeyVersion, vs...))
+}
+
+// DesktopKeyVersionGT applies the GT predicate on the "desktop_key_version" field.
+func DesktopKeyVersionGT(v int) predicate.APIKey {
+	return predicate.APIKey(sql.FieldGT(FieldDesktopKeyVersion, v))
+}
+
+// DesktopKeyVersionGTE applies the GTE predicate on the "desktop_key_version" field.
+func DesktopKeyVersionGTE(v int) predicate.APIKey {
+	return predicate.APIKey(sql.FieldGTE(FieldDesktopKeyVersion, v))
+}
+
+// DesktopKeyVersionLT applies the LT predicate on the "desktop_key_version" field.
+func DesktopKeyVersionLT(v int) predicate.APIKey {
+	return predicate.APIKey(sql.FieldLT(FieldDesktopKeyVersion, v))
+}
+
+// DesktopKeyVersionLTE applies the LTE predicate on the "desktop_key_version" field.
+func DesktopKeyVersionLTE(v int) predicate.APIKey {
+	return predicate.APIKey(sql.FieldLTE(FieldDesktopKeyVersion, v))
+}
+
+// KeyHashTypeEQ applies the EQ predicate on the "key_hash_type" field.
+func KeyHashTypeEQ(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldKeyHashType, v))
+}
+
+// KeyHashTypeNEQ applies the NEQ predicate on the "key_hash_type" field.
+func KeyHashTypeNEQ(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNEQ(FieldKeyHashType, v))
+}
+
+// KeyHashTypeIn applies the In predicate on the "key_hash_type" field.
+func KeyHashTypeIn(vs ...string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldIn(FieldKeyHashType, vs...))
+}
+
+// KeyHashTypeNotIn applies the NotIn predicate on the "key_hash_type" field.
+func KeyHashTypeNotIn(vs ...string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNotIn(FieldKeyHashType, vs...))
+}
+
+// KeyHashTypeGT applies the GT predicate on the "key_hash_type" field.
+func KeyHashTypeGT(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldGT(FieldKeyHashType, v))
+}
+
+// KeyHashTypeGTE applies the GTE predicate on the "key_hash_type" field.
+func KeyHashTypeGTE(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldGTE(FieldKeyHashType, v))
+}
+
+// KeyHashTypeLT applies the LT predicate on the "key_hash_type" field.
+func KeyHashTypeLT(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldLT(FieldKeyHashType, v))
+}
+
+// KeyHashTypeLTE applies the LTE predicate on the "key_hash_type" field.
+func KeyHashTypeLTE(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldLTE(FieldKeyHashType, v))
+}
+
+// KeyHashTypeContains applies the Contains predicate on the "key_hash_type" field.
+func KeyHashTypeContains(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldContains(FieldKeyHashType, v))
+}
+
+// KeyHashTypeHasPrefix applies the HasPrefix predicate on the "key_hash_type" field.
+func KeyHashTypeHasPrefix(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldHasPrefix(FieldKeyHashType, v))
+}
+
+// KeyHashTypeHasSuffix applies the HasSuffix predicate on the "key_hash_type" field.
+func KeyHashTypeHasSuffix(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldHasSuffix(FieldKeyHashType, v))
+}
+
+// KeyHashTypeEqualFold applies the EqualFold predicate on the "key_hash_type" field.
+func KeyHashTypeEqualFold(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEqualFold(FieldKeyHashType, v))
+}
+
+// KeyHashTypeContainsFold applies the ContainsFold predicate on the "key_hash_type" field.
+func KeyHashTypeContainsFold(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldContainsFold(FieldKeyHashType, v))
 }
 
 // UserIDEQ applies the EQ predicate on the "user_id" field.

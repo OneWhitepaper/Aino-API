@@ -158,11 +158,11 @@ type DesktopCredentialResponse struct {
 }
 
 type DesktopDevice struct {
-	DeviceID   string    `json:"device_id"`
-	LastUsedAt time.Time `json:"last_used_at"`
-	ExpiresAt  time.Time `json:"expires_at"`
-	Revoked    bool      `json:"revoked"`
-	Status     string    `json:"status"`
+	DeviceID   string     `json:"device_id"`
+	LastUsedAt time.Time  `json:"last_used_at"`
+	ExpiresAt  *time.Time `json:"expires_at"`
+	Revoked    bool       `json:"revoked"`
+	Status     string     `json:"status"`
 }
 
 func (s *DesktopCredentialService) ListDevices(ctx context.Context, userID int64) ([]DesktopDevice, error) {
@@ -184,8 +184,9 @@ func (s *DesktopCredentialService) ListDevices(ctx context.Context, userID int64
 		if lease.UpdatedAt.After(device.LastUsedAt) {
 			device.LastUsedAt = lease.UpdatedAt
 		}
-		if lease.ExpiresAt.After(device.ExpiresAt) {
-			device.ExpiresAt = lease.ExpiresAt
+		if device.ExpiresAt == nil || lease.ExpiresAt.After(*device.ExpiresAt) {
+			expiresAt := lease.ExpiresAt
+			device.ExpiresAt = &expiresAt
 		}
 		// A device may have several login families. Keep it revocable until all
 		// of them have explicit revocations, even when the newest one is revoked.

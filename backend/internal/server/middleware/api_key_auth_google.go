@@ -77,7 +77,7 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 		}
 
 		// Desktop leases only authorize the explicitly supported /v1 transports.
-		if apiKey.DesktopManaged {
+		if apiKey.DesktopManaged || apiKey.DesktopCredentialType == service.DesktopCredentialTypeDevice {
 			abortWithGoogleError(c, http.StatusForbidden, "Desktop authorization does not support this endpoint")
 			return
 		}

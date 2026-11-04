@@ -592,7 +592,19 @@ func compositeTargetPlatformMiddleware(resolver *service.CompositeRouteResolver)
 		routePath := c.FullPath()
 		model := requestmodel.FromBodyForRoute(routePath, c.GetHeader("Content-Type"), body)
 		if model != "" {
-			decision, err := resolver.Resolve(c.Request.Context(), apiKey.Group.ID, model, compositeRouteEndpointForPath(c.Request.URL.Path))
+			var decision service.CompositeRouteDecision
+			var err error
+			if apiKey.DesktopCredentialType == service.DesktopCredentialTypeDevice {
+				target, targetOK := service.ResolvedTargetPlatformFromContext(c.Request.Context())
+				upstream, upstreamOK := service.ResolvedUpstreamModelFromContext(c.Request.Context())
+				if !targetOK || !upstreamOK {
+					c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": gin.H{"type": "permission_error", "message": "Desktop model route is unavailable"}})
+					return
+				}
+				decision = service.CompositeRouteDecision{Matched: true, GroupID: apiKey.Group.ID, PublicModel: model, TargetPlatform: target, UpstreamModel: upstream}
+			} else {
+				decision, err = resolver.Resolve(c.Request.Context(), apiKey.Group.ID, model, compositeRouteEndpointForPath(c.Request.URL.Path))
+			}
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"type": "server_error", "message": "Failed to resolve composite model route"}})
 				c.Abort()

@@ -1628,6 +1628,11 @@ func (h *GatewayHandler) Usage(c *gin.Context) {
 		}
 	}
 
+	if apiKey.DesktopCredentialType == service.DesktopCredentialTypeDevice {
+		writeDesktopDeviceUsage(c, apiKey, usageData, dailyUsage, modelStats)
+		return
+	}
+
 	// 判断模式: key 有总额度或速率限制 → quota_limited，否则 → unrestricted
 	isQuotaLimited := apiKey.Quota > 0 || apiKey.HasRateLimits()
 

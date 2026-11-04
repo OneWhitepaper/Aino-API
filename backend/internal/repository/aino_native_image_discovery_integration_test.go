@@ -42,6 +42,7 @@ func (p *ainoNativeProtocol) discoverNativeImageTool(w http.ResponseWriter, body
 	if edited {
 		toolID = "fixture-native-image-edit"
 	}
+	toolID = nativeFixtureToolCallID(toolID, body)
 	last := body.Messages[len(body.Messages)-1]
 	bridges := map[string]string{"tool_search": "queries", "tool_describe": "names", "tool_call": "calls"}
 	for _, tool := range body.Tools {

@@ -59,6 +59,27 @@ func (_u *APIKeyUpdate) ClearDeletedAt() *APIKeyUpdate {
 	return _u
 }
 
+// SetDesktopKeyVersion sets the "desktop_key_version" field.
+func (_u *APIKeyUpdate) SetDesktopKeyVersion(v int) *APIKeyUpdate {
+	_u.mutation.ResetDesktopKeyVersion()
+	_u.mutation.SetDesktopKeyVersion(v)
+	return _u
+}
+
+// SetNillableDesktopKeyVersion sets the "desktop_key_version" field if the given value is not nil.
+func (_u *APIKeyUpdate) SetNillableDesktopKeyVersion(v *int) *APIKeyUpdate {
+	if v != nil {
+		_u.SetDesktopKeyVersion(*v)
+	}
+	return _u
+}
+
+// AddDesktopKeyVersion adds value to the "desktop_key_version" field.
+func (_u *APIKeyUpdate) AddDesktopKeyVersion(v int) *APIKeyUpdate {
+	_u.mutation.AddDesktopKeyVersion(v)
+	return _u
+}
+
 // SetUserID sets the "user_id" field.
 func (_u *APIKeyUpdate) SetUserID(v int64) *APIKeyUpdate {
 	_u.mutation.SetUserID(v)
@@ -624,6 +645,12 @@ func (_u *APIKeyUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if _u.mutation.DeletedAtCleared() {
 		_spec.ClearField(apikey.FieldDeletedAt, field.TypeTime)
 	}
+	if value, ok := _u.mutation.DesktopKeyVersion(); ok {
+		_spec.SetField(apikey.FieldDesktopKeyVersion, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedDesktopKeyVersion(); ok {
+		_spec.AddField(apikey.FieldDesktopKeyVersion, field.TypeInt, value)
+	}
 	if value, ok := _u.mutation.Key(); ok {
 		_spec.SetField(apikey.FieldKey, field.TypeString, value)
 	}
@@ -924,6 +951,27 @@ func (_u *APIKeyUpdateOne) SetNillableDeletedAt(v *time.Time) *APIKeyUpdateOne {
 // ClearDeletedAt clears the value of the "deleted_at" field.
 func (_u *APIKeyUpdateOne) ClearDeletedAt() *APIKeyUpdateOne {
 	_u.mutation.ClearDeletedAt()
+	return _u
+}
+
+// SetDesktopKeyVersion sets the "desktop_key_version" field.
+func (_u *APIKeyUpdateOne) SetDesktopKeyVersion(v int) *APIKeyUpdateOne {
+	_u.mutation.ResetDesktopKeyVersion()
+	_u.mutation.SetDesktopKeyVersion(v)
+	return _u
+}
+
+// SetNillableDesktopKeyVersion sets the "desktop_key_version" field if the given value is not nil.
+func (_u *APIKeyUpdateOne) SetNillableDesktopKeyVersion(v *int) *APIKeyUpdateOne {
+	if v != nil {
+		_u.SetDesktopKeyVersion(*v)
+	}
+	return _u
+}
+
+// AddDesktopKeyVersion adds value to the "desktop_key_version" field.
+func (_u *APIKeyUpdateOne) AddDesktopKeyVersion(v int) *APIKeyUpdateOne {
+	_u.mutation.AddDesktopKeyVersion(v)
 	return _u
 }
 
@@ -1521,6 +1569,12 @@ func (_u *APIKeyUpdateOne) sqlSave(ctx context.Context) (_node *APIKey, err erro
 	}
 	if _u.mutation.DeletedAtCleared() {
 		_spec.ClearField(apikey.FieldDeletedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.DesktopKeyVersion(); ok {
+		_spec.SetField(apikey.FieldDesktopKeyVersion, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedDesktopKeyVersion(); ok {
+		_spec.AddField(apikey.FieldDesktopKeyVersion, field.TypeInt, value)
 	}
 	if value, ok := _u.mutation.Key(); ok {
 		_spec.SetField(apikey.FieldKey, field.TypeString, value)

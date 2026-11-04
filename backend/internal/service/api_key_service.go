@@ -167,10 +167,11 @@ func (d *APIKeyRateLimitData) EffectiveUsage7d() float64 {
 // APIKeyQuotaUsageState captures the latest quota fields after an atomic quota update.
 // It is intentionally small so repositories can return it from a single SQL statement.
 type APIKeyQuotaUsageState struct {
-	QuotaUsed float64
-	Quota     float64
-	Key       string
-	Status    string
+	KeyHashType string
+	QuotaUsed   float64
+	Quota       float64
+	Key         string
+	Status      string
 }
 
 // APIKeyCache defines cache operations for API key service
@@ -964,6 +965,15 @@ func (s *APIKeyService) Delete(ctx context.Context, id int64, userID int64) erro
 	if ownerID != userID {
 		return ErrInsufficientPerms
 	}
+	hashType := ""
+	if repo, ok := s.apiKeyRepo.(interface {
+		GetStoredKeyHashType(context.Context, int64) (string, error)
+	}); ok {
+		hashType, err = repo.GetStoredKeyHashType(ctx, id)
+		if err != nil {
+			return err
+		}
+	}
 
 	// 事务内:写审计 + 软删除(tombstone)。
 	if err := s.apiKeyRepo.DeleteWithAudit(ctx, id); err != nil {
@@ -972,7 +982,7 @@ func (s *APIKeyService) Delete(ctx context.Context, id int64, userID int64) erro
 
 	// 删除成功后再清理缓存,避免"缓存已清但删除失败"的竞态。
 	// 注意:不清零创建相关计数,否则"删除后反复新建"即可绕过创建限流。
-	s.InvalidateAuthCacheByKey(ctx, key)
+	s.InvalidateAuthCacheByStoredKey(ctx, key, hashType)
 	s.lastUsedTouchL1.Delete(id)
 
 	return nil
@@ -1179,7 +1189,7 @@ func (s *APIKeyService) UpdateQuotaUsed(ctx context.Context, apiKeyID int64, cos
 			return fmt.Errorf("increment quota used: %w", err)
 		}
 		if state != nil && state.Status == StatusAPIKeyQuotaExhausted && strings.TrimSpace(state.Key) != "" {
-			s.InvalidateAuthCacheByKey(ctx, state.Key)
+			s.InvalidateAuthCacheByStoredKey(ctx, state.Key, state.KeyHashType)
 		}
 		return nil
 	}
@@ -1205,7 +1215,7 @@ func (s *APIKeyService) UpdateQuotaUsed(ctx context.Context, apiKeyID int64, cos
 			return nil // Don't fail the request
 		}
 		// Invalidate cache so next request sees the new status
-		s.InvalidateAuthCacheByKey(ctx, apiKey.Key)
+		s.InvalidateAuthCacheByStoredKey(ctx, apiKey.Key, apiKey.KeyHashType)
 	}
 
 	return nil

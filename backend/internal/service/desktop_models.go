@@ -6,6 +6,8 @@ import (
 	"sort"
 	"time"
 
+	"golang.org/x/sync/singleflight"
+
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/shopspring/decimal"
@@ -81,18 +83,22 @@ type PlatformModel struct {
 
 // ResolvedPlatformModel stays server-side. A catalog entry cannot grant a group.
 type ResolvedPlatformModel struct {
-	GroupID  int64
-	Platform string
-	Model    PlatformModel
+	Route                *CompositeRouteDecision
+	Group                *Group
+	UserGroupRPMOverride *int
+	GroupID              int64
+	Platform             string
+	Model                PlatformModel
 }
 
 type DesktopModelService struct {
-	settings    *SettingService
-	keys        *APIKeyService
-	billing     *BillingService
-	pricing     *ModelPricingResolver
-	eligibility *BillingCacheService
-	routes      *CompositeRouteResolver
+	resolveFlight singleflight.Group
+	settings      *SettingService
+	keys          *APIKeyService
+	billing       *BillingService
+	pricing       *ModelPricingResolver
+	eligibility   *BillingCacheService
+	routes        *CompositeRouteResolver
 }
 
 func NewDesktopModelService(settings *SettingService, keys *APIKeyService, billing *BillingService, pricing *ModelPricingResolver, eligibility *BillingCacheService, routes *CompositeRouteResolver) *DesktopModelService {
@@ -151,7 +157,7 @@ func (s *DesktopModelService) ResolveForUser(ctx context.Context, userID int64, 
 	return nil, infraerrors.Forbidden("DESKTOP_MODEL_NOT_ALLOWED", "selected platform model is not available to this account")
 }
 
-func (s *DesktopModelService) resolveCatalog(ctx context.Context, userID int64) ([]ResolvedPlatformModel, error) {
+func (s *DesktopModelService) buildCatalogProjection(ctx context.Context, userID int64) ([]ResolvedPlatformModel, error) {
 	settings, err := s.settings.GetDesktopSettings(ctx)
 	if err != nil {
 		return nil, err
@@ -189,11 +195,15 @@ func (s *DesktopModelService) resolveCatalog(ctx context.Context, userID int64) 
 		if group.IsSubscriptionType() {
 			model.BillingSource = "subscription"
 		}
+		var route *CompositeRouteDecision
 		routeMatches := group.Platform == entry.Platform
 		if group.Platform == PlatformComposite {
 			endpoint := map[string]string{"chat_completions": CompositeRouteEndpointChatCompletions, "responses": CompositeRouteEndpointResponses, "anthropic_messages": CompositeRouteEndpointMessages, "images_generations": CompositeRouteEndpointImages}[entry.APIMode]
 			decision, routeErr := s.routes.Resolve(ctx, group.ID, entry.Model, endpoint)
 			routeMatches = routeErr == nil && decision.Matched && decision.TargetPlatform == entry.Platform
+			if routeMatches {
+				route = &decision
+			}
 		}
 		model.Pricing = s.modelPricing(ctx, entry, group, rates)
 		switch {
@@ -205,15 +215,20 @@ func (s *DesktopModelService) resolveCatalog(ctx context.Context, userID int64) 
 			setPlatformModelState(&model, "unavailable", "DESKTOP_MODEL_NOT_VERIFIED")
 		case model.Purpose != DesktopPurposeImage && !model.Pricing.DetailAvailable:
 			setPlatformModelState(&model, "unavailable", "DESKTOP_MODEL_PRICING_UNAVAILABLE")
-		default:
-			s.applyEligibility(ctx, user, group, entry.Platform, &model)
 		}
 		defaultID := settings.DefaultModelID
 		if model.Purpose == DesktopPurposeImage {
 			defaultID = settings.DefaultImageModelID
 		}
 		model.IsDefault = model.State == "available" && defaultID != nil && *defaultID == entry.ID
-		result = append(result, ResolvedPlatformModel{GroupID: group.ID, Platform: entry.Platform, Model: model})
+		var rpmOverride *int
+		if s.keys.userGroupRateRepo != nil {
+			rpmOverride, err = s.keys.userGroupRateRepo.GetRPMOverrideByUserAndGroup(ctx, userID, group.ID)
+			if err != nil {
+				return nil, err
+			}
+		}
+		result = append(result, ResolvedPlatformModel{Route: route, GroupID: group.ID, Group: group, UserGroupRPMOverride: rpmOverride, Platform: entry.Platform, Model: model})
 	}
 	return result, nil
 }

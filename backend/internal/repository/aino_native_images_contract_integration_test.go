@@ -11,6 +11,8 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strconv"
 	"testing"
 	"time"
@@ -87,7 +89,7 @@ func TestAinoNativeImageGatewayUsesRealLeaseAndSettles(t *testing.T) {
 	request.Header.Set("X-Aino-Call-Id", uuid.NewString())
 	response, err := http.DefaultClient.Do(request)
 	require.NoError(t, err)
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	data, err = io.ReadAll(response.Body)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, response.StatusCode, string(data))
@@ -127,8 +129,14 @@ func TestAinoNativeImageProtocolUsesAdvertisedDiscoveryBridge(t *testing.T) {
 		require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &result))
 		require.Len(t, result.Choices, 1)
 		message := result.Choices[0].Message
-		call := message["tool_calls"].([]any)[0].(map[string]any)
-		require.Equal(t, wantName, call["function"].(map[string]any)["name"])
+		calls, ok := message["tool_calls"].([]any)
+		require.True(t, ok)
+		require.Len(t, calls, 1)
+		call, ok := calls[0].(map[string]any)
+		require.True(t, ok)
+		function, ok := call["function"].(map[string]any)
+		require.True(t, ok)
+		require.Equal(t, wantName, function["name"])
 		messages = append(messages, message)
 		return call
 	}
@@ -143,8 +151,46 @@ func TestAinoNativeImageProtocolUsesAdvertisedDiscoveryBridge(t *testing.T) {
 			Arguments map[string]string `json:"arguments"`
 		} `json:"calls"`
 	}
-	require.NoError(t, json.Unmarshal([]byte(call["function"].(map[string]any)["arguments"].(string)), &invocation))
+	function, ok := call["function"].(map[string]any)
+	require.True(t, ok)
+	arguments, ok := function["arguments"].(string)
+	require.True(t, ok)
+	require.NoError(t, json.Unmarshal([]byte(arguments), &invocation))
 	require.Len(t, invocation.Calls, 1)
 	require.Equal(t, "image_generate", invocation.Calls[0].Name)
 	require.Equal(t, "fixture-image-generate", invocation.Calls[0].Arguments["prompt"])
+}
+
+func TestAinoNativeImageProtocolFinishesOnlyKnownCatalogs(t *testing.T) {
+	var image bytes.Buffer
+	require.NoError(t, png.Encode(&image, nativeFixtureImage(false)))
+	path := filepath.Join(t.TempDir(), "generated.png")
+	require.NoError(t, os.WriteFile(path, image.Bytes(), 0600))
+	for _, test := range []struct {
+		id     string
+		status int
+	}{
+		{nativeImageCatalogID, 200}, {"fixture-image-subscription", 200}, {"untrusted-image-catalog", 400},
+	} {
+		t.Run(test.id, func(t *testing.T) {
+			result, err := json.Marshal(map[string]any{"success": true, "provider": "aino", "model": test.id, "quality": "auto", "image": path})
+			require.NoError(t, err)
+			wire, err := json.Marshal(map[string]any{"model": "fixture-tool-model", "messages": []any{
+				map[string]any{"role": "user", "content": "fixture-image-generate"},
+				nativeImageFunctionCall("fixture-native-image-generate", "image_generate", `{"prompt":"fixture-image-generate"}`),
+				map[string]any{"role": "tool", "tool_call_id": "fixture-native-image-generate", "content": string(result)},
+			}, "tools": []any{map[string]any{"function": map[string]any{"name": "image_generate", "parameters": map[string]any{"properties": map[string]any{"prompt": map[string]any{}}}}}}})
+			require.NoError(t, err)
+			var request ainoNativeChatRequest
+			require.NoError(t, json.Unmarshal(wire, &request))
+			protocol := &ainoNativeProtocol{rig: &ainoPlatformFixture{runID: "known-image-catalog-contract"}}
+			response := httptest.NewRecorder()
+			require.True(t, protocol.serveNativeImageTool(response, &request))
+			require.Equal(t, test.status, response.Code, response.Body.String())
+			if test.status == 200 {
+				require.Contains(t, response.Body.String(), "Fixture image generated")
+				require.Contains(t, response.Body.String(), path)
+			}
+		})
+	}
 }

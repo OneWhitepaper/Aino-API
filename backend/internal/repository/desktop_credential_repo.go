@@ -129,6 +129,12 @@ func (r *desktopCredentialRepository) RevokeFamily(ctx context.Context, family s
 }
 
 func (r *desktopCredentialRepository) RevokeUser(ctx context.Context, userID int64, reason string) error {
+	if reason == "all_sessions_revoked" {
+		_, err := r.client.APIKey.Update().Where(apikey.UserIDEQ(userID), apikey.DesktopCredentialTypeEQ(service.DesktopCredentialTypeDevice), apikey.StatusNEQ(service.StatusAPIKeyDisabled)).SetStatus(service.StatusAPIKeyDisabled).AddDesktopKeyVersion(1).Save(ctx)
+		if err != nil {
+			return err
+		}
+	}
 	return r.revoke(ctx, desktopmodelcredential.UserIDEQ(userID), reason)
 }
 

@@ -110,13 +110,20 @@ export default {
     created: '创建时间',
     copyToClipboard: '复制到剪贴板',
     desktopManaged: 'Aino 桌面托管（可删除撤销）',
+    desktopDeviceKey: '桌面设备授权',
+    desktopTemporaryKey: '桌面临时授权',
+    desktopDevice: '设备',
+    desktopLongLived: '长期有效',
+    desktopRequestBilling: '按所选模型的当前套餐计费',
+    revokeDevice: '撤销设备授权',
+    revokeDeviceConfirm: '确定撤销「{name}」的设备授权吗？该设备将停止调用模型，历史用量会保留。你可以在 Aino 桌面端明确重新授权。',
     keyTypes: {
       label: '密钥类型',
       manual: '普通密钥',
       desktop: '桌面托管'
     },
     manualKeyHint: '用于第三方工具和 API 接入，由你创建和管理。Aino 桌面端的自动授权可在「桌面托管」中查看。',
-    desktopManagedHint: 'Aino 桌面端自动申请和续期的临时授权，过期后自动归档。删除可撤销对应授权，无需手动创建。',
+    desktopManagedHint: '设备授权长期有效，按每次所选模型使用当前余额或订阅。旧版桌面端仍使用自动续期的临时授权。撤销会停止对应授权的后续调用，无需手动配置密钥。',
     desktopEmptyTitle: '暂无桌面托管授权',
     copied: '已复制！',
     importToCcSwitch: '导入到 CCS',
@@ -345,6 +352,8 @@ export default {
     status: {
       active: '活跃',
       inactive: '已停用',
+      disabled: '已停用',
+      revoked: '已撤销',
       quota_exhausted: '额度耗尽',
       expired: '已过期'
     }

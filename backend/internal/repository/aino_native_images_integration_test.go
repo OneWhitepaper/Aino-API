@@ -31,6 +31,7 @@ import (
 )
 
 const nativeImageCatalogID = "fixture-image-model"
+const nativeSubscriptionImageCatalogID = "fixture-image-subscription"
 const nativeImageUpstreamModel = "gpt-image-fixture"
 
 type ainoNativeImageRequest struct {
@@ -139,7 +140,7 @@ func nativeImageBodyDigest(raw []byte, contentType string) ([32]byte, error) {
 		if err != nil {
 			return [32]byte{}, err
 		}
-		canonical.WriteByte(0)
+		_ = canonical.WriteByte(0)
 	}
 }
 
@@ -199,7 +200,7 @@ func (p *ainoNativeProtocol) serveNativeImage(w http.ResponseWriter, req *http.R
 			http.Error(w, "native edit requires multipart PNG", http.StatusBadRequest)
 			return
 		}
-		defer req.MultipartForm.RemoveAll()
+		defer func() { _ = req.MultipartForm.RemoveAll() }()
 		entry.Model, entry.Quality, entry.Size = req.FormValue("model"), req.FormValue("quality"), req.FormValue("size")
 		prompt = req.FormValue("prompt")
 		for _, parts := range req.MultipartForm.File {
@@ -298,6 +299,7 @@ func (p *ainoNativeProtocol) serveNativeImageTool(w http.ResponseWriter, body *a
 			return true
 		}
 	}
+	toolID = nativeFixtureToolCallID(toolID, body)
 	last := body.Messages[len(body.Messages)-1]
 	encodedArguments, _ := json.Marshal(arguments)
 	name := "image_generate"
@@ -307,6 +309,11 @@ func (p *ainoNativeProtocol) serveNativeImageTool(w http.ResponseWriter, body *a
 	}
 	message := nativeImageFunctionCall(toolID, name, string(encodedArguments))
 	finish := "tool_calls"
+	if last.Role == "tool" && last.ToolCallID != toolID && (!deferred || last.ToolCallID != toolID+"-describe") {
+		p.recordNativeImageProtocol(body, "image_unissued_tool_result")
+		http.Error(w, "native image tool ID mismatch", http.StatusBadRequest)
+		return true
+	}
 	if last.Role == "tool" && last.ToolCallID == toolID {
 		path, ok := nativeImageToolResultPath(body.Messages, toolID, marker, edited)
 		if !ok {
@@ -345,7 +352,8 @@ func nativeImageToolResultPath(messages []ainoNativeMessage, toolID, marker stri
 				if call.ID != toolID {
 					continue
 				}
-				if call.Function.Name == "tool_call" {
+				switch call.Function.Name {
+				case "tool_call":
 					var bridge struct {
 						Calls []struct {
 							Name      string            `json:"name"`
@@ -355,7 +363,7 @@ func nativeImageToolResultPath(messages []ainoNativeMessage, toolID, marker stri
 					if json.Unmarshal([]byte(call.Function.Arguments), &bridge) == nil && len(bridge.Calls) == 1 && bridge.Calls[0].Name == "image_generate" {
 						args = bridge.Calls[0].Arguments
 					}
-				} else if call.Function.Name == "image_generate" {
+				case "image_generate":
 					_ = json.Unmarshal([]byte(call.Function.Arguments), &args)
 				}
 				if args["prompt"] == marker {
@@ -370,19 +378,31 @@ func nativeImageToolResultPath(messages []ainoNativeMessage, toolID, marker stri
 		Success                         bool
 		Image, Model, Provider, Quality string
 	}
-	if !matched || last.ToolCallID != toolID || json.Unmarshal(last.Content, &content) != nil || json.Unmarshal([]byte(content), &result) != nil || !result.Success || result.Provider != "aino" || result.Model != nativeImageCatalogID || result.Quality != "auto" {
+	if !matched || last.ToolCallID != toolID || json.Unmarshal(last.Content, &content) != nil || json.Unmarshal([]byte(content), &result) != nil || !result.Success || result.Provider != "aino" || (result.Model != nativeImageCatalogID && result.Model != nativeSubscriptionImageCatalogID) || result.Quality != "auto" {
 		return "", false
 	}
 	resolved, err := filepath.EvalSymlinks(result.Image)
 	if err != nil || !filepath.IsAbs(resolved) {
 		return "", false
 	}
-	temp, err := filepath.EvalSymlinks(os.TempDir())
-	if err != nil || !strings.HasPrefix(resolved, temp+string(os.PathSeparator)) {
+	if !nativeImageArtifactAllowed(resolved) {
 		return "", false
 	}
 	raw, err := os.ReadFile(resolved)
 	return result.Image, err == nil && nativeImagePixelsMatch(raw, edited)
+}
+
+func nativeImageArtifactAllowed(resolved string) bool {
+	for _, root := range []string{os.TempDir(), *devicePreflightArtifactRoot} {
+		if root == "" || !filepath.IsAbs(root) {
+			continue
+		}
+		allowed, err := filepath.EvalSymlinks(root)
+		if err == nil && strings.HasPrefix(resolved, allowed+string(os.PathSeparator)) {
+			return true
+		}
+	}
+	return false
 }
 
 func (p *ainoNativeProtocol) writeNativeImageChat(w http.ResponseWriter, body *ainoNativeChatRequest, message map[string]any, finish string) {
@@ -401,7 +421,12 @@ func (p *ainoNativeProtocol) writeNativeImageChat(w http.ResponseWriter, body *a
 		return
 	}
 	if calls, ok := message["tool_calls"].([]any); ok {
-		calls[0].(map[string]any)["index"] = 0
+		call, ok := calls[0].(map[string]any)
+		if !ok {
+			http.Error(w, "fixture tool call malformed", http.StatusInternalServerError)
+			return
+		}
+		call["index"] = 0
 	}
 	for _, chunk := range []struct {
 		delta  map[string]any

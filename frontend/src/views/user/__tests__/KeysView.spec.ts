@@ -59,6 +59,7 @@ const messages: Record<string, string> = {
   'keys.status.expired': 'Expired',
   'keys.status.inactive': 'Inactive',
   'keys.status.quota_exhausted': 'Quota exhausted',
+  'keys.status.revoked': 'Revoked',
   'keys.usage': 'Usage',
 }
 
@@ -182,6 +183,7 @@ const DataTableStub = {
         <slot name="cell-key" :value="row.key" :row="row" />
         <slot name="cell-group" :row="row" />
         <slot name="cell-actions" :row="row" />
+        <div data-test="key-expiry"><slot name="cell-expires_at" :value="row.expires_at" :row="row" /></div>
         <div data-test="key-status">
           <slot name="cell-status" :value="row.status" :row="row" />
         </div>
@@ -337,7 +339,7 @@ describe('user KeysView column settings', () => {
   it('offers deletion without copy, import, editing or reactivation for managed keys', async () => {
     listKeys.mockResolvedValueOnce({ items: [{ ...createApiKey(), key: '', desktop_managed: true }], total: 1, page: 1, page_size: 20, pages: 1 })
     const wrapper = await mountView()
-    expect(wrapper.text()).toContain('keys.desktopManaged')
+    expect(wrapper.text()).toContain('keys.desktopTemporaryKey')
     expect(wrapper.find('button[title="keys.copyToClipboard"]').exists()).toBe(false)
     for (const label of ['keys.useKey', 'keys.importToCcSwitch', 'keys.disable', 'common.edit']) {
       expect(wrapper.findAll('button').some(button => button.text().includes(label))).toBe(false)
@@ -346,6 +348,41 @@ describe('user KeysView column settings', () => {
     await getButtonByText(wrapper, 'common.delete').trigger('click')
     expect(wrapper.findComponent({ name: 'ConfirmDialog' }).props('show')).toBe(true)
     expect(updateKey).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('distinguishes permanent device authorization from temporary leases and revokes without exposing a key', async () => {
+    const deviceId = '00000000-0000-4000-8000-000000000001'
+    listKeys.mockResolvedValueOnce({ items: [
+      { ...createApiKey(), key: '', desktop_managed: true, desktop_credential_type: 'device', desktop_device_id: deviceId },
+      { ...createApiKey(), id: 2, key: '', desktop_managed: true, expires_at: '2999-01-01T00:00:00Z' },
+    ], total: 2, page: 1, page_size: 20, pages: 1 })
+    vi.mocked(keysAPI.delete).mockResolvedValueOnce(undefined)
+    const wrapper = await mountView()
+    expect(wrapper.text()).toContain('keys.desktopDeviceKey')
+    expect(wrapper.text()).toContain('keys.desktopTemporaryKey')
+    expect(wrapper.text()).toContain('keys.desktopRequestBilling')
+    expect(wrapper.find(`[title="${deviceId}"]`).exists()).toBe(true)
+    expect(wrapper.findAll('[data-test="key-expiry"]')[0].text()).toBe('keys.desktopLongLived')
+    expect(wrapper.findAll('[data-test="key-status"]')[0].text()).toBe('Active')
+    expect(wrapper.find('button[title="keys.copyToClipboard"]').exists()).toBe(false)
+    await getButtonByText(wrapper, 'keys.revokeDevice').trigger('click')
+    const dialog = wrapper.findComponent({ name: 'ConfirmDialog' })
+    expect(dialog.props('title')).toBe('keys.revokeDevice')
+    expect(dialog.props('message')).toBe('keys.revokeDeviceConfirm')
+    dialog.vm.$emit('confirm')
+    await flushPromises()
+    expect(keysAPI.delete).toHaveBeenCalledWith(1)
+    expect(updateKey).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('shows a disabled device authorization as revoked without a renewal or reactivate control', async () => {
+    listKeys.mockResolvedValueOnce({ items: [{ ...createApiKey(), key: '', desktop_managed: true, desktop_credential_type: 'device', status: 'disabled' }], total: 1, page: 1, page_size: 20, pages: 1 })
+    const wrapper = await mountView()
+    expect(wrapper.get('[data-test="key-status"]').text()).toBe('Revoked')
+    expect(wrapper.get('[data-test="key-expiry"]').text()).toBe('keys.desktopLongLived')
+    expect(wrapper.findAll('button').some(button => button.text().includes('keys.enable'))).toBe(false)
     wrapper.unmount()
   })
 

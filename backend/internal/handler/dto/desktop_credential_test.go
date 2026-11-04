@@ -32,3 +32,15 @@ func TestAPIKeyDTOShowsEffectiveExpiryWithoutChangingStoredStatus(t *testing.T) 
 		require.Equal(t, status, key.Status)
 	}
 }
+
+func TestDeviceKeyDTOExposesOnlySafeDeviceIdentity(t *testing.T) {
+	key := &service.APIKey{ID: 17, DesktopManaged: true, DesktopCredentialType: "device",
+		DesktopDeviceID: "device-id", KeyHashType: "sha256", Key: "sha256:private-verifier"}
+	data, err := json.Marshal(APIKeyFromService(key))
+	require.NoError(t, err)
+	require.Contains(t, string(data), `"desktop_credential_type":"device"`)
+	require.Contains(t, string(data), `"desktop_device_id":"device-id"`)
+	require.Contains(t, string(data), `"expires_at":null`)
+	require.NotContains(t, string(data), "private-verifier")
+	require.NotContains(t, string(data), "key_hash_type")
+}

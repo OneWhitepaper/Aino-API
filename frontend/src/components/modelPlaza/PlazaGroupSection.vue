@@ -32,7 +32,10 @@
           {{ t('modelPlaza.badges.subscription') }}
         </span>
       </div>
-      <p v-if="group.description" class="mt-2 text-sm text-gray-500 dark:text-dark-400">
+      <p
+        v-if="group.description"
+        class="mt-2 whitespace-pre-line break-words text-sm leading-relaxed text-gray-500 dark:text-dark-400"
+      >
         {{ group.description }}
       </p>
       <p

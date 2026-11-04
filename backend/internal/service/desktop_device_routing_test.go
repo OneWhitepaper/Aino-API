@@ -68,11 +68,14 @@ func TestDesktopProjectionHasHardAgeAndCannotFreezeBalance(t *testing.T) {
 	cache.Wait()
 	cached, ok := cache.Get("desktop:catalog:17")
 	require.True(t, ok)
-	projection := cached.(desktopCatalogProjection)
+	projection, ok := cached.(desktopCatalogProjection)
+	require.True(t, ok)
 	require.NotContains(t, string(projection.Data), `"Balance"`)
 	// Model entitlement is reusable briefly; quota/balance is never reused as a
 	// permission. Permission revocation must be authoritative at the hard age.
-	keys.groupRepo.(*desktopGroupRepo).groups[0].AllowImageGeneration = false
+	groups, ok := keys.groupRepo.(*desktopGroupRepo)
+	require.True(t, ok)
+	groups.groups[0].AllowImageGeneration = false
 	_, err = models.ResolveRequest(context.Background(), key, "image", "images_generations", []string{"fixture-image"}, "", true)
 	require.NoError(t, err)
 	projection.CheckedAt = time.Now().Add(-16 * time.Second)
@@ -93,7 +96,9 @@ func TestDesktopCatalogBalanceChangesWithoutProjectionRefresh(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "available", before[0].State)
 	cache.Wait()
-	keys.userRepo.(*desktopUserRepo).user.Balance = 0
+	users, ok := keys.userRepo.(*desktopUserRepo)
+	require.True(t, ok)
+	users.user.Balance = 0
 	after, err := models.ListForUser(context.Background(), 17)
 	require.NoError(t, err)
 	require.Equal(t, "insufficient_balance", after[0].State)
@@ -106,7 +111,9 @@ func TestDeviceRequestUsesBillingBalanceRatherThanIdentitySnapshot(t *testing.T)
 	selected, err := models.ResolveRequest(context.Background(), key, "image", "images_generations", []string{"fixture-image"}, "", true)
 	require.NoError(t, err)
 	require.Equal(t, 10.0, selected.Key.User.Balance, "a recharge must not be hidden by an older identity snapshot")
-	keys.userRepo.(*desktopUserRepo).user.Balance = 0
+	users, ok := keys.userRepo.(*desktopUserRepo)
+	require.True(t, ok)
+	users.user.Balance = 0
 	selected, err = models.ResolveRequest(context.Background(), key, "image", "images_generations", []string{"fixture-image"}, "", true)
 	require.NoError(t, err)
 	require.Zero(t, selected.Key.User.Balance)

@@ -114,6 +114,7 @@ BEGIN
        AND OLD.status IS NOT DISTINCT FROM NEW.status
        AND OLD.is_exclusive IS NOT DISTINCT FROM NEW.is_exclusive
        AND OLD.allow_image_generation IS NOT DISTINCT FROM NEW.allow_image_generation
+       AND OLD.image_count_billing IS NOT DISTINCT FROM NEW.image_count_billing
        AND OLD.platform IS NOT DISTINCT FROM NEW.platform
        AND OLD.subscription_type IS NOT DISTINCT FROM NEW.subscription_type
        AND OLD.rate_multiplier IS NOT DISTINCT FROM NEW.rate_multiplier

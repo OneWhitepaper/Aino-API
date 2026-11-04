@@ -80,12 +80,11 @@ func (h *DesktopHandler) executeDeviceKeyMutation(c *gin.Context, userID int64, 
 	}
 	coordinator := service.DefaultIdempotencyCoordinator()
 	if coordinator == nil {
-		data, err := execute(c.Request.Context())
+		data, err := h.deviceKeys.Ensure(c.Request.Context(), userID, req)
 		if err != nil {
 			response.ErrorFrom(c, err)
 			return
 		}
-		data.(*service.DesktopDeviceKeyResponse).APIKey = secret
 		response.Success(c, data)
 		return
 	}
@@ -105,7 +104,11 @@ func (h *DesktopHandler) executeDeviceKeyMutation(c *gin.Context, userID int64, 
 		response.Success(c, current)
 		return
 	}
-	metadata := result.Data.(*service.DesktopDeviceKeyResponse)
+	metadata, ok := result.Data.(*service.DesktopDeviceKeyResponse)
+	if !ok {
+		response.ErrorFrom(c, service.ErrServiceUnavailable)
+		return
+	}
 	copy := *metadata
 	copy.APIKey = secret
 	response.Success(c, &copy)

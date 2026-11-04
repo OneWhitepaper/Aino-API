@@ -61,7 +61,11 @@ func (s *DesktopModelService) catalogProjection(ctx context.Context, userID int6
 		if err != nil {
 			return nil, err
 		}
-		data = value.([]byte)
+		var valid bool
+		data, valid = value.([]byte)
+		if !valid {
+			return nil, ErrServiceUnavailable
+		}
 	}
 	// Decode per request so downstream group changes cannot mutate a projection
 	// shared by concurrent requests or retain repository-owned maps and slices.

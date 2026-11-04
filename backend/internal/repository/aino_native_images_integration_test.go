@@ -31,6 +31,7 @@ import (
 )
 
 const nativeImageCatalogID = "fixture-image-model"
+const nativeSubscriptionImageCatalogID = "fixture-image-subscription"
 const nativeImageUpstreamModel = "gpt-image-fixture"
 
 type ainoNativeImageRequest struct {
@@ -370,7 +371,7 @@ func nativeImageToolResultPath(messages []ainoNativeMessage, toolID, marker stri
 		Success                         bool
 		Image, Model, Provider, Quality string
 	}
-	if !matched || last.ToolCallID != toolID || json.Unmarshal(last.Content, &content) != nil || json.Unmarshal([]byte(content), &result) != nil || !result.Success || result.Provider != "aino" || result.Model != nativeImageCatalogID || result.Quality != "auto" {
+	if !matched || last.ToolCallID != toolID || json.Unmarshal(last.Content, &content) != nil || json.Unmarshal([]byte(content), &result) != nil || !result.Success || result.Provider != "aino" || (result.Model != nativeImageCatalogID && result.Model != nativeSubscriptionImageCatalogID) || result.Quality != "auto" {
 		return "", false
 	}
 	resolved, err := filepath.EvalSymlinks(result.Image)

@@ -112,7 +112,9 @@ func newDevicePreflight(t *testing.T, dir string) *devicePreflight {
 	image := service.DesktopModelEntry{ID: nativeImageCatalogID, GroupID: textGroup.ID, Model: nativeImageUpstreamModel, DisplayName: "Fixture Image", ProviderLabel: "Fixture", Platform: service.PlatformOpenAI, APIMode: "images_generations", Capabilities: service.PlatformModelCapabilities{ImageGeneration: true, ImageQualityOptions: []string{"auto", "high"}}}
 	subChat, subImageEntry := chat, image
 	subChat.ID, subChat.GroupID = "fixture-text-subscription", textSub.ID
-	subImageEntry.ID, subImageEntry.GroupID = "fixture-image-subscription", imageSub.ID
+	subChat.DisplayName = "Fixture Text Subscription"
+	subImageEntry.ID, subImageEntry.GroupID = nativeSubscriptionImageCatalogID, imageSub.ID
+	subImageEntry.DisplayName = "Fixture Image Subscription"
 	r.catalog(t, []service.DesktopModelEntry{chat, image, subChat, subImageEntry}, chat.ID)
 	require.NoError(t, r.settingRepo.Set(r.ctx, "desktop.default_image_model_id", image.ID))
 	return f

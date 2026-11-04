@@ -5,6 +5,7 @@ package repository_test
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -19,6 +20,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
+
+var devicePreflightNativeOnly = flag.Bool("aino-native-only", false, "Keep the isolated API fixture for native consumers without repeating preflight load/fault probes")
 
 func TestDevicePreflightAPI(t *testing.T) {
 	dir := os.Getenv("AINO_DEVICE_PREFLIGHT_DIR")
@@ -40,6 +43,10 @@ func TestDevicePreflightAPI(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "manifest.json"), blob, 0600))
 	t.Log("Two real API processes ready; private manifest written; one hour bounded consumer lifetime")
+	if *devicePreflightNativeOnly {
+		f.awaitConsumer(t)
+		return
+	}
 	// Every destructive probe gets a separate account from the Desktop consumer.
 	u := f.r.user(t, service.StatusActive, false)
 	u.Concurrency = 64
@@ -58,6 +65,11 @@ func TestDevicePreflightAPI(t *testing.T) {
 	}
 	t.Run("real-http-routing-ledger-load-revocation", func(t *testing.T) { probe.verify(t) })
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "verification-complete"), []byte("complete\n"), 0600))
+	f.awaitConsumer(t)
+}
+
+func (f *devicePreflight) awaitConsumer(t *testing.T) {
+	t.Helper()
 	select {
 	case <-f.completed:
 	case <-time.After(time.Hour):

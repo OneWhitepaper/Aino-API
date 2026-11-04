@@ -1,21 +1,24 @@
 package handler
 
 import (
+	"time"
+
+	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
-	"time"
 )
 
 type DesktopHandler struct {
-	users       *service.UserService
-	totp        *service.TotpService
-	models      *service.DesktopModelService
-	credentials *service.DesktopCredentialService
-	deviceKeys  *service.DesktopDeviceKeyService
-	billing     *service.DesktopBillingService
-	diagnostics *service.DiagnosticsService
+	users           *service.UserService
+	totp            *service.TotpService
+	models          *service.DesktopModelService
+	credentials     *service.DesktopCredentialService
+	deviceKeys      *service.DesktopDeviceKeyService
+	deviceKeyPolicy config.DesktopDeviceKeysConfig
+	billing         *service.DesktopBillingService
+	diagnostics     *service.DiagnosticsService
 }
 
 func NewDesktopHandler(models *service.DesktopModelService) *DesktopHandler {
@@ -26,13 +29,14 @@ func (h *DesktopHandler) SetCredentialService(credentials *service.DesktopCreden
 	h.credentials = credentials
 }
 
-func ProvideDesktopHandler(models *service.DesktopModelService, credentials *service.DesktopCredentialService, users *service.UserService, totp *service.TotpService, billing *service.DesktopBillingService, diagnostics *service.DiagnosticsService, deviceKeys *service.DesktopDeviceKeyService) *DesktopHandler {
+func ProvideDesktopHandler(models *service.DesktopModelService, credentials *service.DesktopCredentialService, users *service.UserService, totp *service.TotpService, billing *service.DesktopBillingService, diagnostics *service.DiagnosticsService, deviceKeys *service.DesktopDeviceKeyService, cfg *config.Config) *DesktopHandler {
 	h := NewDesktopHandler(models)
 	h.SetCredentialService(credentials)
 	h.SetCredentialSecurity(users, totp)
 	h.SetBillingService(billing)
 	h.SetDiagnosticsService(diagnostics)
 	h.SetDeviceKeyService(deviceKeys)
+	h.SetDeviceKeyPolicy(cfg.DesktopDeviceKeys)
 	return h
 }
 

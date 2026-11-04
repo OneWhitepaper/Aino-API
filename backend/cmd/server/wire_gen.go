@@ -353,7 +353,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	diagnosticsService := service.NewDiagnosticsService(diagnosticsRepository)
 	desktopDeviceKeyRepository := repository.NewDesktopDeviceKeyRepository(client)
 	desktopDeviceKeyService := service.NewDesktopDeviceKeyService(desktopDeviceKeyRepository, apiKeyService)
-	desktopHandler := handler.ProvideDesktopHandler(desktopModelService, desktopCredentialService, userService, totpService, desktopBillingService, diagnosticsService, desktopDeviceKeyService)
+	desktopHandler := handler.ProvideDesktopHandler(desktopModelService, desktopCredentialService, userService, totpService, desktopBillingService, diagnosticsService, desktopDeviceKeyService, configConfig)
 	idempotencyCleanupService := service.ProvideIdempotencyCleanupService(idempotencyRepository, configConfig)
 	openAIQuotaAutoResetService := service.ProvideOpenAIQuotaAutoResetService(accountRepository, openAIQuotaService, rateLimitService, idempotencyCoordinator, auditLogService, settingService, leaderLockCache)
 	handlers := handler.ProvideHandlers(iqTestHandler, iqRadarHandler, authHandler, userHandler, mcpoAuthHandler, apiKeyHandler, usageHandler, redeemHandler, subscriptionHandler, announcementHandler, channelMonitorUserHandler, channelMonitorV2Handler, adminHandlers, gatewayHandler, openAIGatewayHandler, handlerSettingHandler, totpHandler, passkeyHandler, handlerPaymentHandler, paymentWebhookHandler, availableChannelHandler, modelPlazaHandler, asyncImageHandler, batchImageHandler, desktopHandler, idempotencyCoordinator, idempotencyCleanupService, openAIQuotaAutoResetService)

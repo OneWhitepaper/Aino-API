@@ -182,6 +182,7 @@ func (f *devicePreflight) startServers(t *testing.T) {
 		require.NoError(t, os.MkdirAll(dataDir, 0700))
 		password, _ := dsn.User.Password()
 		cfg := map[string]any{"server": map[string]any{"host": "127.0.0.1", "port": port, "mode": "release"}, "run_mode": "standard", "database": map[string]any{"host": dsn.Hostname(), "port": pgPort, "user": dsn.User.Username(), "password": password, "dbname": strings.TrimPrefix(dsn.Path, "/"), "sslmode": "disable", "max_open_conns": 20, "max_idle_conns": 5}, "redis": map[string]any{"host": redisHost, "port": rp, "pool_size": 32, "min_idle_conns": 1}, "jwt": map[string]any{"secret": jwt, "expire_hour": 1}, "totp": map[string]any{"encryption_key": preflightSecret(t)}, "security": map[string]any{"url_allowlist": map[string]any{"allow_private_hosts": true, "allow_insecure_http": true}}, "log": map[string]any{"level": "warn", "format": "json"}, "pricing": map[string]any{"remote_url": "http://127.0.0.1:1/pricing", "hash_url": "", "data_dir": dataDir, "fallback_file": "./resources/model-pricing/model_prices_and_context_window.json"}, "api_key_auth_cache": map[string]any{"l1_ttl_seconds": 300, "l2_ttl_seconds": 300, "jitter_percent": 0}, "gateway": map[string]any{"scheduling": map[string]any{"outbox_poll_interval_seconds": 1}}}
+		cfg["desktop_device_keys"] = map[string]any{"enabled": true}
 		blob, err := yaml.Marshal(cfg)
 		require.NoError(t, err)
 		configPath := filepath.Join(dataDir, "config.yaml")

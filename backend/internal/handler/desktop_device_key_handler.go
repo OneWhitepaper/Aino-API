@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -14,6 +16,10 @@ import (
 
 func (h *DesktopHandler) SetDeviceKeyService(keys *service.DesktopDeviceKeyService) {
 	h.deviceKeys = keys
+}
+
+func (h *DesktopHandler) SetDeviceKeyPolicy(policy config.DesktopDeviceKeysConfig) {
+	h.deviceKeyPolicy = policy
 }
 
 func (h *DesktopHandler) GetDeviceKey(c *gin.Context) {
@@ -56,9 +62,14 @@ func (h *DesktopHandler) ProvisionDeviceKey(c *gin.Context) {
 		response.ErrorFrom(c, stateErr)
 		return
 	}
+	mutation := req.Rotate || req.Reauthorize || errors.Is(stateErr, service.ErrDesktopDeviceKeyNotFound)
+	if mutation && !h.deviceKeyPolicy.AllowsMutation(subject.UserID, req.DeviceID) {
+		response.ErrorFrom(c, infraerrors.Forbidden("DESKTOP_DEVICE_KEY_ROLLOUT_DENIED", "Device key provisioning is not enabled for this installation"))
+		return
+	}
 	// auth_time comes from the completed login (including login MFA), survives
 	// token refresh unchanged, and is independent of the permanent model key.
-	if (req.Rotate || req.Reauthorize || errors.Is(stateErr, service.ErrDesktopDeviceKeyNotFound)) && !service.IsPhoneBindingRecentAuth(subject.AuthTime, time.Now()) {
+	if mutation && !service.IsPhoneBindingRecentAuth(subject.AuthTime, time.Now()) {
 		response.ErrorFrom(c, service.ErrRecentAuthenticationRequired)
 		return
 	}

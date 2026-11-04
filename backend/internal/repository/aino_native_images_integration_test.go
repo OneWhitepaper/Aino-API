@@ -140,7 +140,7 @@ func nativeImageBodyDigest(raw []byte, contentType string) ([32]byte, error) {
 		if err != nil {
 			return [32]byte{}, err
 		}
-		canonical.WriteByte(0)
+		_ = canonical.WriteByte(0)
 	}
 }
 
@@ -200,7 +200,7 @@ func (p *ainoNativeProtocol) serveNativeImage(w http.ResponseWriter, req *http.R
 			http.Error(w, "native edit requires multipart PNG", http.StatusBadRequest)
 			return
 		}
-		defer req.MultipartForm.RemoveAll()
+		defer func() { _ = req.MultipartForm.RemoveAll() }()
 		entry.Model, entry.Quality, entry.Size = req.FormValue("model"), req.FormValue("quality"), req.FormValue("size")
 		prompt = req.FormValue("prompt")
 		for _, parts := range req.MultipartForm.File {
@@ -352,7 +352,8 @@ func nativeImageToolResultPath(messages []ainoNativeMessage, toolID, marker stri
 				if call.ID != toolID {
 					continue
 				}
-				if call.Function.Name == "tool_call" {
+				switch call.Function.Name {
+				case "tool_call":
 					var bridge struct {
 						Calls []struct {
 							Name      string            `json:"name"`
@@ -362,7 +363,7 @@ func nativeImageToolResultPath(messages []ainoNativeMessage, toolID, marker stri
 					if json.Unmarshal([]byte(call.Function.Arguments), &bridge) == nil && len(bridge.Calls) == 1 && bridge.Calls[0].Name == "image_generate" {
 						args = bridge.Calls[0].Arguments
 					}
-				} else if call.Function.Name == "image_generate" {
+				case "image_generate":
 					_ = json.Unmarshal([]byte(call.Function.Arguments), &args)
 				}
 				if args["prompt"] == marker {
@@ -420,7 +421,12 @@ func (p *ainoNativeProtocol) writeNativeImageChat(w http.ResponseWriter, body *a
 		return
 	}
 	if calls, ok := message["tool_calls"].([]any); ok {
-		calls[0].(map[string]any)["index"] = 0
+		call, ok := calls[0].(map[string]any)
+		if !ok {
+			http.Error(w, "fixture tool call malformed", http.StatusInternalServerError)
+			return
+		}
+		call["index"] = 0
 	}
 	for _, chunk := range []struct {
 		delta  map[string]any

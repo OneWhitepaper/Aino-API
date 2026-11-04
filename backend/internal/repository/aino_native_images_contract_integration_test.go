@@ -89,7 +89,7 @@ func TestAinoNativeImageGatewayUsesRealLeaseAndSettles(t *testing.T) {
 	request.Header.Set("X-Aino-Call-Id", uuid.NewString())
 	response, err := http.DefaultClient.Do(request)
 	require.NoError(t, err)
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	data, err = io.ReadAll(response.Body)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, response.StatusCode, string(data))
@@ -129,8 +129,14 @@ func TestAinoNativeImageProtocolUsesAdvertisedDiscoveryBridge(t *testing.T) {
 		require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &result))
 		require.Len(t, result.Choices, 1)
 		message := result.Choices[0].Message
-		call := message["tool_calls"].([]any)[0].(map[string]any)
-		require.Equal(t, wantName, call["function"].(map[string]any)["name"])
+		calls, ok := message["tool_calls"].([]any)
+		require.True(t, ok)
+		require.Len(t, calls, 1)
+		call, ok := calls[0].(map[string]any)
+		require.True(t, ok)
+		function, ok := call["function"].(map[string]any)
+		require.True(t, ok)
+		require.Equal(t, wantName, function["name"])
 		messages = append(messages, message)
 		return call
 	}
@@ -145,7 +151,11 @@ func TestAinoNativeImageProtocolUsesAdvertisedDiscoveryBridge(t *testing.T) {
 			Arguments map[string]string `json:"arguments"`
 		} `json:"calls"`
 	}
-	require.NoError(t, json.Unmarshal([]byte(call["function"].(map[string]any)["arguments"].(string)), &invocation))
+	function, ok := call["function"].(map[string]any)
+	require.True(t, ok)
+	arguments, ok := function["arguments"].(string)
+	require.True(t, ok)
+	require.NoError(t, json.Unmarshal([]byte(arguments), &invocation))
 	require.Len(t, invocation.Calls, 1)
 	require.Equal(t, "image_generate", invocation.Calls[0].Name)
 	require.Equal(t, "fixture-image-generate", invocation.Calls[0].Arguments["prompt"])

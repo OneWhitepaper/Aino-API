@@ -50,7 +50,9 @@ func preflightPort(t *testing.T) int {
 	t.Helper()
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
-	port := l.Addr().(*net.TCPAddr).Port
+	addr, ok := l.Addr().(*net.TCPAddr)
+	require.True(t, ok)
+	port := addr.Port
 	require.NoError(t, l.Close())
 	return port
 }
@@ -213,7 +215,7 @@ func (f *devicePreflight) startServers(t *testing.T) {
 			if err != nil {
 				return false
 			}
-			defer response.Body.Close()
+			defer func() { _ = response.Body.Close() }()
 			return response.StatusCode == 200
 		}, 45*time.Second, 100*time.Millisecond, "real server did not start; inspect private instance log")
 	}
@@ -221,7 +223,7 @@ func (f *devicePreflight) startServers(t *testing.T) {
 
 func (f *devicePreflight) control(w http.ResponseWriter, req *http.Request) {
 	if subtle.ConstantTimeCompare([]byte(req.Header.Get("X-Fixture-Nonce")), []byte(f.nonce)) != 1 {
-		http.Error(w, "forbidden", 403)
+		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -250,7 +252,7 @@ func (f *devicePreflight) control(w http.ResponseWriter, req *http.Request) {
 			http.Error(w, "fixture ledger query failed", 500)
 			return
 		}
-		defer rows.Close()
+		defer func() { _ = rows.Close() }()
 		ledger := []map[string]any{}
 		for rows.Next() {
 			var key, group, sub int64
@@ -296,7 +298,7 @@ func preflightHTTP(ctx context.Context, origin, method, path, token string, body
 	if err != nil {
 		return 0, nil, time.Since(start), err
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	raw, err := io.ReadAll(response.Body)
 	return response.StatusCode, raw, time.Since(start), err
 }

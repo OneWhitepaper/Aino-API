@@ -115,7 +115,7 @@ func TestDevicePreflightUpstreamReplacement(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		if strings.HasPrefix(req.URL.Path, "/fixture/control/") {
 			if subtle.ConstantTimeCompare([]byte(req.Header.Get("X-Fixture-Nonce")), []byte(manifest.Nonce)) != 1 {
-				http.Error(w, "forbidden", 403)
+				http.Error(w, "forbidden", http.StatusForbidden)
 				return
 			}
 			if strings.HasSuffix(req.URL.Path, "/complete") {

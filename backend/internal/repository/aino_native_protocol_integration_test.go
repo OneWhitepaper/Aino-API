@@ -357,7 +357,7 @@ func TestAinoNativeProtocolAcceptsCompressionSummaryRequest(t *testing.T) {
 	request.Header.Set("Content-Type", "application/json")
 	response, err := http.DefaultClient.Do(request)
 	require.NoError(t, err)
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	data, err := io.ReadAll(response.Body)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, response.StatusCode)
@@ -383,7 +383,7 @@ func TestAinoNativeProtocolRejectsMalformedNoToolRequest(t *testing.T) {
 			request.Header.Set("Content-Type", "application/json")
 			response, err := http.DefaultClient.Do(request)
 			require.NoError(t, err)
-			defer response.Body.Close()
+			defer func() { _ = response.Body.Close() }()
 			require.Equal(t, http.StatusBadRequest, response.StatusCode)
 			require.EqualValues(t, 0, protocol.compressionRequests.Load())
 		})
@@ -406,7 +406,7 @@ func TestAinoNativeProtocolShutdownDoesNotCountAsCancellation(t *testing.T) {
 	request.Header.Set("Content-Type", "application/json")
 	response, err := http.DefaultClient.Do(request)
 	require.NoError(t, err)
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	require.Equal(t, http.StatusOK, response.StatusCode)
 	require.Eventually(t, func() bool { return protocol.streamStarted.Load() == 1 }, time.Second, 10*time.Millisecond)
 
@@ -445,7 +445,7 @@ func TestNativeProtocolReleasesTerminalOnlyAfterSelectedDownstreamDisconnect(t *
 	go func() {
 		response, err := http.DefaultClient.Do(request)
 		if response != nil {
-			response.Body.Close()
+			_ = response.Body.Close()
 		}
 		requestDone <- err
 	}()
@@ -486,7 +486,7 @@ func TestNativeProtocolOnlySelectsLatestUserCancellationMarker(t *testing.T) {
 	request.Header.Set("Content-Type", "application/json")
 	response, err := http.DefaultClient.Do(request)
 	require.NoError(t, err)
-	response.Body.Close()
+	_ = response.Body.Close()
 
 	require.Never(t, func() bool { return protocol.downstreamDisconnects.Load() != 0 }, 100*time.Millisecond, 10*time.Millisecond)
 	select {
@@ -510,7 +510,7 @@ func TestNativeProtocolNormalCompletionDoesNotCountAsDownstreamDisconnect(t *tes
 	request.Header.Set("Content-Type", "application/json")
 	response, err := http.DefaultClient.Do(request)
 	require.NoError(t, err)
-	response.Body.Close()
+	_ = response.Body.Close()
 
 	require.Never(t, func() bool { return protocol.downstreamDisconnects.Load() != 0 }, 100*time.Millisecond, 10*time.Millisecond)
 	select {
@@ -538,7 +538,7 @@ func TestNativeProtocolDeadlineDoesNotEmitTerminalUsage(t *testing.T) {
 	request.Header.Set("Content-Type", "application/json")
 	response, err := http.DefaultClient.Do(request)
 	require.NoError(t, err)
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	stream, err := io.ReadAll(response.Body)
 	require.NoError(t, err)
 	require.Contains(t, string(stream), "Fixture stream started")

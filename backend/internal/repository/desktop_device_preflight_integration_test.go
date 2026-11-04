@@ -267,7 +267,7 @@ func (f *devicePreflight) verifyHardAge(t *testing.T, token string, _ *service.D
 	}
 	transaction, err := db.BeginTx(context.Background(), nil)
 	require.NoError(t, err)
-	defer transaction.Rollback()
+	defer func() { _ = transaction.Rollback() }()
 	_, err = transaction.Exec("ALTER TABLE api_keys DISABLE TRIGGER trg_api_keys_auth_cache_invalidation")
 	require.NoError(t, err)
 	_, err = transaction.Exec("UPDATE api_keys SET status='disabled',updated_at=now() WHERE id=$1", key.KeyID)

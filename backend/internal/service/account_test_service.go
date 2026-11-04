@@ -65,11 +65,12 @@ type TestEvent struct {
 	Error    string `json:"error,omitempty"`
 }
 
-// AccountTestOptions carries optional media for admin connectivity tests.
+// AccountTestOptions carries optional media and image quality for admin connectivity tests.
 // ImageDataURL / AudioDataURL are full data URLs (data:<mime>;base64,...).
 type AccountTestOptions struct {
 	ImageDataURL string
 	AudioDataURL string
+	ImageQuality string
 }
 
 func firstAccountTestOptions(opts []AccountTestOptions) AccountTestOptions {
@@ -394,7 +395,7 @@ func (s *AccountTestService) TestAccountConnection(c *gin.Context, accountID int
 		case APIProtocolAdaptive:
 			return s.testCNProviderAdaptiveConnection(c, account, modelID, prompt)
 		case APIProtocolResponses:
-			return s.testOpenAIAccountConnection(c, account, modelID, prompt, normalizeAccountTestMode(mode))
+			return s.testOpenAIAccountConnection(c, account, modelID, prompt, normalizeAccountTestMode(mode), testOpts)
 		case APIProtocolChatCompletions:
 			return s.testCNProviderChatCompletionsConnection(c, account, modelID, prompt)
 		case APIProtocolAnthropic:
@@ -403,7 +404,7 @@ func (s *AccountTestService) TestAccountConnection(c *gin.Context, accountID int
 	}
 
 	if account.IsOpenAI() {
-		return s.testOpenAIAccountConnection(c, account, modelID, prompt, normalizeAccountTestMode(mode))
+		return s.testOpenAIAccountConnection(c, account, modelID, prompt, normalizeAccountTestMode(mode), testOpts)
 	}
 
 	if account.IsGemini() {
@@ -800,7 +801,7 @@ func (s *AccountTestService) testBedrockAccountConnection(c *gin.Context, ctx co
 }
 
 // testOpenAIAccountConnection tests an OpenAI account's connection
-func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account *Account, modelID string, prompt string, mode string) error {
+func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account *Account, modelID string, prompt string, mode string, opts ...AccountTestOptions) error {
 	ctx := c.Request.Context()
 	mode = normalizeAccountTestMode(mode)
 
@@ -826,7 +827,7 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 			imagePrompt = defaultOpenAIImageTestPrompt
 		}
 		if account.Type == "apikey" {
-			return s.testOpenAIImageAPIKey(c, ctx, account, testModelID, imagePrompt)
+			return s.testOpenAIImageAPIKey(c, ctx, account, testModelID, imagePrompt, opts...)
 		}
 		return s.testOpenAIImageOAuth(c, ctx, account, testModelID, imagePrompt)
 	}
@@ -976,7 +977,7 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 				return s.sendErrorAndEnd(c, fmt.Sprintf("Agent Identity task recovery failed: %s", err.Error()))
 			}
 			c.Request = c.Request.WithContext(markAgentIdentityTaskRecoveryTried(ctx))
-			return s.testOpenAIAccountConnection(c, account, modelID, prompt, mode)
+			return s.testOpenAIAccountConnection(c, account, modelID, prompt, mode, opts...)
 		}
 		if resp.StatusCode == http.StatusTooManyRequests {
 			s.reconcileOpenAI429State(ctx, account, resp.Header, body)
@@ -3024,7 +3025,7 @@ func (s *AccountTestService) processOpenAIStream(c *gin.Context, body io.Reader)
 }
 
 // testOpenAIImageAPIKey tests OpenAI image generation using an API Key account.
-func (s *AccountTestService) testOpenAIImageAPIKey(c *gin.Context, ctx context.Context, account *Account, modelID, prompt string) error {
+func (s *AccountTestService) testOpenAIImageAPIKey(c *gin.Context, ctx context.Context, account *Account, modelID, prompt string, opts ...AccountTestOptions) error {
 	authToken := account.GetOpenAIApiKey()
 	if authToken == "" {
 		return s.sendErrorAndEnd(c, "No API key available")
@@ -3054,6 +3055,9 @@ func (s *AccountTestService) testOpenAIImageAPIKey(c *gin.Context, ctx context.C
 		"prompt":          prompt,
 		"n":               1,
 		"response_format": "b64_json",
+	}
+	if quality := strings.TrimSpace(firstAccountTestOptions(opts).ImageQuality); quality != "" {
+		payload["quality"] = quality
 	}
 	payloadBytes, _ := json.Marshal(payload)
 

@@ -66,6 +66,30 @@
         />
       </div>
 
+      <div v-if="supportsImageQuality" class="space-y-1.5">
+        <label for="image-test-quality" class="text-sm font-medium text-gray-700 dark:text-gray-300">
+          {{ t('admin.accounts.imageQualityLabel') }}
+        </label>
+        <select
+          id="image-test-quality"
+          v-model="imageQuality"
+          class="input"
+          data-testid="image-test-quality"
+          aria-describedby="image-test-quality-hint"
+          :disabled="status === 'connecting'"
+        >
+          <option value="">{{ t('admin.accounts.imageQualityDefault') }}</option>
+          <option value="1k">1k</option>
+          <option value="2k">2k</option>
+          <option value="4k">4k</option>
+          <option value="auto">{{ t('admin.accounts.imageQualityAuto') }}</option>
+          <option value="low">{{ t('admin.accounts.imageQualityLow') }}</option>
+          <option value="medium">{{ t('admin.accounts.imageQualityMedium') }}</option>
+          <option value="high">{{ t('admin.accounts.imageQualityHigh') }}</option>
+        </select>
+        <p id="image-test-quality-hint" class="input-hint">{{ t('admin.accounts.imageQualityHint') }}</p>
+      </div>
+
       <div v-if="supportsImageTest" class="space-y-1.5">
         <TextArea
           v-model="testPrompt"
@@ -283,6 +307,7 @@ const errorMessage = ref('')
 const availableModels = ref<ClaudeModel[]>([])
 const selectedModelId = ref('')
 const testPrompt = ref('')
+const imageQuality = ref('')
 const loadingModels = ref(false)
 let abortController: AbortController | null = null
 const generatedImages = ref<PreviewImage[]>([])
@@ -307,6 +332,10 @@ const supportsOpenAIImageTest = computed(() => {
   return props.account?.platform === 'openai'
 })
 
+const supportsImageQuality = computed(
+  () => supportsOpenAIImageTest.value && props.account?.type === 'apikey' && testMode.value === 'default'
+)
+
 const supportsImageTest = computed(() => supportsGeminiImageTest.value || supportsOpenAIImageTest.value)
 
 const sortTestModels = (models: ClaudeModel[]) => {
@@ -326,6 +355,7 @@ watch(
   async (newVal) => {
     if (newVal && props.account) {
       testPrompt.value = ''
+      imageQuality.value = ''
       testMode.value = 'default'
       resetState()
       await loadAvailableModels()
@@ -336,6 +366,7 @@ watch(
 )
 
 watch(selectedModelId, () => {
+  imageQuality.value = ''
   if (supportsImageTest.value && !testPrompt.value.trim()) {
     testPrompt.value = t('admin.accounts.imagePromptDefault')
   }
@@ -431,7 +462,8 @@ const startTest = async () => {
       body: JSON.stringify({
         model_id: selectedModelId.value,
         prompt: supportsImageTest.value ? testPrompt.value.trim() : '',
-        mode: isOpenAIAccount.value ? testMode.value : 'default'
+        mode: isOpenAIAccount.value ? testMode.value : 'default',
+        ...(supportsImageQuality.value && imageQuality.value ? { image_quality: imageQuality.value } : {})
       }),
       signal: abortController.signal
     })

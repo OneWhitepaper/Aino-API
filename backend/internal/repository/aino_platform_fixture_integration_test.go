@@ -40,6 +40,7 @@ type ainoPlatformFixture struct {
 	modelGroupID             int64
 	gatewayBillingCache      *service.BillingCacheService
 	nativeInferenceObserver  gin.HandlerFunc
+	nativeImageObserver      gin.HandlerFunc
 }
 
 func newAinoPlatformFixture(t *testing.T) *ainoPlatformFixture {
@@ -152,12 +153,19 @@ func (r *ainoPlatformFixture) wireModel(t *testing.T, userID int64) {
 	input, output := 2e-6, 6e-6
 	g.ModelPricing = []service.ChannelModelPricing{{Models: []string{"fixture-*"}, InputPrice: &input, OutputPrice: &output}}
 	g.ModelAllowlist = service.GroupModelAllowlist{Enabled: true, Models: []string{"fixture-tool-model"}}
+	entries := []service.DesktopModelEntry{desktopEntry("fixture-tool-model", g.ID)}
+	imageProvider, hasImages := r.modelProvider.(interface {
+		configureNativeImageCatalog(*testing.T, *ainoPlatformFixture, *service.Group) service.DesktopModelEntry
+	})
+	if hasImages {
+		entries = append(entries, imageProvider.configureNativeImageCatalog(t, r, g))
+	}
 	require.NoError(t, r.groups.Update(r.ctx, g))
 	r.modelGroupID = g.ID
 	if userID > 0 {
 		require.NoError(t, r.userRepo.AddGroupToAllowedGroups(r.ctx, userID, g.ID))
 	}
-	r.catalog(t, []service.DesktopModelEntry{desktopEntry("fixture-tool-model", g.ID)}, "fixture-tool-model")
+	r.catalog(t, entries, "fixture-tool-model")
 	db := repository.GetIntegrationDB()
 	accounts := repository.NewAccountRepository(r.client, db, nil)
 	account := &service.Account{Name: "fixture-" + r.runID, Platform: service.PlatformOpenAI, Type: service.AccountTypeAPIKey, Status: service.StatusActive, Schedulable: true, Concurrency: 5, Credentials: map[string]any{"api_key": "fixture-upstream-key", "base_url": provider.URL}, Extra: map[string]any{"openai_responses_mode": "force_chat_completions"}}
@@ -180,8 +188,15 @@ func (r *ainoPlatformFixture) wireModel(t *testing.T, userID int64) {
 	if r.nativeInferenceObserver != nil {
 		handlers = append(handlers, r.nativeInferenceObserver)
 	}
-	handlers = append(handlers, h.ChatCompletions)
-	r.router.POST("/v1/chat/completions", handlers...)
+	r.router.POST("/v1/chat/completions", append(append([]gin.HandlerFunc{}, handlers...), h.ChatCompletions)...)
+	if hasImages {
+		imageHandlers := append([]gin.HandlerFunc{}, handlers...)
+		if r.nativeImageObserver != nil {
+			imageHandlers = append(imageHandlers, r.nativeImageObserver)
+		}
+		r.router.POST("/v1/images/generations", append(append([]gin.HandlerFunc{}, imageHandlers...), h.Images)...)
+		r.router.POST("/v1/images/edits", append(append([]gin.HandlerFunc{}, imageHandlers...), h.Images)...)
+	}
 	usage := handler.NewUsageHandler(service.NewUsageService(logs, r.userRepo, r.client, nil), r.keys, nil, r.settings)
 	r.router.GET("/api/v1/usage", gin.HandlerFunc(middleware.NewJWTAuthMiddleware(r.auth, r.users, r.settings, nil)), usage.List)
 }

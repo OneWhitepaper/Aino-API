@@ -1696,6 +1696,13 @@ export default {
       imagePromptLabel: '生图提示词',
       imagePromptPlaceholder: '例如：生成一只戴宇航员头盔的橘猫，像素插画风格，纯色背景。',
       imagePromptDefault: 'Generate a cute orange cat astronaut sticker on a clean pastel background.',
+      imageQualityLabel: '图片画质',
+      imageQualityDefault: '不指定（使用上游默认值）',
+      imageQualityAuto: '自动（auto）',
+      imageQualityLow: '低（low）',
+      imageQualityMedium: '中（medium）',
+      imageQualityHigh: '高（high）',
+      imageQualityHint: '请按上游支持的画质选择。部分上游按 1k / 2k / 4k 计价，需要明确指定；实际费用由上游决定。',
       imageTestHint:
         '调用独立 /v1/images/generations 生图，并在下方预览返回图片。',
       imageTestMode: '模式：生图测试',

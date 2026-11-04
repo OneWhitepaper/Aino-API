@@ -89,6 +89,30 @@
         />
       </div>
 
+      <div v-if="supportsImageQuality" class="space-y-1.5">
+        <label for="image-test-quality" class="text-sm font-medium text-gray-700 dark:text-gray-300">
+          {{ t('admin.accounts.imageQualityLabel') }}
+        </label>
+        <select
+          id="image-test-quality"
+          v-model="imageQuality"
+          class="input"
+          data-testid="image-test-quality"
+          aria-describedby="image-test-quality-hint"
+          :disabled="status === 'connecting'"
+        >
+          <option value="">{{ t('admin.accounts.imageQualityDefault') }}</option>
+          <option value="1k">1k</option>
+          <option value="2k">2k</option>
+          <option value="4k">4k</option>
+          <option value="auto">{{ t('admin.accounts.imageQualityAuto') }}</option>
+          <option value="low">{{ t('admin.accounts.imageQualityLow') }}</option>
+          <option value="medium">{{ t('admin.accounts.imageQualityMedium') }}</option>
+          <option value="high">{{ t('admin.accounts.imageQualityHigh') }}</option>
+        </select>
+        <p id="image-test-quality-hint" class="input-hint">{{ t('admin.accounts.imageQualityHint') }}</p>
+      </div>
+
       <div v-if="supportsPromptInput" class="space-y-1.5">
         <TextArea
           v-model="testPrompt"
@@ -415,6 +439,7 @@ const errorMessage = ref('')
 const availableModels = ref<ClaudeModel[]>([])
 const selectedModelId = ref('')
 const testPrompt = ref('')
+const imageQuality = ref('')
 const loadingModels = ref(false)
 let abortController: AbortController | null = null
 const generatedImages = ref<PreviewMedia[]>([])
@@ -460,6 +485,10 @@ const supportsOpenAIImageTest = computed(() => {
   if (!modelID.startsWith('gpt-image-')) return false
   return props.account?.platform === 'openai'
 })
+
+const supportsImageQuality = computed(
+  () => supportsOpenAIImageTest.value && props.account?.type === 'apikey' && testMode.value === 'default'
+)
 
 const isGrokImageModel = (id: string) => {
   const modelID = id.toLowerCase()
@@ -753,6 +782,7 @@ watch(
   async (newVal) => {
     if (newVal && props.account) {
       testPrompt.value = ''
+      imageQuality.value = ''
       testMode.value = 'default'
       videoTestMode.value = 'default'
       grokTestMode.value = 'text'
@@ -767,6 +797,10 @@ watch(
     }
   }
 )
+
+watch(selectedModelId, () => {
+  imageQuality.value = ''
+})
 
 watch(grokTestMode, () => {
   if (!isGrokAccount.value) return
@@ -864,6 +898,7 @@ const startTest = async () => {
       model_id: string
       prompt: string
       mode?: string
+      image_quality?: string
       image_data_url?: string
       audio_data_url?: string
     } = {
@@ -872,6 +907,9 @@ const startTest = async () => {
     }
     if (isOpenAIAccount.value) {
       requestBody.mode = testMode.value
+    }
+    if (supportsImageQuality.value && imageQuality.value) {
+      requestBody.image_quality = imageQuality.value
     }
     if (isVideoAccount.value) requestBody.mode = videoTestMode.value
     if (isGrokAccount.value) {

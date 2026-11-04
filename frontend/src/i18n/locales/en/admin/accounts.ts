@@ -1608,6 +1608,13 @@ export default {
       imagePromptLabel: 'Image prompt',
       imagePromptPlaceholder: 'Example: Generate an orange cat astronaut sticker in pixel-art style on a solid background.',
       imagePromptDefault: 'Generate a cute orange cat astronaut sticker on a clean pastel background.',
+      imageQualityLabel: 'Image quality',
+      imageQualityDefault: 'Unspecified (upstream default)',
+      imageQualityAuto: 'Auto (auto)',
+      imageQualityLow: 'Low (low)',
+      imageQualityMedium: 'Medium (medium)',
+      imageQualityHigh: 'High (high)',
+      imageQualityHint: 'Choose a quality supported by the upstream. Some providers price by 1k / 2k / 4k and require an explicit value. Actual charges depend on the upstream.',
       imageTestHint:
         'Calls standalone /v1/images/generations and shows the returned image below.',
       imageTestMode: 'Mode: Image generation test',

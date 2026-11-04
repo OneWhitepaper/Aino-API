@@ -62,6 +62,19 @@ type ainoNativeChatRequest struct {
 	} `json:"tools"`
 }
 
+func nativeFixtureToolCallID(prefix string, body *ainoNativeChatRequest) string {
+	turns := 0
+	for _, message := range body.Messages {
+		if message.Role == "user" {
+			turns++
+		}
+	}
+	if turns <= 1 {
+		return prefix
+	}
+	return fmt.Sprintf("%s-turn-%d", prefix, turns)
+}
+
 func (p *ainoNativeProtocol) closeActiveStream() {
 	p.shutdownOnce.Do(func() { close(p.shutdown) })
 }
@@ -213,7 +226,7 @@ func (p *ainoNativeProtocol) ServeHTTP(w http.ResponseWriter, req *http.Request)
 	}
 	call := p.rig.modelCalls.Add(1)
 	last := body.Messages[len(body.Messages)-1]
-	toolID := "fixture-native-read"
+	toolID := nativeFixtureToolCallID("fixture-native-read", &body)
 	arguments, _ := json.Marshal(map[string]string{"path": p.path})
 	message := map[string]any{"role": "assistant", "content": nil, "tool_calls": []any{map[string]any{"id": toolID, "type": "function", "function": map[string]any{"name": "read_file", "arguments": string(arguments)}}}}
 	finish := "tool_calls"

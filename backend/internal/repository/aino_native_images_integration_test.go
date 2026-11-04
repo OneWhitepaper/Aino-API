@@ -299,6 +299,7 @@ func (p *ainoNativeProtocol) serveNativeImageTool(w http.ResponseWriter, body *a
 			return true
 		}
 	}
+	toolID = nativeFixtureToolCallID(toolID, body)
 	last := body.Messages[len(body.Messages)-1]
 	encodedArguments, _ := json.Marshal(arguments)
 	name := "image_generate"
@@ -308,6 +309,11 @@ func (p *ainoNativeProtocol) serveNativeImageTool(w http.ResponseWriter, body *a
 	}
 	message := nativeImageFunctionCall(toolID, name, string(encodedArguments))
 	finish := "tool_calls"
+	if last.Role == "tool" && last.ToolCallID != toolID && (!deferred || last.ToolCallID != toolID+"-describe") {
+		p.recordNativeImageProtocol(body, "image_unissued_tool_result")
+		http.Error(w, "native image tool ID mismatch", http.StatusBadRequest)
+		return true
+	}
 	if last.Role == "tool" && last.ToolCallID == toolID {
 		path, ok := nativeImageToolResultPath(body.Messages, toolID, marker, edited)
 		if !ok {
@@ -378,12 +384,24 @@ func nativeImageToolResultPath(messages []ainoNativeMessage, toolID, marker stri
 	if err != nil || !filepath.IsAbs(resolved) {
 		return "", false
 	}
-	temp, err := filepath.EvalSymlinks(os.TempDir())
-	if err != nil || !strings.HasPrefix(resolved, temp+string(os.PathSeparator)) {
+	if !nativeImageArtifactAllowed(resolved) {
 		return "", false
 	}
 	raw, err := os.ReadFile(resolved)
 	return result.Image, err == nil && nativeImagePixelsMatch(raw, edited)
+}
+
+func nativeImageArtifactAllowed(resolved string) bool {
+	for _, root := range []string{os.TempDir(), *devicePreflightArtifactRoot} {
+		if root == "" || !filepath.IsAbs(root) {
+			continue
+		}
+		allowed, err := filepath.EvalSymlinks(root)
+		if err == nil && strings.HasPrefix(resolved, allowed+string(os.PathSeparator)) {
+			return true
+		}
+	}
+	return false
 }
 
 func (p *ainoNativeProtocol) writeNativeImageChat(w http.ResponseWriter, body *ainoNativeChatRequest, message map[string]any, finish string) {

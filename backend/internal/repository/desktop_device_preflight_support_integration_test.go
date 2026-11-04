@@ -186,7 +186,8 @@ func (f *devicePreflight) startServers(t *testing.T) {
 		require.NoError(t, os.WriteFile(configPath, blob, 0600))
 		logfile, err := os.OpenFile(filepath.Join(dataDir, "server.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 		require.NoError(t, err)
-		cmd := exec.Command("/tmp/aino-device-key-preflight-server")
+		require.True(t, filepath.IsAbs(*devicePreflightServerBinary), "preflight server path must be explicit and absolute")
+		cmd := exec.Command(*devicePreflightServerBinary)
 		cmd.Dir = "../.."
 		cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + dataDir, "DATA_DIR=" + dataDir, "CONFIG_FILE=" + configPath, "SKIP_SETUP=true", "TZ=UTC"}
 		cmd.Stdout, cmd.Stderr = logfile, logfile
@@ -232,20 +233,37 @@ func (f *devicePreflight) control(w http.ResponseWriter, req *http.Request) {
 		var balance, cost string
 		var keys, calls int
 		db := repository.GetIntegrationDB()
-		_ = db.QueryRow("SELECT balance::text FROM users WHERE id=$1", f.userID).Scan(&balance)
-		_ = db.QueryRow("SELECT count(*),coalesce(sum(actual_cost),0)::text FROM usage_logs WHERE user_id=$1 AND settlement_status='settled'", f.userID).Scan(&calls, &cost)
-		_ = db.QueryRow("SELECT count(*) FROM api_keys WHERE user_id=$1 AND desktop_credential_type='device'", f.userID).Scan(&keys)
-		rows, err := db.Query("SELECT api_key_id,coalesce(group_id,0),coalesce(subscription_id,0),coalesce(desktop_session_id,''),coalesce(desktop_turn_id,''),coalesce(desktop_call_id,''),coalesce(desktop_purpose,''),actual_cost::text FROM usage_logs WHERE user_id=$1 ORDER BY id", f.userID)
+		if err := db.QueryRowContext(req.Context(), "SELECT balance::text FROM users WHERE id=$1", f.userID).Scan(&balance); err != nil {
+			http.Error(w, "fixture state query failed", 500)
+			return
+		}
+		if err := db.QueryRowContext(req.Context(), "SELECT count(*),coalesce(sum(actual_cost),0)::text FROM usage_logs WHERE user_id=$1 AND settlement_status='settled'", f.userID).Scan(&calls, &cost); err != nil {
+			http.Error(w, "fixture state query failed", 500)
+			return
+		}
+		if err := db.QueryRowContext(req.Context(), "SELECT count(*) FROM api_keys WHERE user_id=$1 AND desktop_credential_type='device'", f.userID).Scan(&keys); err != nil {
+			http.Error(w, "fixture state query failed", 500)
+			return
+		}
+		rows, err := db.QueryContext(req.Context(), "SELECT api_key_id,coalesce(group_id,0),coalesce(subscription_id,0),coalesce(session_id,''),coalesce(desktop_turn_id,''),coalesce(desktop_call_id,''),coalesce(desktop_purpose,''),actual_cost::text FROM usage_logs WHERE user_id=$1 ORDER BY id", f.userID)
+		if err != nil {
+			http.Error(w, "fixture ledger query failed", 500)
+			return
+		}
+		defer rows.Close()
 		ledger := []map[string]any{}
-		if err == nil {
-			defer rows.Close()
-			for rows.Next() {
-				var key, group, sub int64
-				var session, turn, call, purpose, charge string
-				if rows.Scan(&key, &group, &sub, &session, &turn, &call, &purpose, &charge) == nil {
-					ledger = append(ledger, map[string]any{"api_key_id": key, "group_id": group, "subscription_id": sub, "desktop_session_id": session, "desktop_turn_id": turn, "desktop_call_id": call, "desktop_purpose": purpose, "actual_cost": charge})
-				}
+		for rows.Next() {
+			var key, group, sub int64
+			var session, turn, call, purpose, charge string
+			if err := rows.Scan(&key, &group, &sub, &session, &turn, &call, &purpose, &charge); err != nil {
+				http.Error(w, "fixture ledger scan failed", 500)
+				return
 			}
+			ledger = append(ledger, map[string]any{"api_key_id": key, "group_id": group, "subscription_id": sub, "desktop_session_id": session, "desktop_turn_id": turn, "desktop_call_id": call, "desktop_purpose": purpose, "actual_cost": charge})
+		}
+		if err := rows.Err(); err != nil {
+			http.Error(w, "fixture ledger read failed", 500)
+			return
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"user_id": f.userID, "balance": balance, "usage_cost": cost, "usage_calls": calls, "device_keys": keys, "key_posts": f.keyPosts.Load(), "usage_ledger": ledger, "model_calls": f.r.modelCalls.Load(), "tool_results": f.protocol.toolResults.Load(), "image_requests": f.protocol.images.snapshot()})
 	default:

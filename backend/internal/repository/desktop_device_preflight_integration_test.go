@@ -22,6 +22,8 @@ import (
 )
 
 var devicePreflightNativeOnly = flag.Bool("aino-native-only", false, "Keep the isolated API fixture for native consumers without repeating preflight load/fault probes")
+var devicePreflightServerBinary = flag.String("aino-preflight-server", filepath.Join(os.TempDir(), "aino-device-key-preflight-server"), "Absolute path to the isolated preflight server binary")
+var devicePreflightArtifactRoot = flag.String("aino-native-artifact-root", "", "Explicit isolated native generated-image directory for fixture pixel verification")
 
 func TestDevicePreflightAPI(t *testing.T) {
 	dir := os.Getenv("AINO_DEVICE_PREFLIGHT_DIR")

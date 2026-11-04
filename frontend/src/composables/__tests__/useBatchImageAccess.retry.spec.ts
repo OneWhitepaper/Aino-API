@@ -9,7 +9,7 @@ beforeEach(() => { vi.resetModules(); list.mockReset() })
 describe('batch image access lookup', () => {
   it('retries a failed lookup when another consumer requests access', async () => {
     list.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({
-      items: [{ status: 'active', group: { platform: 'gemini', allow_batch_image_generation: true } }], pages: 1,
+      items: [{ key: 'sk-personal', status: 'active', group: { platform: 'gemini', allow_batch_image_generation: true } }], pages: 1,
     })
     const { useBatchImageAccess } = await import('../useBatchImageAccess')
     const access = useBatchImageAccess()
@@ -28,5 +28,19 @@ describe('batch image access lookup', () => {
     expect(access.batchImageAccessLoaded.value).toBe(true)
     expect(await access.refreshBatchImageAccess()).toBe(false)
     expect(list).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not expose batch generation for desktop managed or empty secrets from an older server', async () => {
+    const eligibleGroup = { platform: 'gemini', allow_batch_image_generation: true }
+    list.mockResolvedValue({ items: [
+      { key: '', desktop_managed: true, status: 'active', group: eligibleGroup },
+      { key: 'sk-internal', desktop_managed: true, status: 'active', group: eligibleGroup },
+      { key: '', status: 'active', group: eligibleGroup },
+    ], pages: 1 })
+    const { useBatchImageAccess } = await import('../useBatchImageAccess')
+    const access = useBatchImageAccess()
+    expect(await access.refreshBatchImageAccess()).toBe(false)
+    expect(access.canUseBatchImage.value).toBe(false)
+    expect(list).toHaveBeenCalledWith(1, 100, expect.objectContaining({ desktop_managed: false }))
   })
 })

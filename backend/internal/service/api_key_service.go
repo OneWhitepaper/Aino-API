@@ -604,6 +604,11 @@ func (s *APIKeyService) Create(ctx context.Context, userID int64, req CreateAPIK
 
 // List 获取用户的API Key列表
 func (s *APIKeyService) List(ctx context.Context, userID int64, params pagination.PaginationParams, filters APIKeyListFilters) ([]APIKey, *pagination.PaginationResult, error) {
+	if s.desktopRepo != nil {
+		if err := s.desktopRepo.RetireInactiveKeys(ctx, userID); err != nil {
+			return nil, nil, fmt.Errorf("retire desktop api keys: %w", err)
+		}
+	}
 	if normalizedAPIKeySortBy(params.SortBy) == apiKeySortCurrentConcurrency {
 		return s.listByCurrentConcurrency(ctx, userID, params, filters)
 	}

@@ -842,10 +842,10 @@ const handleColumnClickOutside = (event: MouseEvent) => {
 }
 
 const loadApiKeys = async () => {
-  const firstPage = await keysAPI.list(1, 100)
+  const firstPage = await keysAPI.list(1, 100, { include_archived: true })
   const keys = [...firstPage.items]
   for (let page = 2; page <= firstPage.pages && keys.length > 0; page++) {
-    const response = await keysAPI.list(page, 100)
+    const response = await keysAPI.list(page, 100, { include_archived: true })
     if (response.items.length === 0) break
     keys.push(...response.items)
   }

@@ -110,6 +110,14 @@ export default {
     created: '创建时间',
     copyToClipboard: '复制到剪贴板',
     desktopManaged: 'Aino 桌面托管（可删除撤销）',
+    keyTypes: {
+      label: '密钥类型',
+      manual: '普通密钥',
+      desktop: '桌面托管'
+    },
+    manualKeyHint: '用于第三方工具和 API 接入，由你创建和管理。Aino 桌面端的自动授权可在「桌面托管」中查看。',
+    desktopManagedHint: 'Aino 桌面端自动申请和续期的临时授权，过期后自动归档。删除可撤销对应授权，无需手动创建。',
+    desktopEmptyTitle: '暂无桌面托管授权',
     copied: '已复制！',
     importToCcSwitch: '导入到 CCS',
     enable: '启用',

@@ -20,6 +20,8 @@ export async function list(
   filters?: {
     search?: string
     status?: string
+    desktop_managed?: boolean
+    include_archived?: boolean
     group_id?: number | string
     sort_by?: string
     sort_order?: 'asc' | 'desc'

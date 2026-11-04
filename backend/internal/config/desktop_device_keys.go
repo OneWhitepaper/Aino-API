@@ -77,10 +77,16 @@ func validateDesktopDeviceKeyRawIDs(raw any) error {
 	if !ok {
 		return fmt.Errorf("desktop_device_keys must be a configuration object")
 	}
-	if section["rollout_allowlist"] == nil {
+	if enabled, exists := section["enabled"]; exists {
+		if _, ok := enabled.(bool); !ok {
+			return fmt.Errorf("desktop_device_keys.enabled must be a boolean")
+		}
+	}
+	rawEntries, exists := section["rollout_allowlist"]
+	if !exists {
 		return nil
 	}
-	entries, ok := section["rollout_allowlist"].([]any)
+	entries, ok := rawEntries.([]any)
 	if !ok {
 		return fmt.Errorf("desktop_device_keys.rollout_allowlist must be a list")
 	}

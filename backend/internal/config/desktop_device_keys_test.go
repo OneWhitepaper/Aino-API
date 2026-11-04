@@ -10,6 +10,8 @@ import (
 
 func TestLoadDesktopDeviceKeyPolicyRejectsMalformedConfiguration(t *testing.T) {
 	for name, policy := range map[string]string{
+		"null enabled":            "  enabled: null\n  rollout_allowlist: []\n",
+		"null allowlist":          "  enabled: true\n  rollout_allowlist: null\n",
 		"unknown field":           "  enabled: true\n  rollout_allowlisst: []\n",
 		"fractional user":         "  enabled: true\n  rollout_allowlist:\n    - user_id: 7.5\n      device_id: 00000000-0000-4000-8000-000000000001\n",
 		"rounded fractional user": "  enabled: true\n  rollout_allowlist:\n    - user_id: 7.0000000000000001\n      device_id: 00000000-0000-4000-8000-000000000001\n",
@@ -60,4 +62,18 @@ func TestDesktopDeviceKeyRolloutOnlyReadsDeploymentConfiguration(t *testing.T) {
 	cfg, err := Load()
 	require.NoError(t, err)
 	require.False(t, cfg.DesktopDeviceKeys.Enabled, "the deployment-only gate must not acquire a new environment override")
+}
+
+func TestDesktopDeviceKeyPolicyAcceptsOmittedOptionalFields(t *testing.T) {
+	for _, policy := range []string{"{}", "\n  enabled: false\n", "\n  rollout_allowlist: []\n"} {
+		t.Run(policy, func(t *testing.T) {
+			resetViperWithJWTSecret(t)
+			path := filepath.Join(t.TempDir(), "config.yaml")
+			require.NoError(t, os.WriteFile(path, []byte("desktop_device_keys: "+policy), 0600))
+			t.Setenv("CONFIG_FILE", path)
+			cfg, err := Load()
+			require.NoError(t, err)
+			require.False(t, cfg.DesktopDeviceKeys.Enabled)
+		})
+	}
 }

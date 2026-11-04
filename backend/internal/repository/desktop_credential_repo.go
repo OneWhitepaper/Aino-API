@@ -40,6 +40,10 @@ func (r *desktopCredentialRepository) IssueOrReuse(ctx context.Context, candidat
 	if revoked {
 		return nil, nil, service.ErrDesktopCredentialRevoked
 	}
+	now := time.Now()
+	if err = retireInactiveDesktopKeys(ctx, tx.Client(), candidate.UserID, now); err != nil {
+		return nil, nil, err
+	}
 	scope := []predicate.DesktopModelCredential{
 		desktopmodelcredential.UserIDEQ(candidate.UserID), desktopmodelcredential.DeviceIDEQ(candidate.DeviceID),
 		desktopmodelcredential.ConnectionGrantIDEQ(candidate.ConnectionGrantID), desktopmodelcredential.SessionFamilyIDEQ(candidate.SessionFamilyID), desktopmodelcredential.GroupIDEQ(candidate.GroupID),
@@ -54,6 +58,8 @@ func (r *desktopCredentialRepository) IssueOrReuse(ctx context.Context, candidat
 		if previous.TokenVersion != candidate.TokenVersion || previous.RevokedAt != nil && previous.RevokeReason != "expired" {
 			return nil, nil, service.ErrDesktopCredentialRevoked
 		}
+	}
+	if previous != nil && previous.RevokedAt == nil {
 		existing, err := keyRepo.GetByID(ctx, previous.APIKeyID)
 		if err != nil {
 			return nil, nil, err
@@ -61,7 +67,7 @@ func (r *desktopCredentialRepository) IssueOrReuse(ctx context.Context, candidat
 		if !existing.DesktopManaged || !existing.IsActive() || existing.GroupID == nil || *existing.GroupID != candidate.GroupID || existing.UserID != candidate.UserID {
 			return nil, nil, service.ErrDesktopCredentialRevoked
 		}
-		if previous.RevokedAt == nil && previous.ExpiresAt.After(time.Now()) && existing.ExpiresAt != nil && existing.ExpiresAt.After(time.Now()) {
+		if previous.ExpiresAt.After(now) && existing.ExpiresAt != nil && existing.ExpiresAt.After(now) {
 			// Reuse initially; renew after one third of the configured lifetime.
 			if time.Until(previous.ExpiresAt) <= ttl*2/3 || candidate.ExpiresAt.Before(previous.ExpiresAt) {
 				previous, err = tx.DesktopModelCredential.UpdateOne(previous).SetExpiresAt(candidate.ExpiresAt).Save(ctx)
@@ -77,14 +83,6 @@ func (r *desktopCredentialRepository) IssueOrReuse(ctx context.Context, candidat
 				return nil, nil, err
 			}
 			return desktopCredentialFromEntity(previous), existing, nil
-		}
-		if previous.RevokedAt == nil {
-			if _, err = tx.DesktopModelCredential.UpdateOne(previous).SetRevokedAt(time.Now()).SetRevokeReason("expired").Save(ctx); err != nil {
-				return nil, nil, err
-			}
-			if _, err = tx.APIKey.UpdateOneID(previous.APIKeyID).SetStatus(service.StatusAPIKeyDisabled).Save(ctx); err != nil {
-				return nil, nil, err
-			}
 		}
 	}
 	if err = keyRepo.Create(ctx, key); err != nil {
@@ -140,7 +138,10 @@ func (r *desktopCredentialRepository) revoke(ctx context.Context, scope predicat
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
-	rows, err := tx.DesktopModelCredential.Query().Where(scope, desktopmodelcredential.RevokedAtIsNil()).All(ctx)
+	// Natural expiry may already have retired the backing key. Explicit
+	// revocation must still fence that family and remain visible on the device.
+	eligible := desktopmodelcredential.Or(desktopmodelcredential.RevokedAtIsNil(), desktopmodelcredential.RevokeReasonEQ("expired"))
+	rows, err := tx.DesktopModelCredential.Query().Where(scope, eligible).All(ctx)
 	if err != nil {
 		return err
 	}
@@ -151,11 +152,11 @@ func (r *desktopCredentialRepository) revoke(ctx context.Context, scope predicat
 	for _, row := range rows {
 		ids = append(ids, row.APIKeyID)
 	}
-	if _, err = tx.DesktopModelCredential.Update().Where(scope, desktopmodelcredential.RevokedAtIsNil()).SetRevokedAt(time.Now()).SetRevokeReason(reason).Save(ctx); err != nil {
+	if _, err = tx.DesktopModelCredential.Update().Where(scope, eligible).SetRevokedAt(time.Now()).SetRevokeReason(reason).Save(ctx); err != nil {
 		return err
 	}
 	// Existing DB triggers enqueue durable cross-instance auth invalidations.
-	if _, err = tx.APIKey.Update().Where(apikey.IDIn(ids...), apikey.DesktopManagedEQ(true)).SetStatus(service.StatusAPIKeyDisabled).Save(ctx); err != nil {
+	if _, err = tx.APIKey.Update().Where(apikey.IDIn(ids...), apikey.DesktopManagedEQ(true), apikey.DeletedAtIsNil()).SetStatus(service.StatusAPIKeyDisabled).Save(ctx); err != nil {
 		return err
 	}
 	return tx.Commit()

@@ -792,13 +792,13 @@ async function openMyKeyPicker() {
   myKeysLoading.value = true
   try {
     const [res, rates] = await Promise.all([
-      keysAPI.list(1, 100, { status: 'active' }),
+      keysAPI.list(1, 100, { status: 'active', desktop_managed: false }),
       userGroupsAPI.getUserGroupRates(),
     ])
     const items = res.items || []
     const now = Date.now()
     myActiveKeys.value = items.filter(k => {
-      if (k.status !== 'active') return false
+      if (k.desktop_managed || !k.key?.trim() || k.status !== 'active') return false
       if (!k.expires_at) return true
       return new Date(k.expires_at).getTime() > now
     })

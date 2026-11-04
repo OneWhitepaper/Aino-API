@@ -41,6 +41,7 @@ type DesktopCredentialRepository interface {
 	IssueOrReuse(context.Context, *DesktopCredential, *APIKey, time.Duration) (*DesktopCredential, *APIKey, error)
 	GetByAPIKeyID(context.Context, int64) (*DesktopCredential, error)
 	ListByUser(context.Context, int64) ([]DesktopCredential, error)
+	RetireInactiveKeys(context.Context, int64) error
 }
 
 // Parent activity is checked against live refresh tokens, never merely set membership.
@@ -161,6 +162,7 @@ type DesktopDevice struct {
 	LastUsedAt time.Time `json:"last_used_at"`
 	ExpiresAt  time.Time `json:"expires_at"`
 	Revoked    bool      `json:"revoked"`
+	Status     string    `json:"status"`
 }
 
 func (s *DesktopCredentialService) ListDevices(ctx context.Context, userID int64) ([]DesktopDevice, error) {
@@ -170,12 +172,13 @@ func (s *DesktopCredentialService) ListDevices(ctx context.Context, userID int64
 	}
 	devices := []DesktopDevice{}
 	byID := map[string]int{}
+	now := time.Now()
 	for _, lease := range leases {
 		index, ok := byID[lease.DeviceID]
 		if !ok {
 			index = len(devices)
 			byID[lease.DeviceID] = index
-			devices = append(devices, DesktopDevice{DeviceID: lease.DeviceID, Revoked: true})
+			devices = append(devices, DesktopDevice{DeviceID: lease.DeviceID, Status: "revoked", Revoked: true})
 		}
 		device := &devices[index]
 		if lease.UpdatedAt.After(device.LastUsedAt) {
@@ -184,8 +187,16 @@ func (s *DesktopCredentialService) ListDevices(ctx context.Context, userID int64
 		if lease.ExpiresAt.After(device.ExpiresAt) {
 			device.ExpiresAt = lease.ExpiresAt
 		}
-		if lease.RevokedAt == nil && lease.ExpiresAt.After(time.Now()) {
+		// A device may have several login families. Keep it revocable until all
+		// of them have explicit revocations, even when the newest one is revoked.
+		if lease.RevokedAt == nil || lease.RevokeReason == "expired" {
 			device.Revoked = false
+			if device.Status != "active" {
+				device.Status = "expired"
+			}
+		}
+		if lease.RevokedAt == nil && lease.ExpiresAt.After(now) {
+			device.Status = "active"
 		}
 	}
 	return devices, nil

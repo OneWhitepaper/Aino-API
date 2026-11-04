@@ -384,7 +384,10 @@ func (r *usageLogRepository) loadAPIKeys(ctx context.Context, ids []int64) (map[
 	if len(ids) == 0 {
 		return out, nil
 	}
-	models, err := r.client.APIKey.Query().Where(dbapikey.IDIn(ids...)).All(ctx)
+	// IDs come from already authorized usage rows; archived desktop keys retain
+	// their display name for billing, while credential material is never read.
+	models, err := r.client.APIKey.Query().Where(dbapikey.IDIn(ids...), apiKeyUsageMetadataPredicate()).
+		Select(apiKeyUsageMetadataFields...).All(mixins.SkipSoftDelete(ctx))
 	if err != nil {
 		return nil, err
 	}

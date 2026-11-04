@@ -127,6 +127,22 @@ func (h *APIKeyHandler) List(c *gin.Context) {
 		filters.Search = search
 	}
 	filters.Status = c.Query("status")
+	if value, present := c.GetQuery("include_archived"); present {
+		include, err := strconv.ParseBool(value)
+		if err != nil {
+			response.BadRequest(c, "Invalid include_archived filter")
+			return
+		}
+		filters.IncludeArchived = include
+	}
+	if value, present := c.GetQuery("desktop_managed"); present {
+		managed, err := strconv.ParseBool(value)
+		if err != nil {
+			response.BadRequest(c, "Invalid desktop_managed filter")
+			return
+		}
+		filters.DesktopManaged = &managed
+	}
 	if groupIDStr := c.Query("group_id"); groupIDStr != "" {
 		gid, err := strconv.ParseInt(groupIDStr, 10, 64)
 		if err == nil {

@@ -85,7 +85,7 @@ func (h *UsageHandler) parseUserUsageFilters(c *gin.Context, requireRange bool) 
 			response.InternalError(c, "API key service not available")
 			return nil, false
 		}
-		apiKey, err := h.apiKeyService.GetByID(c.Request.Context(), id)
+		apiKey, err := h.apiKeyService.GetUsageMetadata(c.Request.Context(), id)
 		if err != nil {
 			response.ErrorFrom(c, err)
 			return nil, false
@@ -664,7 +664,7 @@ func (h *UsageHandler) DashboardAPIKeysUsage(c *gin.Context) {
 		return
 	}
 
-	validAPIKeyIDs, err := h.apiKeyService.VerifyOwnership(c.Request.Context(), subject.UserID, req.APIKeyIDs)
+	validAPIKeyIDs, err := h.apiKeyService.VerifyUsageOwnership(c.Request.Context(), subject.UserID, req.APIKeyIDs)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -710,7 +710,7 @@ func (h *UsageHandler) GetMyAPIKeyDailyUsage(c *gin.Context) {
 		return
 	}
 
-	apiKey, err := h.apiKeyService.GetByID(c.Request.Context(), apiKeyID)
+	apiKey, err := h.apiKeyService.GetUsageMetadata(c.Request.Context(), apiKeyID)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return

@@ -10,6 +10,22 @@
     <TablePageLayout>
       <template #filters>
         <div class="flex flex-col gap-3">
+          <div class="tabs w-full self-start sm:w-auto" role="group" :aria-label="t('keys.keyTypes.label')">
+            <button
+              v-for="type in keyTypeOptions"
+              :key="String(type.managed)"
+              type="button"
+              class="tab flex-1 sm:flex-none"
+              :class="{ 'tab-active': filterDesktopManaged === type.managed }"
+              :aria-pressed="filterDesktopManaged === type.managed"
+              @click="onKeyTypeChange(type.managed)"
+            >
+              {{ type.label }}
+            </button>
+          </div>
+          <p class="text-sm leading-relaxed text-gray-500 dark:text-dark-400">
+            {{ t(filterDesktopManaged ? 'keys.desktopManagedHint' : 'keys.manualKeyHint') }}
+          </p>
           <div class="flex flex-wrap items-center gap-3">
             <SearchInput
               v-model="filterSearch"
@@ -370,15 +386,15 @@
             <span v-else class="text-sm text-gray-400 dark:text-dark-500">{{ t('keys.noExpiration') }}</span>
           </template>
 
-          <template #cell-status="{ value }">
+          <template #cell-status="{ row }">
             <span :class="[
               'badge',
-              value === 'active' ? 'badge-success' :
-              value === 'quota_exhausted' ? 'badge-warning' :
-              value === 'expired' ? 'badge-danger' :
+              keyDisplayStatus(row) === 'active' ? 'badge-success' :
+              keyDisplayStatus(row) === 'quota_exhausted' ? 'badge-warning' :
+              keyDisplayStatus(row) === 'expired' ? 'badge-danger' :
               'badge-gray'
             ]">
-              {{ t('keys.status.' + value) }}
+              {{ t('keys.status.' + keyDisplayStatus(row)) }}
             </span>
           </template>
 
@@ -457,9 +473,9 @@
 
           <template #empty>
             <EmptyState
-              :title="t('keys.noKeysYet')"
-              :description="t('keys.createFirstKey')"
-              :action-text="t('keys.createKey')"
+              :title="t(filterDesktopManaged ? 'keys.desktopEmptyTitle' : 'keys.noKeysYet')"
+              :description="t(filterDesktopManaged ? 'keys.desktopManagedHint' : 'keys.createFirstKey')"
+              :action-text="filterDesktopManaged ? undefined : t('keys.createKey')"
               @action="showCreateModal = true"
             />
           </template>
@@ -1402,6 +1418,10 @@ const groups = ref<Group[]>([])
 const loading = ref(false)
 const submitting = ref(false)
 const now = ref(new Date())
+const keyDisplayStatus = (key: ApiKey): ApiKey['status'] =>
+  key.status === 'active' && key.expires_at && new Date(key.expires_at) <= now.value
+    ? 'expired'
+    : key.status
 let resetTimer: ReturnType<typeof setInterval> | null = null
 const usageStats = ref<Record<string, BatchApiKeyUsageStats>>({})
 const userGroupRates = ref<Record<number, number>>({})
@@ -1419,6 +1439,7 @@ const sortState = ref({
 
 // Filter state
 const filterSearch = ref('')
+const filterDesktopManaged = ref(false)
 const filterStatus = ref('')
 const filterGroupId = ref<string | number>('')
 
@@ -1518,6 +1539,11 @@ const shouldSubmitEditStatus = (key: ApiKey, status: 'active' | 'inactive') => {
 }
 
 // Filter dropdown options
+const keyTypeOptions = computed(() => [
+  { managed: false, label: t('keys.keyTypes.manual') },
+  { managed: true, label: t('keys.keyTypes.desktop') }
+])
+
 const groupFilterOptions = computed(() => [
   { value: '', label: t('keys.allGroups') },
   { value: 0, label: t('keys.noGroup') },
@@ -1540,6 +1566,12 @@ const onFilterChange = () => {
 
 const onGroupFilterChange = (value: string | number | boolean | null) => {
   filterGroupId.value = value as string | number
+  onFilterChange()
+}
+
+const onKeyTypeChange = (managed: boolean) => {
+  if (filterDesktopManaged.value === managed) return
+  filterDesktopManaged.value = managed
   onFilterChange()
 }
 
@@ -1632,10 +1664,11 @@ const loadApiKeys = async () => {
     const filters: {
       search?: string
       status?: string
+      desktop_managed: boolean
       group_id?: number | string
       sort_by?: string
       sort_order?: 'asc' | 'desc'
-    } = {}
+    } = { desktop_managed: filterDesktopManaged.value }
     if (filterSearch.value) filters.search = filterSearch.value
     if (filterStatus.value) filters.status = filterStatus.value
     if (filterGroupId.value !== '') filters.group_id = filterGroupId.value
@@ -1925,6 +1958,8 @@ const handleSubmit = async () => {
         expiresInDays,
         rateLimitData
       )
+      filterDesktopManaged.value = false
+      pagination.value.page = 1
       appStore.showSuccess(t('keys.keyCreatedSuccess'))
       // Only advance tour if active, on submit step, and creation succeeded
       if (onboardingStore.isCurrentStep('[data-tour="key-form-submit"]')) {

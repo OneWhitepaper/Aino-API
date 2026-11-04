@@ -244,7 +244,7 @@ describe('user UsageView', () => {
       include_group_stats: true,
     }))
     expect(list).toHaveBeenCalledTimes(1)
-    expect(list).toHaveBeenCalledWith(1, 100)
+    expect(list).toHaveBeenCalledWith(1, 100, { include_archived: true })
     expect(getAvailable).toHaveBeenCalled()
   })
 
@@ -261,7 +261,7 @@ describe('user UsageView', () => {
     const wrapper = mountUsageView()
     await flushPromises()
 
-    expect(list.mock.calls).toEqual([[1, 100], [2, 100]])
+    expect(list.mock.calls).toEqual([[1, 100, { include_archived: true }], [2, 100, { include_archived: true }]])
     const usageKeySelect = wrapper.findAllComponents(Select).find((select) =>
       select.props('options').some((option: SelectOption) => option.label === 'All API Keys')
     )!
@@ -299,13 +299,31 @@ describe('user UsageView', () => {
     wrapper.unmount()
   })
 
+  it('keeps archived desktop authorization available for historical usage filters', async () => {
+    const archived = { id: 109, name: 'Aino desktop', desktop_managed: true, key: '', status: 'inactive' }
+    list.mockImplementation(async (_page, _size, filters) => ({
+      items: filters?.include_archived ? [archived] : [], total: 1, page: 1, page_size: 100, pages: 1,
+    }))
+    const wrapper = mountUsageView()
+    await flushPromises()
+    const keySelect = wrapper.findAllComponents(Select).find((select) =>
+      select.props('options').some((option: SelectOption) => option.label === 'All API Keys')
+    )!
+    expect(keySelect.props('options')).toContainEqual({ value: archived.id, label: archived.name })
+    keySelect.vm.$emit('update:modelValue', archived.id)
+    keySelect.vm.$emit('change', archived.id)
+    await flushPromises()
+    expect(query).toHaveBeenCalledWith(expect.objectContaining({ api_key_id: archived.id }), expect.anything())
+    wrapper.unmount()
+  })
+
   it('does not request another API key page when the user has no keys', async () => {
     list.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 100, pages: 0 })
 
     const wrapper = mountUsageView()
     await flushPromises()
 
-    expect(list.mock.calls).toEqual([[1, 100]])
+    expect(list.mock.calls).toEqual([[1, 100, { include_archived: true }]])
     const keySelect = wrapper.findAllComponents(Select).find((select) =>
       select.props('options').some((option: SelectOption) => option.label === 'All API Keys')
     )!
@@ -326,7 +344,7 @@ describe('user UsageView', () => {
     const wrapper = mountUsageView()
     await flushPromises()
 
-    expect(list.mock.calls).toEqual([[1, 100], [2, 100]])
+    expect(list.mock.calls).toEqual([[1, 100, { include_archived: true }], [2, 100, { include_archived: true }]])
     const keySelect = wrapper.findAllComponents(Select).find((select) =>
       select.props('options').some((option: SelectOption) => option.label === 'All API Keys')
     )!

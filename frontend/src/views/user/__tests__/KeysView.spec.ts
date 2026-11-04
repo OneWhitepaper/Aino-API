@@ -48,6 +48,9 @@ const messages: Record<string, string> = {
   'keys.group': 'Group',
   'keys.id': 'ID',
   'keys.currentConcurrency': 'Current Concurrency',
+  'keys.keyTypes.label': 'Key type',
+  'keys.keyTypes.manual': 'Personal keys',
+  'keys.keyTypes.desktop': 'Desktop managed',
   'keys.lastUsedAt': 'Last Used',
   'keys.lastUsedIP': 'Last Used IP',
   'keys.rateLimitColumn': 'Rate Limit',
@@ -179,6 +182,9 @@ const DataTableStub = {
         <slot name="cell-key" :value="row.key" :row="row" />
         <slot name="cell-group" :row="row" />
         <slot name="cell-actions" :row="row" />
+        <div data-test="key-status">
+          <slot name="cell-status" :value="row.status" :row="row" />
+        </div>
         <div data-test="current-concurrency">
           <slot name="cell-current_concurrency" :value="row.current_concurrency" :row="row" />
         </div>
@@ -340,6 +346,61 @@ describe('user KeysView column settings', () => {
     await getButtonByText(wrapper, 'common.delete').trigger('click')
     expect(wrapper.findComponent({ name: 'ConfirmDialog' }).props('show')).toBe(true)
     expect(updateKey).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('loads personal keys by default and resets pagination and selection when viewing desktop authorizations', async () => {
+    const wrapper = await mountView()
+    expect(listKeys).toHaveBeenLastCalledWith(1, 20,
+      expect.objectContaining({ desktop_managed: false }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }))
+
+    await wrapper.get('[data-test="page-2"]').trigger('click')
+    await flushPromises()
+    const table = wrapper.findComponent({ name: 'DataTable' })
+    table.vm.$emit('update:selectedKeys', [1])
+    await nextTick()
+    listKeys.mockResolvedValue({ items: [{ ...createApiKey(), key: '', desktop_managed: true }], total: 1, page: 1, page_size: 20, pages: 1 })
+    await getButtonByText(wrapper, 'Desktop managed').trigger('click')
+    await flushPromises()
+
+    expect(listKeys).toHaveBeenLastCalledWith(1, 20,
+      expect.objectContaining({ desktop_managed: true }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }))
+    expect(table.props('selectedKeys')).toEqual([])
+    expect(wrapper.text()).toContain('keys.desktopManaged')
+    expect(wrapper.findAll('button').some(button => button.text().includes('common.delete'))).toBe(true)
+    await getButtonByText(wrapper, 'Personal keys').trigger('click')
+    await flushPromises()
+    expect(listKeys).toHaveBeenLastCalledWith(1, 20,
+      expect.objectContaining({ desktop_managed: false }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }))
+    wrapper.unmount()
+  })
+
+  it('explains automatic desktop authorization without suggesting a manual key for the managed empty state', async () => {
+    listKeys.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20, pages: 0 })
+    const wrapper = await mountView()
+    expect(wrapper.findComponent({ name: 'EmptyState' }).props('actionText')).toBe('Create API Key')
+    await getButtonByText(wrapper, 'Desktop managed').trigger('click')
+    await flushPromises()
+    const empty = wrapper.findComponent({ name: 'EmptyState' })
+    expect(empty.props('title')).toBe('keys.desktopEmptyTitle')
+    expect(empty.props('description')).toBe('keys.desktopManagedHint')
+    expect(empty.props('actionText')).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it('shows a naturally expired active key as expired while preserving explicit disabled status', async () => {
+    listKeys.mockResolvedValue({
+      items: [
+        { ...createApiKey(), expires_at: '2000-01-01T00:00:00Z' },
+        { ...createApiKey(), id: 2, status: 'inactive', expires_at: '2000-01-01T00:00:00Z' },
+        { ...createApiKey(), id: 3, expires_at: '2999-01-01T00:00:00Z' }
+      ], total: 3, page: 1, page_size: 20, pages: 1
+    })
+    const wrapper = await mountView()
+    expect(wrapper.findAll('[data-test="key-status"]').map(status => status.text())).toEqual(['Expired', 'Inactive', 'Active'])
     wrapper.unmount()
   })
 
@@ -640,6 +701,7 @@ describe('user KeysView column settings', () => {
       1,
       50,
       {
+        desktop_managed: false,
         search: 'target',
         status: 'active',
         group_id: 42,
@@ -684,6 +746,23 @@ describe('user KeysView column settings', () => {
       await chooseProvider(wrapper, 'other')
       expect(optionIds(wrapper)).toEqual([7, 8, 9, 10, 11, 12])
       expect(wrapper.findAllComponents({ name: 'Select' })[0].props('options')).toHaveLength(14)
+    })
+
+    it('returns to personal keys after creating a key from the desktop view', async () => {
+      const wrapper = await mountView()
+      await getButtonByText(wrapper, 'Desktop managed').trigger('click')
+      await flushPromises()
+      await wrapper.get('[data-tour="keys-create-btn"]').trigger('click')
+      await wrapper.get('[data-tour="key-form-name"]').setValue('New personal key')
+      await groupSelect(wrapper).vm.$emit('update:modelValue', 1)
+      vi.mocked(keysAPI.create).mockResolvedValue({ ...createApiKey(), group_id: 1 })
+      await wrapper.get('#key-form').trigger('submit')
+      await flushPromises()
+      expect(listKeys).toHaveBeenLastCalledWith(1, 20,
+        expect.objectContaining({ desktop_managed: false }),
+        expect.objectContaining({ signal: expect.any(AbortSignal) }))
+      expect(getButtonByText(wrapper, 'Personal keys').attributes('aria-pressed')).toBe('true')
+      wrapper.unmount()
     })
 
     it('clears the previous group on provider change and submits only the newly selected group', async () => {

@@ -142,7 +142,9 @@ func (k *APIKey) EffectiveUsage7d() float64 {
 
 // APIKeyListFilters holds optional filtering parameters for listing API keys.
 type APIKeyListFilters struct {
-	Search  string
-	Status  string
-	GroupID *int64 // nil=不筛选, 0=无分组, >0=指定分组
+	Search          string
+	Status          string
+	GroupID         *int64 // nil=不筛选, 0=无分组, >0=指定分组
+	DesktopManaged  *bool  // nil includes both manual and desktop-managed keys.
+	IncludeArchived bool   // Usage history may include archived desktop key metadata.
 }

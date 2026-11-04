@@ -437,6 +437,9 @@ func (r *apiKeyRepository) deleteWithTombstone(ctx context.Context, exec *dbent.
 
 func (r *apiKeyRepository) apiKeyListByUserIDQuery(userID int64, filters service.APIKeyListFilters) *dbent.APIKeyQuery {
 	q := r.activeQuery().Where(apikey.UserIDEQ(userID))
+	if filters.IncludeArchived {
+		q = r.client.APIKey.Query().Where(apikey.UserIDEQ(userID), apiKeyUsageMetadataPredicate())
+	}
 
 	if filters.Search != "" {
 		q = q.Where(apikey.Or(
@@ -444,8 +447,17 @@ func (r *apiKeyRepository) apiKeyListByUserIDQuery(userID int64, filters service
 			apikey.KeyContainsFold(filters.Search),
 		))
 	}
-	if filters.Status != "" {
+	switch filters.Status {
+	case service.StatusAPIKeyActive:
+		q = q.Where(apikey.StatusEQ(service.StatusAPIKeyActive), apikey.Or(apikey.ExpiresAtIsNil(), apikey.ExpiresAtGT(time.Now())))
+	case service.StatusAPIKeyExpired:
+		q = q.Where(apikey.Or(apikey.StatusEQ(service.StatusAPIKeyExpired), apikey.And(apikey.StatusEQ(service.StatusAPIKeyActive), apikey.ExpiresAtLTE(time.Now()))))
+	case "":
+	default:
 		q = q.Where(apikey.StatusEQ(filters.Status))
+	}
+	if filters.DesktopManaged != nil {
+		q = q.Where(apikey.DesktopManagedEQ(*filters.DesktopManaged))
 	}
 	if filters.GroupID != nil {
 		if *filters.GroupID == 0 {
@@ -459,6 +471,9 @@ func (r *apiKeyRepository) apiKeyListByUserIDQuery(userID int64, filters service
 }
 
 func (r *apiKeyRepository) ListByUserID(ctx context.Context, userID int64, params pagination.PaginationParams, filters service.APIKeyListFilters) ([]service.APIKey, *pagination.PaginationResult, error) {
+	if filters.IncludeArchived {
+		ctx = mixins.SkipSoftDelete(ctx)
+	}
 	q := r.apiKeyListByUserIDQuery(userID, filters)
 
 	total, err := q.Count(ctx)
@@ -491,6 +506,9 @@ func (r *apiKeyRepository) ListByUserID(ctx context.Context, userID int64, param
 }
 
 func (r *apiKeyRepository) ListAllByUserID(ctx context.Context, userID int64, filters service.APIKeyListFilters) ([]service.APIKey, error) {
+	if filters.IncludeArchived {
+		ctx = mixins.SkipSoftDelete(ctx)
+	}
 	keys, err := r.apiKeyListByUserIDQuery(userID, filters).
 		WithGroup().
 		Order(dbent.Asc(apikey.FieldID)).

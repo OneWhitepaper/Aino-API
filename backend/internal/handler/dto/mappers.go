@@ -91,6 +91,10 @@ func APIKeyFromService(k *service.APIKey) *APIKey {
 	if k.DesktopManaged {
 		publicKey = ""
 	}
+	status := k.Status
+	if status == service.StatusAPIKeyActive && k.ExpiresAt != nil && !k.ExpiresAt.After(time.Now()) {
+		status = service.StatusAPIKeyExpired
+	}
 	out := &APIKey{
 		DesktopManaged:     k.DesktopManaged,
 		ID:                 k.ID,
@@ -98,7 +102,7 @@ func APIKeyFromService(k *service.APIKey) *APIKey {
 		Key:                publicKey,
 		Name:               k.Name,
 		GroupID:            k.GroupID,
-		Status:             k.Status,
+		Status:             status,
 		IPWhitelist:        k.IPWhitelist,
 		IPBlacklist:        k.IPBlacklist,
 		LastUsedAt:         k.LastUsedAt,

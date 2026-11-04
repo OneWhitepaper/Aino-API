@@ -110,6 +110,14 @@ export default {
     created: 'Created',
     copyToClipboard: 'Copy to clipboard',
     desktopManaged: 'Aino desktop managed (delete to revoke)',
+    keyTypes: {
+      label: 'Key type',
+      manual: 'Personal keys',
+      desktop: 'Desktop managed'
+    },
+    manualKeyHint: 'Keys you create and manage for third-party tools and API access. View automatic Aino desktop authorizations under Desktop managed.',
+    desktopManagedHint: 'Temporary authorizations that Aino desktop creates and renews automatically. Expired authorizations are archived. Delete one to revoke it; no manual setup is needed.',
+    desktopEmptyTitle: 'No desktop authorizations',
     copied: 'Copied!',
     importToCcSwitch: 'Import to CCS',
     enable: 'Enable',

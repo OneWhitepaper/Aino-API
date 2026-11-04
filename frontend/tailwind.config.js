@@ -5,15 +5,21 @@ export default {
   theme: {
     extend: {
       colors: {
+        // Aino neutral scale: shared by legacy utility classes and new layouts.
+        gray: {
+          50: '#f5f6f7', 100: '#eef1f3', 200: '#e5e7e9', 300: '#cbd3d9',
+          400: '#83939e', 500: '#636f79', 600: '#4e6271', 700: '#304f63',
+          800: '#173d55', 900: '#092e48', 950: '#06283f'
+        },
         // 主色调 - Teal/Cyan 青色系
         primary: {
-          50: '#f0fdfa',
-          100: '#ccfbf1',
+          50: '#effaf6',
+          100: '#e9f9f3',
           200: '#99f6e4',
           300: '#5eead4',
           400: '#2dd4bf',
-          500: '#14b8a6',
-          600: '#0d9488',
+          500: '#19b8a6',
+          600: '#087d72',
           700: '#0f766e',
           800: '#115e59',
           900: '#134e4a',
@@ -38,18 +44,19 @@ export default {
           50: '#f8fafc',
           100: '#f1f5f9',
           200: '#e2e8f0',
-          300: '#cbd5e1',
-          400: '#94a3b8',
-          500: '#64748b',
-          600: '#475569',
-          700: '#334155',
-          800: '#1e293b',
-          900: '#0f172a',
-          950: '#020617'
+          300: '#cbdde7',
+          400: '#a9b9c3',
+          500: '#849aa8',
+          600: '#496575',
+          700: '#304959',
+          800: '#1a3647',
+          900: '#142d3d',
+          950: '#0c202e'
         }
       },
       fontFamily: {
         sans: [
+          'Figtree',
           'system-ui',
           '-apple-system',
           'BlinkMacSystemFont',
@@ -67,10 +74,10 @@ export default {
       boxShadow: {
         glass: '0 8px 32px rgba(0, 0, 0, 0.08)',
         'glass-sm': '0 4px 16px rgba(0, 0, 0, 0.06)',
-        glow: '0 0 20px rgba(20, 184, 166, 0.25)',
-        'glow-lg': '0 0 40px rgba(20, 184, 166, 0.35)',
-        card: '0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06)',
-        'card-hover': '0 10px 40px rgba(0, 0, 0, 0.08)',
+        glow: '0 2px 8px rgba(9, 46, 72, 0.06)',
+        'glow-lg': '0 4px 16px rgba(9, 46, 72, 0.08)',
+        card: '0 2px 8px rgba(9, 46, 72, 0.025)',
+        'card-hover': '0 6px 20px rgba(9, 46, 72, 0.06)',
         'inner-glow': 'inset 0 1px 0 rgba(255, 255, 255, 0.1)'
       },
       backgroundImage: {

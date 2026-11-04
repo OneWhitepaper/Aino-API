@@ -296,6 +296,67 @@ async function mountSubscriptionPlanList(planCount: number) {
   return wrapper
 }
 
+describe('PaymentView recharge checkout summary', () => {
+  beforeEach(() => {
+    routeState.path = '/purchase'
+    routeState.query = {}
+    appStoreState.setPublicSettings(undefined)
+    createOrder.mockReset()
+    window.localStorage.clear()
+  })
+
+  async function mountRecharge(checkout: Partial<CheckoutInfoResponse> = {}) {
+    getCheckoutInfo.mockReset().mockResolvedValue(checkoutInfoFixture(checkout))
+    const wrapper = shallowMount(PaymentView, {
+      global: { stubs: { AppLayout: { template: '<div><slot /></div>' }, Teleport: true, Transition: false } },
+    })
+    await flushPromises()
+    return wrapper
+  }
+
+  it('keeps an empty summary visible and payment disabled until an amount is entered', async () => {
+    const wrapper = await mountRecharge()
+    const summary = wrapper.get('[data-testid="recharge-summary"]')
+    expect(summary.text()).toContain(formatPaymentAmount(0, 'CNY'))
+    expect(wrapper.get('[data-testid="recharge-submit"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-testid="recharge-balance"]').text()).toContain('$0.00')
+    expect(createOrder).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('supports keyboard tab switching while preserving the recharge amount', async () => {
+    const wrapper = await mountRecharge()
+    wrapper.findComponent(AmountInput).vm.$emit('update:modelValue', 100)
+    await flushPromises()
+    const tabs = wrapper.findAll('[role="tab"]')
+    await tabs[0].trigger('keydown', { key: 'ArrowRight' })
+    expect(tabs[1].attributes('aria-selected')).toBe('true')
+    expect(wrapper.get('[role="tabpanel"]').attributes('aria-labelledby')).toBe(tabs[1].attributes('id'))
+    await tabs[1].trigger('keydown', { key: 'Home' })
+    expect(tabs[0].attributes('tabindex')).toBe('0')
+    expect(wrapper.get('[data-testid="recharge-summary"]').text()).toContain(formatPaymentAmount(100, 'CNY'))
+    expect(createOrder).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('preserves discounts, fees and credited USD when updating the new summary', async () => {
+    const wrapper = await mountRecharge({
+      balance_recharge_multiplier: 0.14, recharge_fee_rate: 10, recharge_bonus_mode: 'discount',
+      recharge_bonus_tiers: [{ min_amount: 100, bonus_percent: 20 }],
+    })
+    wrapper.getComponent(AmountInput).vm.$emit('update:modelValue', 100)
+    await flushPromises()
+    const summary = wrapper.get('[data-testid="recharge-summary"]')
+    expect(summary.get('[data-testid="recharge-discount-row"]').text()).toContain(formatPaymentAmount(20, 'CNY'))
+    expect(summary.get('[data-testid="recharge-fee-row"]').text()).toContain(formatPaymentAmount(8, 'CNY'))
+    expect(summary.get('[data-testid="recharge-credited-row"]').text()).toContain('$14.00')
+    expect(wrapper.get('[data-testid="recharge-submit"]').text()).toContain(formatPaymentAmount(88, 'CNY'))
+    expect(wrapper.get('[data-testid="recharge-submit"]').attributes('disabled')).toBeUndefined()
+    expect(createOrder).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+})
+
 describe('PaymentView help text', () => {
   beforeEach(() => {
     vi.useRealTimers()

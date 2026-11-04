@@ -44,7 +44,14 @@ func (h *SettingHandler) GetPublicSettings(c *gin.Context) {
 	}
 
 	response.Success(c, dto.PublicSettings{
+		DesktopAPIVersion:                   service.DesktopAPIVersion,
+		DesktopEnabled:                      settings.DesktopEnabled,
 		RegistrationEnabled:                 settings.RegistrationEnabled,
+		PhoneLoginEnabled:                   settings.PhoneLoginEnabled,
+		PhoneRegistrationEnabled:            settings.PhoneRegistrationEnabled,
+		PhoneBindingEnabled:                 settings.PhoneBindingEnabled,
+		PhoneRegions:                        settings.PhoneRegions,
+		PhoneCodeLength:                     settings.PhoneCodeLength,
 		EmailVerifyEnabled:                  settings.EmailVerifyEnabled,
 		ForceEmailOnThirdPartySignup:        settings.ForceEmailOnThirdPartySignup,
 		RegistrationEmailSuffixWhitelist:    settings.RegistrationEmailSuffixWhitelist,
@@ -94,6 +101,7 @@ func (h *SettingHandler) GetPublicSettings(c *gin.Context) {
 		GitHubOAuthEnabled:                  settings.GitHubOAuthEnabled,
 		GoogleOAuthEnabled:                  settings.GoogleOAuthEnabled,
 		BackendModeEnabled:                  settings.BackendModeEnabled,
+		MCPEnabled:                          settings.MCPEnabled,
 		PaymentEnabled:                      settings.PaymentEnabled,
 		PaymentBalanceDisabled:              settings.PaymentBalanceDisabled,
 		Version:                             h.version,

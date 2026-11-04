@@ -17,6 +17,7 @@ import type {
   UserAffiliateDetail,
   AffiliateTransferResponse,
   PlatformQuotasResponse,
+  ActionCaptchaRequestProof,
 } from '@/types'
 
 /**
@@ -108,6 +109,31 @@ export async function bindEmailIdentity(payload: {
 }): Promise<User> {
   const { data } = await apiClient.post<User>('/user/account-bindings/email', payload)
   return data
+}
+
+export interface PhoneBindingChallenge {
+  challenge_id: string
+  expires_in: number
+  retry_after?: number
+  delivery: string
+}
+
+export interface PhoneBindingCodeRequest extends ActionCaptchaRequestProof {
+  phone: string
+}
+
+export async function sendPhoneBindingCode(request: PhoneBindingCodeRequest): Promise<PhoneBindingChallenge> {
+  const { data } = await apiClient.post<PhoneBindingChallenge>('/user/account-bindings/phone/send-code', request)
+  return data
+}
+
+export async function bindPhoneIdentity(payload: {
+  phone: string
+  challenge_id: string
+  code: string
+}): Promise<User> {
+  const { data } = await apiClient.post<{ user: User }>('/user/account-bindings/phone', payload)
+  return data.user
 }
 
 export async function unbindAuthIdentity(provider: BindableOAuthProvider): Promise<User> {
@@ -204,6 +230,8 @@ export const userAPI = {
   toggleNotifyEmail,
   sendEmailBindingCode,
   bindEmailIdentity,
+  sendPhoneBindingCode,
+  bindPhoneIdentity,
   unbindAuthIdentity,
   buildOAuthBindingStartURL,
   startOAuthBinding,

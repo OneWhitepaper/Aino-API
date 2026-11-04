@@ -76,6 +76,11 @@ func (u *User) IsActive() bool {
 	return u.Status == StatusActive
 }
 
+// ResolvedTokenVersion returns the identity fingerprint used by authentication.
+func (u *User) ResolvedTokenVersion() int64 {
+	return resolvedTokenVersion(u)
+}
+
 // CanBindGroup checks whether a user can bind to a given group.
 // For standard groups:
 //   - Public groups (non-exclusive): bindable by every user, unless the user has

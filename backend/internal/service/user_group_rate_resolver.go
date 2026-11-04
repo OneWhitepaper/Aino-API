@@ -22,7 +22,9 @@ func newUserGroupRateResolver(repo UserGroupRateRepository, cache *gocache.Cache
 	if cacheTTL <= 0 {
 		cacheTTL = defaultUserGroupRateCacheTTL
 	}
-	if cache == nil {
+	// Without a repository Resolve can only return the default or a supplied cached value.
+	// Fallback callers may construct a resolver per request; do not start unused janitors.
+	if cache == nil && repo != nil {
 		cache = gocache.New(cacheTTL, time.Minute)
 	}
 	if logComponent == "" {

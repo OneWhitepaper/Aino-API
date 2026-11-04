@@ -44,6 +44,7 @@ func (r *apiKeyRepository) activeQuery() *dbent.APIKeyQuery {
 
 func (r *apiKeyRepository) Create(ctx context.Context, key *service.APIKey) error {
 	builder := r.client.APIKey.Create().
+		SetDesktopManaged(key.DesktopManaged).
 		SetUserID(key.UserID).
 		SetKey(key.Key).
 		SetName(key.Name).
@@ -131,6 +132,7 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 	m, err := r.activeQuery().
 		Where(apikey.KeyEQ(key)).
 		Select(
+			apikey.FieldDesktopManaged,
 			apikey.FieldID,
 			apikey.FieldUserID,
 			apikey.FieldGroupID,
@@ -183,6 +185,7 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 				group.FieldMonthlyLimitUsd,
 				group.FieldAllowImageGeneration,
 				group.FieldAllowBatchImageGeneration,
+				group.FieldImageCountBilling,
 				group.FieldImageRateIndependent,
 				group.FieldImageRateMultiplier,
 				group.FieldImagePrice1k,
@@ -434,6 +437,9 @@ func (r *apiKeyRepository) deleteWithTombstone(ctx context.Context, exec *dbent.
 
 func (r *apiKeyRepository) apiKeyListByUserIDQuery(userID int64, filters service.APIKeyListFilters) *dbent.APIKeyQuery {
 	q := r.activeQuery().Where(apikey.UserIDEQ(userID))
+	if filters.IncludeArchived {
+		q = r.client.APIKey.Query().Where(apikey.UserIDEQ(userID), apiKeyUsageMetadataPredicate())
+	}
 
 	if filters.Search != "" {
 		q = q.Where(apikey.Or(
@@ -441,8 +447,17 @@ func (r *apiKeyRepository) apiKeyListByUserIDQuery(userID int64, filters service
 			apikey.KeyContainsFold(filters.Search),
 		))
 	}
-	if filters.Status != "" {
+	switch filters.Status {
+	case service.StatusAPIKeyActive:
+		q = q.Where(apikey.StatusEQ(service.StatusAPIKeyActive), apikey.Or(apikey.ExpiresAtIsNil(), apikey.ExpiresAtGT(time.Now())))
+	case service.StatusAPIKeyExpired:
+		q = q.Where(apikey.Or(apikey.StatusEQ(service.StatusAPIKeyExpired), apikey.And(apikey.StatusEQ(service.StatusAPIKeyActive), apikey.ExpiresAtLTE(time.Now()))))
+	case "":
+	default:
 		q = q.Where(apikey.StatusEQ(filters.Status))
+	}
+	if filters.DesktopManaged != nil {
+		q = q.Where(apikey.DesktopManagedEQ(*filters.DesktopManaged))
 	}
 	if filters.GroupID != nil {
 		if *filters.GroupID == 0 {
@@ -456,6 +471,9 @@ func (r *apiKeyRepository) apiKeyListByUserIDQuery(userID int64, filters service
 }
 
 func (r *apiKeyRepository) ListByUserID(ctx context.Context, userID int64, params pagination.PaginationParams, filters service.APIKeyListFilters) ([]service.APIKey, *pagination.PaginationResult, error) {
+	if filters.IncludeArchived {
+		ctx = mixins.SkipSoftDelete(ctx)
+	}
 	q := r.apiKeyListByUserIDQuery(userID, filters)
 
 	total, err := q.Count(ctx)
@@ -488,6 +506,9 @@ func (r *apiKeyRepository) ListByUserID(ctx context.Context, userID int64, param
 }
 
 func (r *apiKeyRepository) ListAllByUserID(ctx context.Context, userID int64, filters service.APIKeyListFilters) ([]service.APIKey, error) {
+	if filters.IncludeArchived {
+		ctx = mixins.SkipSoftDelete(ctx)
+	}
 	keys, err := r.apiKeyListByUserIDQuery(userID, filters).
 		WithGroup().
 		Order(dbent.Asc(apikey.FieldID)).
@@ -610,7 +631,7 @@ func (r *apiKeyRepository) VerifyOwnership(ctx context.Context, userID int64, ap
 }
 
 func (r *apiKeyRepository) CountByUserID(ctx context.Context, userID int64) (int64, error) {
-	count, err := r.activeQuery().Where(apikey.UserIDEQ(userID)).Count(ctx)
+	count, err := r.activeQuery().Where(apikey.UserIDEQ(userID), apikey.DesktopManagedEQ(false)).Count(ctx)
 	return int64(count), err
 }
 
@@ -651,6 +672,17 @@ func (r *apiKeyRepository) ListByGroupID(ctx context.Context, groupID int64, par
 func apiKeyListOrder(params pagination.PaginationParams) []func(*entsql.Selector) {
 	sortBy := strings.ToLower(strings.TrimSpace(params.SortBy))
 	sortOrder := params.NormalizedSortOrder(pagination.SortOrderDesc)
+
+	if sortBy == "group" {
+		// Sort before pagination, keeping ungrouped keys last in either direction.
+		opts := []entsql.OrderTermOption{entsql.OrderNullsLast()}
+		tieOrder := dbent.Asc(apikey.FieldID)
+		if sortOrder == pagination.SortOrderDesc {
+			opts = append(opts, entsql.OrderDesc())
+			tieOrder = dbent.Desc(apikey.FieldID)
+		}
+		return []func(*entsql.Selector){apikey.ByGroupField(group.FieldName, opts...), tieOrder}
+	}
 
 	var field string
 	switch sortBy {
@@ -846,7 +878,7 @@ func (r *apiKeyRepository) ResetRateLimitWindows(ctx context.Context, id int64) 
 // GetRateLimitData returns the current rate limit usage and window start times for an API key.
 func (r *apiKeyRepository) GetRateLimitData(ctx context.Context, id int64) (result *service.APIKeyRateLimitData, err error) {
 	rows, err := r.sql.QueryContext(ctx, `
-		SELECT usage_5h, usage_1d, usage_7d, window_5h_start, window_1d_start, window_7d_start
+		SELECT quota_used, usage_5h, usage_1d, usage_7d, window_5h_start, window_1d_start, window_7d_start
 		FROM api_keys
 		WHERE id = $1 AND deleted_at IS NULL`,
 		id)
@@ -862,7 +894,7 @@ func (r *apiKeyRepository) GetRateLimitData(ctx context.Context, id int64) (resu
 		return nil, service.ErrAPIKeyNotFound
 	}
 	data := &service.APIKeyRateLimitData{}
-	if err := rows.Scan(&data.Usage5h, &data.Usage1d, &data.Usage7d, &data.Window5hStart, &data.Window1dStart, &data.Window7dStart); err != nil {
+	if err := rows.Scan(&data.QuotaUsed, &data.Usage5h, &data.Usage1d, &data.Usage7d, &data.Window5hStart, &data.Window1dStart, &data.Window7dStart); err != nil {
 		return nil, err
 	}
 	return data, rows.Err()
@@ -873,29 +905,30 @@ func apiKeyEntityToService(m *dbent.APIKey) *service.APIKey {
 		return nil
 	}
 	out := &service.APIKey{
-		ID:            m.ID,
-		UserID:        m.UserID,
-		Key:           m.Key,
-		Name:          m.Name,
-		Status:        m.Status,
-		IPWhitelist:   m.IPWhitelist,
-		IPBlacklist:   m.IPBlacklist,
-		LastUsedAt:    m.LastUsedAt,
-		CreatedAt:     m.CreatedAt,
-		UpdatedAt:     m.UpdatedAt,
-		GroupID:       m.GroupID,
-		Quota:         m.Quota,
-		QuotaUsed:     m.QuotaUsed,
-		ExpiresAt:     m.ExpiresAt,
-		RateLimit5h:   m.RateLimit5h,
-		RateLimit1d:   m.RateLimit1d,
-		RateLimit7d:   m.RateLimit7d,
-		Usage5h:       m.Usage5h,
-		Usage1d:       m.Usage1d,
-		Usage7d:       m.Usage7d,
-		Window5hStart: m.Window5hStart,
-		Window1dStart: m.Window1dStart,
-		Window7dStart: m.Window7dStart,
+		DesktopManaged: m.DesktopManaged,
+		ID:             m.ID,
+		UserID:         m.UserID,
+		Key:            m.Key,
+		Name:           m.Name,
+		Status:         m.Status,
+		IPWhitelist:    m.IPWhitelist,
+		IPBlacklist:    m.IPBlacklist,
+		LastUsedAt:     m.LastUsedAt,
+		CreatedAt:      m.CreatedAt,
+		UpdatedAt:      m.UpdatedAt,
+		GroupID:        m.GroupID,
+		Quota:          m.Quota,
+		QuotaUsed:      m.QuotaUsed,
+		ExpiresAt:      m.ExpiresAt,
+		RateLimit5h:    m.RateLimit5h,
+		RateLimit1d:    m.RateLimit1d,
+		RateLimit7d:    m.RateLimit7d,
+		Usage5h:        m.Usage5h,
+		Usage1d:        m.Usage1d,
+		Usage7d:        m.Usage7d,
+		Window5hStart:  m.Window5hStart,
+		Window1dStart:  m.Window1dStart,
+		Window7dStart:  m.Window7dStart,
 	}
 	if m.Edges.User != nil {
 		out.User = userEntityToService(m.Edges.User)
@@ -968,6 +1001,7 @@ func groupEntityToService(g *dbent.Group) *service.Group {
 		ID:                              g.ID,
 		Name:                            g.Name,
 		Description:                     derefString(g.Description),
+		I18n:                            g.I18n,
 		Platform:                        g.Platform,
 		RateMultiplier:                  g.RateMultiplier,
 		IsExclusive:                     g.IsExclusive,
@@ -980,6 +1014,7 @@ func groupEntityToService(g *dbent.Group) *service.Group {
 		MonthlyLimitUSD:                 g.MonthlyLimitUsd,
 		AllowImageGeneration:            g.AllowImageGeneration,
 		AllowBatchImageGeneration:       g.AllowBatchImageGeneration,
+		ImageCountBilling:               g.ImageCountBilling,
 		ImageRateIndependent:            g.ImageRateIndependent,
 		ImageRateMultiplier:             g.ImageRateMultiplier,
 		ImagePrice1K:                    g.ImagePrice1k,

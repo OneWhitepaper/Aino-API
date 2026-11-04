@@ -2,7 +2,7 @@
   <div>
     <div
       v-if="loading && items.length === 0"
-      class="grid gap-5 grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+      class="grid gap-5 grid-cols-1 lg:grid-cols-2"
     >
       <div
         v-for="i in 6"
@@ -27,13 +27,14 @@
 
     <EmptyState
       v-else-if="items.length === 0"
+      class="card py-16"
       :title="t('channelStatus.empty.title')"
       :description="t('channelStatus.empty.description')"
     />
 
     <div
       v-else
-      class="grid gap-5 grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+      class="grid gap-5 grid-cols-1 lg:grid-cols-2"
     >
       <MonitorCard
         v-for="item in items"

@@ -32,7 +32,10 @@
           {{ t('modelPlaza.badges.subscription') }}
         </span>
       </div>
-      <p v-if="group.description" class="mt-2 text-sm text-gray-500 dark:text-dark-400">
+      <p
+        v-if="group.description"
+        class="mt-2 whitespace-pre-line break-words text-sm leading-relaxed text-gray-500 dark:text-dark-400"
+      >
         {{ group.description }}
       </p>
       <p
@@ -61,6 +64,8 @@
         :user-rate-multiplier="group.user_rate_multiplier ?? null"
         :image-rate-independent="group.image_rate_independent"
         :image-rate-multiplier="group.image_rate_multiplier"
+        :video-rate-independent="group.video_rate_independent"
+        :video-rate-multiplier="group.video_rate_multiplier"
         :peak-window="peakWindow"
         :peak-rate-multiplier="group.peak_rate_multiplier"
       />

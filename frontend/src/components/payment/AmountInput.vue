@@ -1,63 +1,80 @@
 <template>
-  <div class="space-y-4">
-    <!-- Quick Amount Buttons -->
-    <div>
-      <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-        {{ t('payment.quickAmounts') }}
-      </label>
-      <div class="grid grid-cols-3 gap-2">
-        <button
-          v-for="amt in filteredAmounts"
-          :key="amt"
-          type="button"
-          :class="[
-            'rounded-lg border-2 px-4 py-3 text-center font-medium transition-colors',
-            modelValue === amt
-              ? 'border-primary-500 bg-primary-50 text-primary-700 dark:border-primary-400 dark:bg-primary-900/40 dark:text-primary-300'
-              : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-200 dark:hover:border-dark-500',
-          ]"
-          @click="selectAmount(amt)"
-        >
-          {{ amt }}
-        </button>
-      </div>
+  <div class="recharge-amount-input">
+    <div class="recharge-section-heading">
+      <h3>{{ t('payment.recharge.selectAmount') }}</h3>
+      <span class="recharge-currency">{{ t('payment.recharge.currency', { currency: paymentCurrency }) }}</span>
     </div>
-
-    <!-- Custom Amount Input -->
-    <div>
-      <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-        {{ t('payment.customAmount') }}
-      </label>
-      <div class="relative">
-        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-dark-500">
-          $
-        </span>
-        <input
-          type="text"
-          inputmode="decimal"
-          :value="customText"
-          :placeholder="placeholderText"
-          class="input w-full py-3 pl-8 pr-4"
-          @input="handleInput"
-        />
-      </div>
+    <p class="recharge-section-description">{{ t('payment.recharge.amountHint') }}</p>
+    <div :id="amountInputId + '-presets'" class="recharge-amount-grid" :aria-label="t('payment.quickAmounts')">
+      <button
+        v-for="amt in displayedAmounts"
+        :key="amt"
+        type="button"
+        class="recharge-amount"
+        :class="{ 'is-selected': modelValue === amt, 'has-bonus': quoteFor(amt).percent > 0 }"
+        :aria-pressed="modelValue === amt"
+        :aria-label="formatPaymentAmount(amt, currency)"
+        :data-testid="`quick-amount-${amt}`"
+        @click="selectAmount(amt)"
+      >
+        <span v-if="quoteFor(amt).percent > 0" class="recharge-bonus-badge" data-testid="quick-amount-bonus-badge">{{ badgeText(amt) }}</span>
+        <span v-else-if="modelValue === amt" class="recharge-amount-check" aria-hidden="true"><Icon name="check" size="xs" /></span>
+        <span class="recharge-amount-number"><span>{{ currencySymbol(currency) }}</span>{{ amt.toLocaleString() }}</span>
+        <span v-if="showSecondLine" class="recharge-amount-credited" data-testid="quick-amount-credited">{{ secondLine(amt) }}</span>
+      </button>
+    </div>
+    <div class="recharge-amount-toolbar">
+      <label :for="amountInputId">{{ t('payment.customAmount') }}</label>
+      <button
+        v-if="filteredAmounts.length > 6"
+        type="button"
+        class="recharge-more-amounts"
+        data-testid="toggle-quick-amounts"
+        :aria-expanded="amountsExpanded"
+        :aria-controls="amountInputId + '-presets'"
+        @click="amountsExpanded = !amountsExpanded"
+      >
+        {{ t(amountsExpanded ? 'payment.recharge.fewerAmounts' : 'payment.recharge.moreAmounts') }}
+        <Icon name="chevronDown" size="xs" :class="{ 'rotate-180': amountsExpanded }" />
+      </button>
+    </div>
+    <div class="recharge-custom-input">
+      <span data-testid="amount-currency-symbol" aria-hidden="true">{{ currencySymbol(currency) }}</span>
+      <input :id="amountInputId" type="text" inputmode="decimal" :value="customText" :placeholder="placeholderText" @input="handleInput" />
+      <span data-testid="amount-currency-code">{{ paymentCurrency }}</span>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
+import type { RechargeBonusTier } from '@/types/payment'
+import { formatRechargeBonusNumber, quoteRechargeBonus, type RechargeBonusMode } from '@/utils/rechargeBonus'
+import { currencySymbol, formatPaymentAmount, normalizePaymentCurrency } from './currency'
+import Icon from '@/components/icons/Icon.vue'
 
 const props = withDefaults(defineProps<{
   amounts?: number[]
   modelValue: number | null
   min?: number
   max?: number
+  /** 充值优惠阶梯（按 min_amount 升序）；为空时不显示价签与第二行 */
+  bonusTiers?: RechargeBonusTier[]
+  /** 阶梯模式：bonus 赠金 / discount 折扣 */
+  bonusMode?: RechargeBonusMode
+  /** 充值倍率（1 支付币种 = multiplier USD），用于计算到账金额 */
+  multiplier?: number
+  /** 支付币种（折扣模式第二行实付金额的币种与精度） */
+  currency?: string
 }>(), {
   amounts: () => [10, 20, 50, 100, 200, 500, 1000, 2000, 5000],
   min: 0,
   max: 0,
+  bonusTiers: () => [],
+  bonusMode: 'bonus',
+  multiplier: 1,
+  currency: undefined,
 })
 
 const emit = defineEmits<{
@@ -67,11 +84,54 @@ const emit = defineEmits<{
 const { t } = useI18n()
 
 const customText = ref('')
+const amountInputId = useId()
+const amountsExpanded = ref(false)
+const paymentCurrency = computed(() => normalizePaymentCurrency(props.currency))
 
 // 0 = no limit
 const filteredAmounts = computed(() =>
   props.amounts.filter((a) => (props.min <= 0 || a >= props.min) && (props.max <= 0 || a <= props.max))
 )
+
+const displayedAmounts = computed(() => amountsExpanded.value ? filteredAmounts.value : filteredAmounts.value.slice(0, 6))
+
+// Keep an externally restored amount visible without changing the selection.
+watch([() => props.modelValue, filteredAmounts], ([value]) => {
+  if (filteredAmounts.value.findIndex(amount => amount === value) >= 6) amountsExpanded.value = true
+}, { immediate: true })
+
+const showSecondLine = computed(() => props.bonusTiers.length > 0)
+
+function currencyDigits(): number {
+  if (!props.currency) return 2
+  try {
+    return new Intl.NumberFormat(undefined, { style: 'currency', currency: props.currency }).resolvedOptions().maximumFractionDigits ?? 2
+  } catch {
+    return 2
+  }
+}
+
+function quoteFor(amt: number) {
+  return quoteRechargeBonus(props.bonusTiers, amt, {
+    multiplier: props.multiplier,
+    mode: props.bonusMode,
+    currencyDigits: currencyDigits(),
+  })
+}
+
+// 价签文案：赠金「+20%」，折扣「20% OFF」
+function badgeText(amt: number): string {
+  const percent = formatRechargeBonusNumber(quoteFor(amt).percent)
+  return props.bonusMode === 'discount' ? `${percent}% OFF` : `+${percent}%`
+}
+
+function secondLine(amt: number): string {
+  const quote = quoteFor(amt)
+  if (props.bonusMode === 'discount') {
+    return t('payment.rechargeBonus.payShort', { amount: formatPaymentAmount(quote.payBase, props.currency) })
+  }
+  return t('payment.rechargeBonus.creditedShort', { amount: '$' + quote.credited.toFixed(2) })
+}
 
 const placeholderText = computed(() => {
   if (props.min > 0 && props.max > 0) return `${props.min} - ${props.max}`
@@ -88,8 +148,12 @@ function selectAmount(amt: number) {
 }
 
 function handleInput(e: Event) {
-  const val = (e.target as HTMLInputElement).value
-  if (!AMOUNT_PATTERN.test(val)) return
+  const input = e.target as HTMLInputElement
+  const val = input.value
+  if (!AMOUNT_PATTERN.test(val)) {
+    input.value = customText.value
+    return
+  }
   customText.value = val
   if (val === '') {
     emit('update:modelValue', null)

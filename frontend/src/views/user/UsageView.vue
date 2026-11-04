@@ -1,7 +1,7 @@
 <template>
   <AppLayout>
-    <div class="space-y-6">
-      <UsageStatsCards :stats="usageStats" :show-account-cost="false" :strike-standard-cost="true" />
+    <div class="user-page space-y-6">
+      <UserPageHeader :title="t('userPages.usageTitle')" :description="t('userPages.usageDescription')" />
 
       <div class="space-y-4">
         <div class="card p-4">
@@ -23,6 +23,19 @@
           </div>
         </div>
 
+        <div class="user-usage-summary">
+          <UsageStatsCards
+            :stats="usageStats"
+            :show-account-cost="false"
+            :strike-standard-cost="true"
+            :show-site-cache-rate="showSiteCacheRate"
+            :site-cache-rate="siteCacheRate"
+            :site-cache-rate-loading="siteCacheRateLoading"
+          />
+        </div>
+        <details class="user-disclosure">
+          <summary>{{ t('userPages.analysis') }}<span>{{ t('userPages.analysisHint') }}</span></summary>
+          <div class="user-disclosure-body space-y-6">
         <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <ModelDistributionChart
             v-model:metric="modelDistributionMetric"
@@ -64,11 +77,14 @@
           />
           <TokenUsageTrend :trend-data="trendData" :loading="chartsLoading" />
         </div>
+          </div>
+        </details>
       </div>
 
-      <div class="card p-6">
+      <div class="user-filter-panel">
+        <h3 class="mb-4 text-sm font-semibold">{{ t('userPages.filters') }}</h3>
         <div class="flex flex-wrap items-end justify-between gap-4">
-          <div v-if="activeTab === 'errors'" class="flex flex-1 flex-wrap items-end gap-4">
+          <div v-if="activeTab === 'errors'" class="user-usage-filters">
             <div class="w-full sm:w-auto sm:min-w-[220px]">
               <label class="input-label">{{ t('usage.errors.keyName') }}</label>
               <Select v-model="errorFilter.api_key_id" :options="errorKeyOptions" @change="applyErrorFilters" />
@@ -94,7 +110,7 @@
               <Select v-model="errorFilter.status_code" :options="errorStatusOptions" @change="applyErrorFilters" />
             </div>
           </div>
-          <div v-else class="flex flex-1 flex-wrap items-end gap-4">
+          <div v-else class="user-usage-filters">
             <div class="w-full sm:w-auto sm:min-w-[220px]">
               <label class="input-label">{{ t('usage.apiKeyFilter') }}</label>
               <Select v-model="filters.api_key_id" :options="apiKeyOptions" @change="applyFilters" />
@@ -107,6 +123,9 @@
               <label class="input-label">{{ t('admin.usage.group') }}</label>
               <Select v-model="filters.group_id" :options="groupOptions" searchable @change="applyFilters" />
             </div>
+            <details class="user-disclosure user-usage-more">
+              <summary>{{ t('userPages.moreFilters') }}</summary>
+              <div class="user-disclosure-body user-usage-filters">
             <div class="w-full sm:w-auto sm:min-w-[180px]">
               <label class="input-label">{{ t('usage.type') }}</label>
               <Select v-model="filters.request_type" :options="requestTypeOptions" @change="applyFilters" />
@@ -123,9 +142,11 @@
               <label class="input-label">{{ t('admin.usage.billingMode') }}</label>
               <Select v-model="filters.billing_mode" :options="billingModeOptions" @change="applyFilters" />
             </div>
+              </div>
+            </details>
           </div>
 
-          <div class="flex w-full flex-wrap items-center justify-end gap-3 sm:w-auto">
+          <div class="flex w-full flex-wrap items-center justify-end gap-3">
             <button type="button" @click="refreshData" :disabled="activeTab === 'errors' ? errorLoading : loading" class="btn btn-secondary">
               {{ t('common.refresh') }}
             </button>
@@ -225,6 +246,7 @@ import { useAppStore } from '@/stores/app'
 import { FeatureFlags, resolveFeatureFlag } from '@/utils/featureFlags'
 import { keysAPI, usageAPI, userGroupsAPI } from '@/api'
 import AppLayout from '@/components/layout/AppLayout.vue'
+import UserPageHeader from '@/components/user/workspace/UserPageHeader.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import Select, { type SelectOption } from '@/components/common/Select.vue'
 import DateRangePicker from '@/components/common/DateRangePicker.vue'
@@ -237,6 +259,7 @@ import TokenUsageTrend from '@/components/charts/TokenUsageTrend.vue'
 import Icon from '@/components/icons/Icon.vue'
 import UserErrorRequestsTable from '@/components/user/UserErrorRequestsTable.vue'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
+import { useSiteCacheRate } from '@/composables/useSiteCacheRate'
 import { formatReasoningEffort } from '@/utils/format'
 import { getBillingModeLabel, getDisplayBillingMode as resolveDisplayBillingMode } from '@/utils/billingMode'
 import { resolveUsageRequestType, requestTypeToLegacyStream } from '@/utils/usageRequestType'
@@ -349,6 +372,7 @@ const getGranularityForRange = (start: string, end: string): 'day' | 'hour' => {
 const defaultRange = getLast24HoursRangeDates()
 const startDate = ref(defaultRange.start)
 const endDate = ref(defaultRange.end)
+const { siteCacheRate, siteCacheRateLoading, showSiteCacheRate, refreshSiteCacheRate } = useSiteCacheRate(startDate, endDate)
 const granularity = ref<'day' | 'hour'>(getGranularityForRange(startDate.value, endDate.value))
 
 const modelDistributionMetric = ref<DistributionMetric>('tokens')
@@ -550,6 +574,7 @@ const applyFilters = () => {
 }
 
 const refreshData = () => {
+  void refreshSiteCacheRate()
   void loadLogs()
   void loadStats()
   void loadModelStats()
@@ -626,6 +651,7 @@ const escapeCSVValue = (value: unknown): string => {
   if (value == null) return ''
   const str = String(value)
   const escaped = str.replace(/"/g, '""')
+  if (str === '-') return str
   if (/^[=+\-@\t\r]/.test(str)) return `"\'${escaped}"`
   if (/[,"\n\r]/.test(str)) return `"${escaped}"`
   return str
@@ -816,10 +842,10 @@ const handleColumnClickOutside = (event: MouseEvent) => {
 }
 
 const loadApiKeys = async () => {
-  const firstPage = await keysAPI.list(1, 100)
+  const firstPage = await keysAPI.list(1, 100, { include_archived: true })
   const keys = [...firstPage.items]
   for (let page = 2; page <= firstPage.pages && keys.length > 0; page++) {
-    const response = await keysAPI.list(page, 100)
+    const response = await keysAPI.list(page, 100, { include_archived: true })
     if (response.items.length === 0) break
     keys.push(...response.items)
   }
@@ -902,7 +928,10 @@ onMounted(() => {
   loadSavedErrColumns()
   document.addEventListener('click', handleColumnClickOutside)
   void loadFilterOptions()
-  refreshData()
+  void loadLogs()
+  void loadStats()
+  void loadModelStats()
+  void loadChartData()
 })
 
 onUnmounted(() => {

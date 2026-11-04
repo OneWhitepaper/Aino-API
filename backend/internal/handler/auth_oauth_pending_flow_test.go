@@ -6,8 +6,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -2472,6 +2474,67 @@ func TestLogin2FACompletesPendingOAuthBindAndConsumesSession(t *testing.T) {
 	require.Empty(t, defaultSubAssigner.calls)
 }
 
+func TestLogin2FADebugLogsRedactTemporaryTokenAndSessionEmail(t *testing.T) {
+	const (
+		invalidToken = "temp-seq"
+		validToken   = "valid-temp-token-canary"
+		sessionEmail = "login-2fa-email-canary@example.com"
+	)
+
+	cache := &oauthPendingFlowTotpCacheStub{
+		loginSessions: map[string]*service.TotpLoginSession{
+			validToken: {
+				UserID: 42,
+				Email:  sessionEmail,
+			},
+		},
+	}
+	handler, client := newOAuthPendingFlowTestHandlerWithDependencies(t, oauthPendingFlowTestHandlerOptions{
+		totpCache:     cache,
+		totpEncryptor: oauthPendingFlowTotpEncryptorStub{},
+	})
+
+	secret := "JBSWY3DPEHPK3PXP"
+	user, err := client.User.Create().
+		SetEmail(sessionEmail).
+		SetUsername("login-2fa-log-user").
+		SetPasswordHash("password-hash").
+		SetBalance(0).
+		SetConcurrency(1).
+		SetRole(service.RoleUser).
+		SetStatus(service.StatusActive).
+		SetTotpEnabled(true).
+		SetTotpSecretEncrypted(secret).
+		Save(context.Background())
+	require.NoError(t, err)
+	cache.loginSessions[validToken].UserID = user.ID
+
+	var logs bytes.Buffer
+	previousLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	t.Cleanup(func() { slog.SetDefault(previousLogger) })
+
+	for _, tempToken := range []string{invalidToken, validToken} {
+		recorder := httptest.NewRecorder()
+		ginCtx, _ := gin.CreateTestContext(recorder)
+		body := bytes.NewBufferString(`{"temp_token":"` + tempToken + `","totp_code":"xxxxxx"}`)
+		ginCtx.Request = httptest.NewRequest(http.MethodPost, "/api/v1/auth/login/2fa", body)
+		ginCtx.Request.Header.Set("Content-Type", "application/json")
+
+		handler.Login2FA(ginCtx)
+
+		require.Equal(t, http.StatusBadRequest, recorder.Code)
+	}
+
+	output := logs.String()
+	require.Contains(t, output, "login_2fa_session_invalid")
+	require.Contains(t, output, "login_2fa_session_found")
+	require.Contains(t, output, "user_id="+strconv.FormatInt(user.ID, 10))
+	require.NotContains(t, output, invalidToken)
+	require.NotContains(t, output, validToken)
+	require.NotContains(t, output, sessionEmail)
+}
+
 func newOAuthPendingFlowTestHandler(t *testing.T, invitationEnabled bool) (*AuthHandler, *dbent.Client) {
 	t.Helper()
 
@@ -3592,4 +3655,21 @@ func (oauthPendingFlowTotpEncryptorStub) Encrypt(plaintext string) (string, erro
 
 func (oauthPendingFlowTotpEncryptorStub) Decrypt(ciphertext string) (string, error) {
 	return ciphertext, nil
+}
+
+func (s *oauthPendingFlowEmailCacheStub) IncrVerificationCodeAttempts(_ context.Context, email string) (int, error) {
+	data := s.verificationCodes[email]
+	if data == nil {
+		return 0, errors.New("verification code not found")
+	}
+	data.Attempts++
+	return data.Attempts, nil
+}
+
+func (s *oauthPendingFlowEmailCacheStub) IncrNotifyVerifyCodeAttempts(context.Context, string) (int, error) {
+	return 0, errors.New("notify verification code not found")
+}
+
+func (s *oauthPendingFlowEmailCacheStub) ConsumePasswordResetToken(context.Context, string, string) (bool, error) {
+	return false, nil
 }

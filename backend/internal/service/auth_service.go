@@ -28,6 +28,8 @@ var (
 	ErrUserNotActive                = infraerrors.Forbidden("USER_NOT_ACTIVE", "user is not active")
 	ErrEmailExists                  = infraerrors.Conflict("EMAIL_EXISTS", "email already exists")
 	ErrEmailReserved                = infraerrors.BadRequest("EMAIL_RESERVED", "email is reserved")
+	ErrPhoneAlreadyBound            = infraerrors.Conflict("PHONE_ALREADY_BOUND", "phone number already belongs to another user")
+	ErrPhoneInvalid                 = infraerrors.BadRequest("PHONE_INVALID", "invalid phone number")
 	ErrInvalidToken                 = infraerrors.Unauthorized("INVALID_TOKEN", "invalid token")
 	ErrTokenExpired                 = infraerrors.Unauthorized("TOKEN_EXPIRED", "token has expired")
 	ErrAccessTokenExpired           = infraerrors.Unauthorized("ACCESS_TOKEN_EXPIRED", "access token has expired")
@@ -46,6 +48,8 @@ var (
 	ErrServiceUnavailable      = infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "service temporarily unavailable")
 	ErrInvitationCodeRequired  = infraerrors.BadRequest("INVITATION_CODE_REQUIRED", "invitation code is required")
 	ErrInvitationCodeInvalid   = infraerrors.BadRequest("INVITATION_CODE_INVALID", "invalid or used invitation code")
+	ErrLoginAgreementRequired  = infraerrors.BadRequest("LOGIN_AGREEMENT_REQUIRED", "please accept the current login agreement")
+	ErrLoginAgreementInvalid   = infraerrors.BadRequest("LOGIN_AGREEMENT_INVALID", "the login agreement has changed; please review it again")
 	ErrOAuthInvitationRequired = infraerrors.Forbidden("OAUTH_INVITATION_REQUIRED", "invitation code required to complete oauth registration")
 	ErrCaptchaProviderConflict = infraerrors.ServiceUnavailable("CAPTCHA_PROVIDER_CONFLICT", "multiple captcha providers are enabled")
 )
@@ -66,11 +70,16 @@ type JWTClaims struct {
 	SessionID string `json:"sid,omitempty"`
 	// BindingHash 会话指纹哈希（IP+UA），会话绑定开启时校验；空值表示旧 token（平滑升级）。
 	BindingHash string `json:"bnd,omitempty"`
+	// AuthTime records the last completed authentication ceremony. It is not
+	// refreshed by refresh-token rotation, so sensitive binding can require a
+	// recent real login without breaking legacy tokens for ordinary endpoints.
+	AuthTime int64 `json:"auth_time,omitempty"`
 	jwt.RegisteredClaims
 }
 
 // AuthService 认证服务
 type AuthService struct {
+	desktopRevoker        DesktopCredentialRevoker
 	entClient             *dbent.Client
 	userRepo              UserRepository
 	redeemRepo            RedeemCodeRepository
@@ -78,6 +87,7 @@ type AuthService struct {
 	cfg                   *config.Config
 	settingService        *SettingService
 	emailService          *EmailService
+	smsService            *SMSService
 	turnstileService      *TurnstileService
 	tencentCaptchaService *TencentCaptchaService
 	aliyunCaptchaService  *AliyunCaptchaService
@@ -86,6 +96,7 @@ type AuthService struct {
 	affiliateService      *AffiliateService
 	defaultSubAssigner    DefaultSubscriptionAssigner
 	userPlatformQuotaRepo UserPlatformQuotaRepository
+	mcpGrantRevoker       MCPGrantRevoker
 }
 
 type CaptchaProof struct {
@@ -93,6 +104,11 @@ type CaptchaProof struct {
 	TurnstileToken string
 	TencentTicket  string
 	TencentRandstr string
+}
+
+// MCPGrantRevoker revokes MCP authorizations, which outlive browser sessions.
+type MCPGrantRevoker interface {
+	RevokeAllGrants(ctx context.Context, userID int64) error
 }
 
 type DefaultSubscriptionAssigner interface {
@@ -152,6 +168,21 @@ func (s *AuthService) SetTencentCaptchaService(tencentCaptchaService *TencentCap
 
 func (s *AuthService) SetAliyunCaptchaService(aliyunCaptchaService *AliyunCaptchaService) {
 	s.aliyunCaptchaService = aliyunCaptchaService
+}
+
+func (s *AuthService) SetSMSService(smsService *SMSService) {
+	s.smsService = smsService
+}
+
+func (s *AuthService) SMSService() *SMSService {
+	if s == nil {
+		return nil
+	}
+	return s.smsService
+}
+
+func (s *AuthService) SetMCPGrantRevoker(revoker MCPGrantRevoker) {
+	s.mcpGrantRevoker = revoker
 }
 
 // Register 用户注册，返回token和用户
@@ -542,6 +573,10 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (string
 		// 记录数据库错误但不暴露给用户
 		logger.LegacyPrintf("service.auth", "[Auth] Database error during login: %v", err)
 		return "", nil, ErrServiceUnavailable
+	}
+	if IsPhonePlaceholderEmail(user.Email) {
+		// Phone-only accounts have no password credential or email identity.
+		return "", nil, ErrInvalidCredentials
 	}
 
 	// 验证密码
@@ -1399,7 +1434,8 @@ func randomHexString(byteLength int) (string, error) {
 
 func isReservedEmail(email string) bool {
 	normalized := strings.ToLower(strings.TrimSpace(email))
-	return strings.HasSuffix(normalized, LinuxDoConnectSyntheticEmailDomain) ||
+	return IsPhonePlaceholderEmail(normalized) ||
+		strings.HasSuffix(normalized, LinuxDoConnectSyntheticEmailDomain) ||
 		strings.HasSuffix(normalized, OIDCConnectSyntheticEmailDomain) ||
 		strings.HasSuffix(normalized, WeChatConnectSyntheticEmailDomain) ||
 		strings.HasSuffix(normalized, DingTalkConnectSyntheticEmailDomain)
@@ -1413,11 +1449,11 @@ func (s *AuthService) GenerateToken(ctx context.Context, user *User) (string, er
 	if err != nil {
 		return "", fmt.Errorf("generate session id: %w", err)
 	}
-	return s.generateAccessToken(user, sessionID, sessionBindingHashFromContext(ctx))
+	return s.generateAccessToken(user, sessionID, sessionBindingHashFromContext(ctx), time.Now().UTC())
 }
 
 // generateAccessToken 生成带会话 ID 与绑定指纹的 access token。
-func (s *AuthService) generateAccessToken(user *User, sessionID, bindingHash string) (string, error) {
+func (s *AuthService) generateAccessToken(user *User, sessionID, bindingHash string, authTime time.Time) (string, error) {
 	now := time.Now()
 	var expiresAt time.Time
 	if s.cfg.JWT.AccessTokenExpireMinutes > 0 {
@@ -1427,6 +1463,10 @@ func (s *AuthService) generateAccessToken(user *User, sessionID, bindingHash str
 		expiresAt = now.Add(time.Duration(s.cfg.JWT.ExpireHour) * time.Hour)
 	}
 
+	authTimeUnix := int64(0)
+	if !authTime.IsZero() {
+		authTimeUnix = authTime.Unix()
+	}
 	claims := &JWTClaims{
 		UserID:       user.ID,
 		Email:        user.Email,
@@ -1434,6 +1474,7 @@ func (s *AuthService) generateAccessToken(user *User, sessionID, bindingHash str
 		TokenVersion: resolvedTokenVersion(user),
 		SessionID:    sessionID,
 		BindingHash:  bindingHash,
+		AuthTime:     authTimeUnix,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expiresAt),
 			IssuedAt:  jwt.NewNumericDate(now),
@@ -1511,8 +1552,13 @@ func (s *AuthService) RefreshToken(ctx context.Context, oldTokenString string) (
 		}
 	}
 
-	// 生成新token
-	return s.GenerateToken(ctx, user)
+	// Preserve the authentication ceremony timestamp during legacy access-token
+	// refresh. Refreshing must not become a substitute for logging in again.
+	authTime := time.Time{}
+	if claims.AuthTime > 0 {
+		authTime = time.Unix(claims.AuthTime, 0).UTC()
+	}
+	return s.generateAccessToken(user, claims.SessionID, claims.BindingHash, authTime)
 }
 
 // IsPasswordResetEnabled 检查是否启用密码重置功能
@@ -1541,6 +1587,9 @@ func (s *AuthService) preparePasswordReset(ctx context.Context, email, frontendB
 			return "", "", false
 		}
 		logger.LegacyPrintf("service.auth", "[Auth] Database error checking email for password reset: %v", err)
+		return "", "", false
+	}
+	if IsPhonePlaceholderEmail(user.Email) {
 		return "", "", false
 	}
 
@@ -1687,6 +1736,14 @@ type TokenPairWithUser struct {
 // GenerateTokenPair 生成Access Token和Refresh Token对
 // familyID: 可选的Token家族ID，用于Token轮转时保持家族关系
 func (s *AuthService) GenerateTokenPair(ctx context.Context, user *User, familyID string) (*TokenPair, error) {
+	return s.generateTokenPair(ctx, user, familyID, time.Now().UTC())
+}
+
+func (s *AuthService) generateTokenPair(ctx context.Context, user *User, familyID string, authTime time.Time) (*TokenPair, error) {
+	return s.generateTokenPairReplacing(ctx, user, familyID, authTime, "")
+}
+
+func (s *AuthService) generateTokenPairReplacing(ctx context.Context, user *User, familyID string, authTime time.Time, oldHash string) (*TokenPair, error) {
 	// 检查 refreshTokenCache 是否可用
 	if s.refreshTokenCache == nil {
 		return nil, errors.New("refresh token cache not configured")
@@ -1703,13 +1760,13 @@ func (s *AuthService) GenerateTokenPair(ctx context.Context, user *User, familyI
 	}
 
 	// 生成Access Token（携带会话ID与绑定指纹）
-	accessToken, err := s.generateAccessToken(user, familyID, sessionBindingHashFromContext(ctx))
+	accessToken, err := s.generateAccessToken(user, familyID, sessionBindingHashFromContext(ctx), authTime)
 	if err != nil {
 		return nil, fmt.Errorf("generate access token: %w", err)
 	}
 
 	// 生成Refresh Token
-	refreshToken, err := s.generateRefreshToken(ctx, user, familyID)
+	refreshToken, err := s.generateRefreshToken(ctx, user, familyID, authTime, oldHash)
 	if err != nil {
 		return nil, fmt.Errorf("generate refresh token: %w", err)
 	}
@@ -1722,7 +1779,7 @@ func (s *AuthService) GenerateTokenPair(ctx context.Context, user *User, familyI
 }
 
 // generateRefreshToken 生成并存储Refresh Token
-func (s *AuthService) generateRefreshToken(ctx context.Context, user *User, familyID string) (string, error) {
+func (s *AuthService) generateRefreshToken(ctx context.Context, user *User, familyID string, authTime time.Time, oldHash string) (string, error) {
 	// 生成随机Token
 	tokenBytes := make([]byte, 32)
 	if _, err := rand.Read(tokenBytes); err != nil {
@@ -1750,12 +1807,24 @@ func (s *AuthService) generateRefreshToken(ctx context.Context, user *User, fami
 		TokenVersion: resolvedTokenVersion(user),
 		FamilyID:     familyID,
 		BindingHash:  sessionBindingHashFromContext(ctx),
+		AuthTime:     authTime,
 		CreatedAt:    now,
 		ExpiresAt:    now.Add(ttl),
 	}
 
 	// 存储Token数据
-	if err := s.refreshTokenCache.StoreRefreshToken(ctx, tokenHash, data, ttl); err != nil {
+	var storeErr error
+	if rotator, ok := s.refreshTokenCache.(interface {
+		RotateRefreshToken(context.Context, string, string, *RefreshTokenData, time.Duration) error
+	}); ok && oldHash != "" {
+		storeErr = rotator.RotateRefreshToken(ctx, oldHash, tokenHash, data, ttl)
+	} else {
+		storeErr = s.refreshTokenCache.StoreRefreshToken(ctx, tokenHash, data, ttl)
+		if storeErr == nil && oldHash != "" {
+			storeErr = s.refreshTokenCache.DeleteRefreshToken(ctx, oldHash)
+		}
+	}
+	if err := storeErr; err != nil {
 		return "", fmt.Errorf("store refresh token: %w", err)
 	}
 
@@ -1844,14 +1913,8 @@ func (s *AuthService) RefreshTokenPair(ctx context.Context, refreshToken string)
 		}
 	}
 
-	// Token轮转：立即使旧Token失效
-	if err := s.refreshTokenCache.DeleteRefreshToken(ctx, tokenHash); err != nil {
-		logger.LegacyPrintf("service.auth", "[Auth] Failed to delete old refresh token: %v", err)
-		// 继续处理，不影响主流程
-	}
-
-	// 生成新的Token对，保持同一个家族ID
-	pair, err := s.GenerateTokenPair(ctx, user, data.FamilyID)
+	// Atomically replace the old token without a gap in parent-session liveness.
+	pair, err := s.generateTokenPairReplacing(ctx, user, data.FamilyID, data.AuthTime, tokenHash)
 	if err != nil {
 		return nil, err
 	}
@@ -1871,7 +1934,25 @@ func (s *AuthService) RevokeRefreshToken(ctx context.Context, refreshToken strin
 	}
 
 	tokenHash := hashToken(refreshToken)
-	return s.refreshTokenCache.DeleteRefreshToken(ctx, tokenHash)
+	if lookup, ok := s.refreshTokenCache.(interface {
+		FamilyForRefreshHash(context.Context, string) (string, error)
+	}); ok {
+		family, err := lookup.FamilyForRefreshHash(ctx, tokenHash)
+		if err != nil {
+			return err
+		}
+		if family != "" {
+			return s.RevokeSessionFamily(ctx, family)
+		}
+	}
+	data, err := s.refreshTokenCache.GetRefreshToken(ctx, tokenHash)
+	if errors.Is(err, ErrRefreshTokenNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return s.RevokeSessionFamily(ctx, data.FamilyID)
 }
 
 // RevokeSessionFamily 撤销单个会话家族（该会话的所有 refresh token）。
@@ -1880,16 +1961,35 @@ func (s *AuthService) RevokeSessionFamily(ctx context.Context, familyID string) 
 	if s.refreshTokenCache == nil || familyID == "" {
 		return nil
 	}
-	return s.refreshTokenCache.DeleteTokenFamily(ctx, familyID)
+	if err := s.refreshTokenCache.DeleteTokenFamily(ctx, familyID); err != nil {
+		return err
+	}
+	if s.desktopRevoker != nil {
+		return s.desktopRevoker.RevokeFamily(ctx, familyID)
+	}
+	return nil
 }
 
-// RevokeAllUserSessions 撤销用户的所有会话（所有Refresh Token）
+// RevokeAllUserSessions 撤销用户的所有浏览器、桌面和 MCP 会话。
 // 用于密码更改或用户主动登出所有设备
 func (s *AuthService) RevokeAllUserSessions(ctx context.Context, userID int64) error {
-	if s.refreshTokenCache == nil {
-		return nil // No-op if cache not configured
+	var errs []error
+	if s.refreshTokenCache != nil {
+		if err := s.refreshTokenCache.DeleteUserRefreshTokens(ctx, userID); err != nil {
+			errs = append(errs, fmt.Errorf("revoke refresh sessions: %w", err))
+		}
 	}
-	return s.refreshTokenCache.DeleteUserRefreshTokens(ctx, userID)
+	if s.desktopRevoker != nil {
+		if err := s.desktopRevoker.RevokeUser(ctx, userID, "all_sessions_revoked"); err != nil {
+			errs = append(errs, fmt.Errorf("revoke desktop credentials: %w", err))
+		}
+	}
+	if s.mcpGrantRevoker != nil {
+		if err := s.mcpGrantRevoker.RevokeAllGrants(ctx, userID); err != nil {
+			errs = append(errs, fmt.Errorf("revoke MCP grants: %w", err))
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // RevokeAllUserTokens invalidates both stateless access tokens and refresh sessions.
@@ -1906,6 +2006,7 @@ func (s *AuthService) RevokeAllUserTokens(ctx context.Context, userID int64) err
 
 	if err := s.RevokeAllUserSessions(ctx, userID); err != nil {
 		logger.LegacyPrintf("service.auth", "[Auth] Failed to revoke refresh sessions after token invalidation for user %d: %v", userID, err)
+		return err
 	}
 	return nil
 }
@@ -1937,9 +2038,9 @@ func (s *AuthService) snapshotPlatformQuotaDefaults(ctx context.Context, userID 
 		return nil
 	}
 	// 平台配额快照是 best-effort（fail-open）：必须脱离调用方事务执行。
-	// 否则某平台违反 user_platform_quotas 的 CHECK 约束（如尚未进约束的新平台）会让
-	// 整个调用方事务被 Postgres 标记 aborted，把"无关紧要的默认配额快照"放大成
-	// "整笔注册失败"（OAuth pending 路径曾因此 500 → 清 cookie → 404）。
+	// 否则写入时的任何数据库错误（历史上是新平台尚未加入 user_platform_quotas 的
+	// CHECK 约束）都会让整个调用方事务被 Postgres 标记 aborted，把"无关紧要的默认
+	// 配额快照"放大成"整笔注册失败"（OAuth pending 路径曾因此 500 → 清 cookie → 404）。
 	ctx = dbent.WithoutTx(ctx)
 	// 仅为至少配置了一档限额的平台建行：user_platform_quotas 中不存在的行等价于不限额，
 	// 三档全空的记录不携带任何可执行的限额。

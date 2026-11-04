@@ -3,6 +3,7 @@ package middleware
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -13,6 +14,67 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
+
+func TestDiagnosticReadIsAuditedWithoutCopyingPrivateResponse(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repository := &auditCaptureRepository{}
+	auditService := service.NewAuditLogService(repository, nil)
+	auditService.Start()
+	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		c.Set(string(ContextKeyUser), AuthSubject{UserID: 77})
+		c.Set(string(ContextKeyUserRole), "admin")
+		c.Next()
+	})
+	router.Use(gin.HandlerFunc(NewAuditLogMiddleware(auditService)))
+	router.GET("/api/v1/admin/diagnostics/:id", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"files": gin.H{"report": "private-diagnostic-canary"}})
+	})
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/admin/diagnostics/22c5a21b-bfaa-476e-92fd-3e408c6effb8", nil)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	auditService.Stop()
+
+	require.Equal(t, http.StatusOK, response.Code)
+	require.Contains(t, response.Body.String(), "private-diagnostic-canary")
+	repository.mu.Lock()
+	defer repository.mu.Unlock()
+	require.Len(t, repository.logs, 1)
+	entry := repository.logs[0]
+	require.Equal(t, "admin.diagnostics.read", entry.Action)
+	require.Equal(t, int64(77), *entry.ActorUserID)
+	require.Equal(t, "admin", entry.ActorRole)
+	require.Equal(t, map[string]string{"id": "22c5a21b-bfaa-476e-92fd-3e408c6effb8"}, entry.Extra["params"])
+	encoded, err := json.Marshal(entry)
+	require.NoError(t, err)
+	require.NotContains(t, string(encoded), "private-diagnostic-canary")
+}
+
+func TestIQTestRequestsOmitCredentialBodiesFromAudit(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repository := &auditCaptureRepository{}
+	audit := service.NewAuditLogService(repository, nil)
+	audit.Start()
+	router := gin.New()
+	router.Use(func(c *gin.Context) { c.Set(string(ContextKeyUser), AuthSubject{UserID: 77}); c.Next() })
+	router.Use(gin.HandlerFunc(NewAuditLogMiddleware(audit)))
+	for _, path := range []string{"/api/v1/iq-tests", "/api/v1/iq-tests/models"} {
+		router.POST(path, func(c *gin.Context) { c.Status(http.StatusAccepted) })
+		request := httptest.NewRequest(http.MethodPost, path, bytes.NewBufferString(`{"source":"custom","api_key":"private-iq-canary","base_url":"https://example.com/v1"}`))
+		request.Header.Set("Content-Type", "application/json")
+		router.ServeHTTP(httptest.NewRecorder(), request)
+	}
+	audit.Stop()
+	repository.mu.Lock()
+	defer repository.mu.Unlock()
+	require.Len(t, repository.logs, 2)
+	for _, entry := range repository.logs {
+		require.Equal(t, "<credential-bearing body omitted>", entry.RequestBody)
+		body, err := json.Marshal(entry)
+		require.NoError(t, err)
+		require.NotContains(t, string(body), "private-iq-canary")
+	}
+}
 
 func TestDeriveAuditAction(t *testing.T) {
 	cases := []struct {
@@ -187,4 +249,40 @@ func TestOllamaCloudUsageSessionRouteOmitsAuditBody(t *testing.T) {
 	require.Len(t, logs, 1)
 	require.Equal(t, "<credential-bearing body omitted>", logs[0].RequestBody)
 	require.NotContains(t, logs[0].RequestBody, "audit-canary")
+}
+
+// MCP OAuth 是机器凭证：只读工具同样可以批量读取邮箱等数据，必须全部入审计并带上 grant。
+func TestAuditRecordsEveryMCPOAuthReadWithGrant(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repository := &auditCaptureRepository{}
+	auditService := service.NewAuditLogService(repository, nil)
+	auditService.Start()
+
+	for _, authMethod := range []string{service.AuditAuthMethodMCPOAuth, ""} {
+		router := gin.New()
+		router.Use(func(c *gin.Context) {
+			c.Set(string(ContextKeyUser), AuthSubject{UserID: 77})
+			c.Set(string(ContextKeyUserRole), service.RoleAdmin)
+			if authMethod != "" {
+				c.Set("auth_method", authMethod)
+				SetAuditExtra(c, map[string]any{"mcp_grant_id": "grant-1", "mcp_tool": "admin_list_users"})
+			}
+			c.Next()
+		})
+		router.Use(gin.HandlerFunc(NewAuditLogMiddleware(auditService)))
+		router.GET("/api/v1/admin/users", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"items": []any{}}) })
+		recorder := httptest.NewRecorder()
+		router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/admin/users?search=a", nil))
+		require.Equal(t, http.StatusOK, recorder.Code)
+	}
+	auditService.Stop()
+
+	repository.mu.Lock()
+	logs := append([]*service.AuditLog(nil), repository.logs...)
+	repository.mu.Unlock()
+	require.Len(t, logs, 1, "browser reads stay outside the audit log")
+	require.Equal(t, service.AuditAuthMethodMCPOAuth, logs[0].AuthMethod)
+	require.Equal(t, "admin.users.read", logs[0].Action)
+	require.Equal(t, "grant-1", logs[0].Extra["mcp_grant_id"])
+	require.Equal(t, "admin_list_users", logs[0].Extra["mcp_tool"])
 }

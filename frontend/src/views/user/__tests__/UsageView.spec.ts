@@ -5,6 +5,10 @@ import UsageView from '../UsageView.vue'
 import Select, { type SelectOption } from '@/components/common/Select.vue'
 import DateRangePicker from '@/components/common/DateRangePicker.vue'
 import UsageTable from '@/components/admin/usage/UsageTable.vue'
+import UsageStatsCards from '@/components/admin/usage/UsageStatsCards.vue'
+import { getSiteCacheRate } from '@/api/usage'
+
+vi.mock('@/api/usage', () => ({ getSiteCacheRate: vi.fn().mockResolvedValue({ visible_to_users: false }) }))
 
 const {
   query,
@@ -158,8 +162,8 @@ function mountUsageView() {
         Select: true,
         DateRangePicker: true,
         Icon: true,
-        UsageStatsCards: chartStub,
-        UsageTable: chartStub,
+        UsageStatsCards: { ...chartStub, props: ['showSiteCacheRate', 'siteCacheRate', 'manageSiteCacheRate'] },
+        UsageTable: { ...chartStub, props: ['columns'] },
         UserErrorRequestsTable: chartStub,
         ModelDistributionChart: chartStub,
         GroupDistributionChart: chartStub,
@@ -171,6 +175,16 @@ function mountUsageView() {
 }
 
 describe('user UsageView', () => {
+  it('shows the site-wide card only when the server allows it, without admin controls', async () => {
+    vi.mocked(getSiteCacheRate).mockResolvedValueOnce({ visible_to_users: true, cache_hit_rate: 87.6 })
+    const wrapper = mountUsageView()
+    await flushPromises()
+    const summary = wrapper.findComponent(UsageStatsCards)
+    expect(summary.props('showSiteCacheRate')).toBe(true)
+    expect(summary.props('siteCacheRate')).toEqual({ visible_to_users: true, cache_hit_rate: 87.6 })
+    expect(summary.props('manageSiteCacheRate')).toBeUndefined()
+  })
+
   beforeEach(() => {
     query.mockReset()
     getStats.mockReset()
@@ -217,9 +231,10 @@ describe('user UsageView', () => {
   })
 
   it('loads logs, stats, model stats, and snapshot on first render', async () => {
-    mountUsageView()
+    const wrapper = mountUsageView()
     await flushPromises()
 
+    expect(wrapper.findComponent(UsageTable).props('columns').map((column: { key: string }) => column.key)).toContain('latency')
     expect(query).toHaveBeenCalled()
     expect(getStats).toHaveBeenCalled()
     expect(getDashboardModels).toHaveBeenCalled()
@@ -229,7 +244,7 @@ describe('user UsageView', () => {
       include_group_stats: true,
     }))
     expect(list).toHaveBeenCalledTimes(1)
-    expect(list).toHaveBeenCalledWith(1, 100)
+    expect(list).toHaveBeenCalledWith(1, 100, { include_archived: true })
     expect(getAvailable).toHaveBeenCalled()
   })
 
@@ -246,7 +261,7 @@ describe('user UsageView', () => {
     const wrapper = mountUsageView()
     await flushPromises()
 
-    expect(list.mock.calls).toEqual([[1, 100], [2, 100]])
+    expect(list.mock.calls).toEqual([[1, 100, { include_archived: true }], [2, 100, { include_archived: true }]])
     const usageKeySelect = wrapper.findAllComponents(Select).find((select) =>
       select.props('options').some((option: SelectOption) => option.label === 'All API Keys')
     )!
@@ -284,13 +299,31 @@ describe('user UsageView', () => {
     wrapper.unmount()
   })
 
+  it('keeps archived desktop authorization available for historical usage filters', async () => {
+    const archived = { id: 109, name: 'Aino desktop', desktop_managed: true, key: '', status: 'inactive' }
+    list.mockImplementation(async (_page, _size, filters) => ({
+      items: filters?.include_archived ? [archived] : [], total: 1, page: 1, page_size: 100, pages: 1,
+    }))
+    const wrapper = mountUsageView()
+    await flushPromises()
+    const keySelect = wrapper.findAllComponents(Select).find((select) =>
+      select.props('options').some((option: SelectOption) => option.label === 'All API Keys')
+    )!
+    expect(keySelect.props('options')).toContainEqual({ value: archived.id, label: archived.name })
+    keySelect.vm.$emit('update:modelValue', archived.id)
+    keySelect.vm.$emit('change', archived.id)
+    await flushPromises()
+    expect(query).toHaveBeenCalledWith(expect.objectContaining({ api_key_id: archived.id }), expect.anything())
+    wrapper.unmount()
+  })
+
   it('does not request another API key page when the user has no keys', async () => {
     list.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 100, pages: 0 })
 
     const wrapper = mountUsageView()
     await flushPromises()
 
-    expect(list.mock.calls).toEqual([[1, 100]])
+    expect(list.mock.calls).toEqual([[1, 100, { include_archived: true }]])
     const keySelect = wrapper.findAllComponents(Select).find((select) =>
       select.props('options').some((option: SelectOption) => option.label === 'All API Keys')
     )!
@@ -311,7 +344,7 @@ describe('user UsageView', () => {
     const wrapper = mountUsageView()
     await flushPromises()
 
-    expect(list.mock.calls).toEqual([[1, 100], [2, 100]])
+    expect(list.mock.calls).toEqual([[1, 100, { include_archived: true }], [2, 100, { include_archived: true }]])
     const keySelect = wrapper.findAllComponents(Select).find((select) =>
       select.props('options').some((option: SelectOption) => option.label === 'All API Keys')
     )!
@@ -399,7 +432,7 @@ describe('user UsageView', () => {
     expect(csvContent.startsWith('\uFEFF')).toBe(true)
     expect(csvContent.slice(1)).toBe([
       'Time,API Key Name,Model,Reasoning Effort,Inbound Endpoint,IP Address,Type,Billing Mode,Input Tokens,Output Tokens,Cache Read Tokens,Cache Creation Tokens,Rate Multiplier,Billed Cost,Original Cost,First Token (ms),Duration (ms)',
-      '2026-03-08T00:00:00Z,demo-key,gpt-5.4,"\'-",,203.0.113.10,Sync,Token,4057,101,278272,4,1,0.09288300,0.09288300,12,345',
+      '2026-03-08T00:00:00Z,demo-key,gpt-5.4,-,,203.0.113.10,Sync,Token,4057,101,278272,4,1,0.09288300,0.09288300,12,345',
     ].join('\n'))
     expect(csvContent).toContain('IP Address')
     expect(csvContent).toContain('203.0.113.10')
@@ -413,6 +446,39 @@ describe('user UsageView', () => {
     window.URL.revokeObjectURL = originalRevokeObjectURL
     vi.unstubAllGlobals()
     clickSpy.mockRestore()
+  })
+
+  it('keeps formula-injection protection for dangerous exported values', async () => {
+    query.mockResolvedValue({
+      items: [{ ...usageLog, api_key: { name: '-1+1' } }],
+      total: 1,
+      pages: 1,
+    })
+    const wrapper = mountUsageView()
+    await flushPromises()
+
+    let csvContent = ''
+    const OriginalBlob = globalThis.Blob
+    vi.stubGlobal('Blob', vi.fn((parts: BlobPart[], options?: BlobPropertyBag) => {
+      csvContent = parts.map((part) => String(part)).join('')
+      return new OriginalBlob(parts, options)
+    }))
+    const originalCreateObjectURL = window.URL.createObjectURL
+    const originalRevokeObjectURL = window.URL.revokeObjectURL
+    window.URL.createObjectURL = vi.fn(() => 'blob:usage-export') as typeof window.URL.createObjectURL
+    window.URL.revokeObjectURL = vi.fn(() => {}) as typeof window.URL.revokeObjectURL
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+
+    await (wrapper.vm as any).exportToCSV()
+
+    expect(csvContent).toContain(',"\'-1+1",gpt-5.4,-,')
+    expect(showSuccess).toHaveBeenCalled()
+
+    window.URL.createObjectURL = originalCreateObjectURL
+    window.URL.revokeObjectURL = originalRevokeObjectURL
+    vi.unstubAllGlobals()
+    clickSpy.mockRestore()
+    wrapper.unmount()
   })
 
   it('keeps the initial filters, sort, and filename while exporting multiple pages', async () => {

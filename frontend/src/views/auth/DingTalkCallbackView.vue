@@ -2,9 +2,9 @@
   <AuthLayout>
     <div class="space-y-6">
       <div class="text-center">
-        <h2 class="text-2xl font-bold text-gray-900 dark:text-white">
+        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
           {{ t('auth.dingtalk.callbackTitle') }}
-        </h2>
+        </h1>
         <p class="mt-2 text-sm text-gray-500 dark:text-dark-400">
           {{ isProcessing ? t('auth.dingtalk.callbackProcessing') : t('auth.dingtalk.callbackHint') }}
         </p>

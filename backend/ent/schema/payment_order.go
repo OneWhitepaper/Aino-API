@@ -33,6 +33,12 @@ func (PaymentOrder) Fields() []ent.Field {
 	return []ent.Field{
 		// 用户信息（冗余存储，避免关联查询）
 		field.Int64("user_id"),
+		field.String("client_order_id").Optional().Nillable().MaxLen(36),
+		field.String("request_hash").Default("").MaxLen(64),
+		field.String("creation_state").Default("").MaxLen(20),
+		field.String("creation_lease_token").Default("").MaxLen(36),
+		field.Time("creation_lease_until").Optional().Nillable(),
+		field.Bool("confirmation_required").Default(false),
 		field.String("user_email").
 			MaxLen(255),
 		field.String("user_name").
@@ -49,6 +55,10 @@ func (PaymentOrder) Fields() []ent.Field {
 			SchemaType(map[string]string{dialect.Postgres: "decimal(20,2)"}),
 		field.Float("fee_rate").
 			SchemaType(map[string]string{dialect.Postgres: "decimal(10,4)"}).
+			Default(0),
+		// 充值赠送额度（USD）。已计入 amount；单独记录用于订单展示与推广返利基数剔除。
+		field.Float("bonus_amount").
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,2)"}).
 			Default(0),
 		field.String("recharge_code").
 			MaxLen(64),
@@ -185,6 +195,7 @@ func (PaymentOrder) Edges() []ent.Edge {
 
 func (PaymentOrder) Indexes() []ent.Index {
 	return []ent.Index{
+		index.Fields("user_id", "client_order_id").Unique().Annotations(entsql.IndexWhere("client_order_id IS NOT NULL AND client_order_id <> ''")),
 		index.Fields("out_trade_no").
 			Unique().
 			Annotations(entsql.IndexWhere("out_trade_no <> ''")),

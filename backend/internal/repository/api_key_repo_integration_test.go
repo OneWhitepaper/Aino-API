@@ -4,11 +4,13 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
+	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/stretchr/testify/require"
@@ -251,6 +253,30 @@ func (s *APIKeyRepoSuite) TestCountByUserID() {
 	s.Require().Equal(int64(2), count)
 }
 
+func (s *APIKeyRepoSuite) TestCreateLimitExcludesDesktopCredentialHistory() {
+	user := s.mustCreateUser("desktop-count@test.com")
+	managed := make([]*dbent.APIKeyCreate, 200)
+	for i := range managed {
+		managed[i] = s.client.APIKey.Create().SetUserID(user.ID).
+			SetKey(fmt.Sprintf("sk-managed-%d", i)).SetName("desktop lease").
+			SetDesktopManaged(true).SetStatus(service.StatusDisabled)
+	}
+	_, err := s.client.APIKey.CreateBulk(managed...).Save(s.ctx)
+	s.Require().NoError(err)
+	cfg := &config.Config{}
+	cfg.APIKeyCreate.MaxActivePerUser = 2
+	keys := service.NewAPIKeyService(s.repo, NewUserRepository(s.client, nil), nil, nil, nil, nil, cfg)
+	for range 2 {
+		_, err := keys.Create(s.ctx, user.ID, service.CreateAPIKeyRequest{Name: "ordinary key"})
+		s.Require().NoError(err, "desktop credential history must not consume ordinary key slots")
+	}
+	_, err = keys.Create(s.ctx, user.ID, service.CreateAPIKeyRequest{Name: "over limit"})
+	s.Require().ErrorIs(err, service.ErrAPIKeyCountExceeded)
+	count, err := s.repo.CountByUserID(s.ctx, user.ID)
+	s.Require().NoError(err)
+	s.Require().Equal(int64(2), count)
+}
+
 // --- ListByGroupID / CountByGroupID ---
 
 func (s *APIKeyRepoSuite) TestListByGroupID() {
@@ -464,6 +490,10 @@ func (s *APIKeyRepoSuite) TestIncrementQuotaUsed_Basic() {
 	newQuota, err = s.repo.IncrementQuotaUsed(s.ctx, key.ID, 2.5)
 	s.Require().NoError(err, "IncrementQuotaUsed second")
 	s.Require().Equal(4.0, newQuota, "第二次递增后应为 4.0")
+
+	data, err := s.repo.GetRateLimitData(s.ctx, key.ID)
+	s.Require().NoError(err, "GetRateLimitData")
+	s.Require().Equal(4.0, data.QuotaUsed, "用量读取带回总额度已用量")
 }
 
 func (s *APIKeyRepoSuite) TestIncrementQuotaUsed_NotFound() {

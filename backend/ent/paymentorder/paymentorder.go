@@ -16,6 +16,18 @@ const (
 	FieldID = "id"
 	// FieldUserID holds the string denoting the user_id field in the database.
 	FieldUserID = "user_id"
+	// FieldClientOrderID holds the string denoting the client_order_id field in the database.
+	FieldClientOrderID = "client_order_id"
+	// FieldRequestHash holds the string denoting the request_hash field in the database.
+	FieldRequestHash = "request_hash"
+	// FieldCreationState holds the string denoting the creation_state field in the database.
+	FieldCreationState = "creation_state"
+	// FieldCreationLeaseToken holds the string denoting the creation_lease_token field in the database.
+	FieldCreationLeaseToken = "creation_lease_token"
+	// FieldCreationLeaseUntil holds the string denoting the creation_lease_until field in the database.
+	FieldCreationLeaseUntil = "creation_lease_until"
+	// FieldConfirmationRequired holds the string denoting the confirmation_required field in the database.
+	FieldConfirmationRequired = "confirmation_required"
 	// FieldUserEmail holds the string denoting the user_email field in the database.
 	FieldUserEmail = "user_email"
 	// FieldUserName holds the string denoting the user_name field in the database.
@@ -28,6 +40,8 @@ const (
 	FieldPayAmount = "pay_amount"
 	// FieldFeeRate holds the string denoting the fee_rate field in the database.
 	FieldFeeRate = "fee_rate"
+	// FieldBonusAmount holds the string denoting the bonus_amount field in the database.
+	FieldBonusAmount = "bonus_amount"
 	// FieldRechargeCode holds the string denoting the recharge_code field in the database.
 	FieldRechargeCode = "recharge_code"
 	// FieldOutTradeNo holds the string denoting the out_trade_no field in the database.
@@ -109,12 +123,19 @@ const (
 var Columns = []string{
 	FieldID,
 	FieldUserID,
+	FieldClientOrderID,
+	FieldRequestHash,
+	FieldCreationState,
+	FieldCreationLeaseToken,
+	FieldCreationLeaseUntil,
+	FieldConfirmationRequired,
 	FieldUserEmail,
 	FieldUserName,
 	FieldUserNotes,
 	FieldAmount,
 	FieldPayAmount,
 	FieldFeeRate,
+	FieldBonusAmount,
 	FieldRechargeCode,
 	FieldOutTradeNo,
 	FieldPaymentType,
@@ -160,12 +181,30 @@ func ValidColumn(column string) bool {
 }
 
 var (
+	// ClientOrderIDValidator is a validator for the "client_order_id" field. It is called by the builders before save.
+	ClientOrderIDValidator func(string) error
+	// DefaultRequestHash holds the default value on creation for the "request_hash" field.
+	DefaultRequestHash string
+	// RequestHashValidator is a validator for the "request_hash" field. It is called by the builders before save.
+	RequestHashValidator func(string) error
+	// DefaultCreationState holds the default value on creation for the "creation_state" field.
+	DefaultCreationState string
+	// CreationStateValidator is a validator for the "creation_state" field. It is called by the builders before save.
+	CreationStateValidator func(string) error
+	// DefaultCreationLeaseToken holds the default value on creation for the "creation_lease_token" field.
+	DefaultCreationLeaseToken string
+	// CreationLeaseTokenValidator is a validator for the "creation_lease_token" field. It is called by the builders before save.
+	CreationLeaseTokenValidator func(string) error
+	// DefaultConfirmationRequired holds the default value on creation for the "confirmation_required" field.
+	DefaultConfirmationRequired bool
 	// UserEmailValidator is a validator for the "user_email" field. It is called by the builders before save.
 	UserEmailValidator func(string) error
 	// UserNameValidator is a validator for the "user_name" field. It is called by the builders before save.
 	UserNameValidator func(string) error
 	// DefaultFeeRate holds the default value on creation for the "fee_rate" field.
 	DefaultFeeRate float64
+	// DefaultBonusAmount holds the default value on creation for the "bonus_amount" field.
+	DefaultBonusAmount float64
 	// RechargeCodeValidator is a validator for the "recharge_code" field. It is called by the builders before save.
 	RechargeCodeValidator func(string) error
 	// DefaultOutTradeNo holds the default value on creation for the "out_trade_no" field.
@@ -219,6 +258,36 @@ func ByUserID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldUserID, opts...).ToFunc()
 }
 
+// ByClientOrderID orders the results by the client_order_id field.
+func ByClientOrderID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldClientOrderID, opts...).ToFunc()
+}
+
+// ByRequestHash orders the results by the request_hash field.
+func ByRequestHash(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRequestHash, opts...).ToFunc()
+}
+
+// ByCreationState orders the results by the creation_state field.
+func ByCreationState(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCreationState, opts...).ToFunc()
+}
+
+// ByCreationLeaseToken orders the results by the creation_lease_token field.
+func ByCreationLeaseToken(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCreationLeaseToken, opts...).ToFunc()
+}
+
+// ByCreationLeaseUntil orders the results by the creation_lease_until field.
+func ByCreationLeaseUntil(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCreationLeaseUntil, opts...).ToFunc()
+}
+
+// ByConfirmationRequired orders the results by the confirmation_required field.
+func ByConfirmationRequired(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldConfirmationRequired, opts...).ToFunc()
+}
+
 // ByUserEmail orders the results by the user_email field.
 func ByUserEmail(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldUserEmail, opts...).ToFunc()
@@ -247,6 +316,11 @@ func ByPayAmount(opts ...sql.OrderTermOption) OrderOption {
 // ByFeeRate orders the results by the fee_rate field.
 func ByFeeRate(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldFeeRate, opts...).ToFunc()
+}
+
+// ByBonusAmount orders the results by the bonus_amount field.
+func ByBonusAmount(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBonusAmount, opts...).ToFunc()
 }
 
 // ByRechargeCode orders the results by the recharge_code field.

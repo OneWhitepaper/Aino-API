@@ -134,6 +134,24 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
+// GetIntegrationRedis returns the shared Redis client for integration tests
+// This is used by service-level integration tests that need Redis
+func GetIntegrationRedis() *redisclient.Client {
+	return integrationRedis
+}
+
+// GetIntegrationEntClient exposes the integration-only Ent client to external
+// repository tests. It is never compiled into production packages.
+func GetIntegrationEntClient() *dbent.Client {
+	return integrationEntClient
+}
+
+// GetIntegrationDB exposes the integration-only SQL connection to external
+// repository tests that need the real repositories alongside HTTP handlers.
+func GetIntegrationDB() *sql.DB {
+	return integrationDB
+}
+
 func dockerIsAvailable(ctx context.Context) bool {
 	cmd := exec.CommandContext(ctx, "docker", "info")
 	cmd.Env = os.Environ()

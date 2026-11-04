@@ -25,16 +25,38 @@ func RegisterUserRoutes(
 	// 用户管理面变更类操作入审计（含 TOTP 启用/禁用、step-up 验证、密码修改等安全事件）
 	authenticated.Use(gin.HandlerFunc(auditLog))
 	{
+		authenticated.GET("/contact", h.Setting.GetContactPage)
+		authenticated.GET("/iq-radar", h.IQRadar.Get)
+		iqTests := authenticated.Group("/iq-tests")
+		{
+			iqTests.GET("", h.IQTest.List)
+			iqTests.GET("/keys", h.IQTest.Keys)
+			iqTests.GET("/options", h.IQTest.Options)
+			iqTests.POST("/models", panelRateLimiter.Heavy(), h.IQTest.Models)
+			iqTests.POST("", panelRateLimiter.Heavy(), h.IQTest.Start)
+			iqTests.GET("/:id", h.IQTest.Get)
+			iqTests.DELETE("/:id", h.IQTest.Cancel)
+		}
+
 		// 用户接口
 		user := authenticated.Group("/user")
 		{
 			user.GET("/profile", h.User.GetProfile)
+			if h.MCPOAuth != nil {
+				user.GET("/mcp/config", h.MCPOAuth.ConnectionConfig)
+				user.GET("/mcp/grants", h.MCPOAuth.ListGrants)
+				user.DELETE("/mcp/grants/:id", h.MCPOAuth.RevokeGrant)
+				user.GET("/mcp/authorize", h.MCPOAuth.Preview)
+				user.POST("/mcp/authorize", h.MCPOAuth.Decide)
+			}
 			user.PUT("/password", h.User.ChangePassword)
 			user.PUT("", h.User.UpdateProfile)
 			user.GET("/aff", h.User.GetAffiliate)
 			user.POST("/aff/transfer", h.User.TransferAffiliateQuota)
 			user.POST("/account-bindings/email/send-code", h.User.SendEmailBindingCode)
 			user.POST("/account-bindings/email", h.User.BindEmailIdentity)
+			user.POST("/account-bindings/phone/send-code", h.User.SendPhoneBindingCode)
+			user.POST("/account-bindings/phone", h.User.BindPhone)
 			user.DELETE("/account-bindings/:provider", h.User.UnbindIdentity)
 			user.POST("/auth-identities/bind/start", h.User.StartIdentityBinding)
 			user.GET("/api-keys/:id/usage/daily", panelRateLimiter.Heavy(), h.Usage.GetMyAPIKeyDailyUsage)
@@ -104,6 +126,7 @@ func RegisterUserRoutes(
 			usage.GET("/errors/:id", h.Usage.GetErrorDetail)
 			usage.GET("/:id", h.Usage.GetByID)
 			usage.GET("/stats", h.Usage.Stats)
+			usage.GET("/site-cache-rate", h.Usage.SiteCacheRate)
 			// User dashboard endpoints
 			usage.GET("/dashboard/stats", h.Usage.DashboardStats)
 			usage.GET("/dashboard/trend", h.Usage.DashboardTrend)

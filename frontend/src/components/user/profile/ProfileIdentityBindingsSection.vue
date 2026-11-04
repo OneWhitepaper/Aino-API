@@ -99,6 +99,7 @@
                   class="input"
                   :placeholder="t('profile.authBindings.emailPlaceholder')"
                   :disabled="isSendingEmailCode || isBindingEmail"
+                  @input="isEmailBindingFormDirty = true"
                 />
                 <button
                   data-testid="profile-binding-email-send-code"
@@ -122,6 +123,7 @@
                   class="input"
                   :placeholder="t('profile.authBindings.codePlaceholder')"
                   :disabled="isBindingEmail"
+                  @input="isEmailBindingFormDirty = true"
                 />
                 <input
                   v-model="emailBindingForm.password"
@@ -130,6 +132,7 @@
                   class="input"
                   :placeholder="emailPasswordPlaceholder"
                   :disabled="isBindingEmail"
+                  @input="isEmailBindingFormDirty = true"
                 />
                 <button
                   data-testid="profile-binding-email-submit"
@@ -145,6 +148,13 @@
                   }}
                 </button>
               </div>
+
+              <PhoneBindingForm
+                v-if="item.provider === 'phone' && item.canBind && showPhoneForm"
+                data-testid="profile-binding-phone-form"
+                :code-length="phoneCodeLength"
+                @updated="handlePhoneUpdated"
+              />
             </div>
           </div>
 
@@ -163,7 +173,16 @@
               }}
             </button>
             <button
-              v-if="item.canBind"
+              v-if="item.provider === 'phone' && item.canBind && compact"
+              data-testid="profile-binding-phone-toggle"
+              type="button"
+              class="btn btn-secondary btn-sm"
+              @click="isPhoneFormExpanded = !isPhoneFormExpanded"
+            >
+              {{ showPhoneForm ? t('profile.authBindings.hidePhoneFormAction') : t('profile.authBindings.managePhoneAction') }}
+            </button>
+            <button
+              v-if="item.canBind && item.provider !== 'phone'"
               :data-testid="`profile-binding-${item.provider}-action`"
               type="button"
               class="btn btn-primary btn-sm"
@@ -208,6 +227,7 @@ import {
   unbindAuthIdentity,
 } from '@/api/user'
 import Icon from '@/components/icons/Icon.vue'
+import PhoneBindingForm from '@/components/user/profile/PhoneBindingForm.vue'
 import { useAppStore, useAuthStore } from '@/stores'
 import type { User, UserAuthBindingStatus, UserAuthProvider } from '@/types'
 
@@ -247,7 +267,9 @@ const authStore = useAuthStore()
 const localUser = ref<User | null>(null)
 const isSendingEmailCode = ref(false)
 const isBindingEmail = ref(false)
+const isEmailBindingFormDirty = ref(false)
 const isEmailFormExpanded = ref(!props.compact)
+const isPhoneFormExpanded = ref(!props.compact)
 const unbindingProvider = ref<BindableProvider | null>(null)
 const emailBindingForm = reactive({
   email: '',
@@ -255,15 +277,21 @@ const emailBindingForm = reactive({
   password: '',
 })
 
+function resetEmailBindingForm(user: User | null): void {
+  emailBindingForm.email =
+    typeof user?.email === 'string' && !user.email.endsWith('.invalid') ? user.email : ''
+  emailBindingForm.verifyCode = ''
+  emailBindingForm.password = ''
+  isEmailBindingFormDirty.value = false
+}
+
 watch(
   () => props.user,
-  (user) => {
+  (user, previousUser) => {
     localUser.value = null
-    if (!user) {
-      return
-    }
-    if (typeof user.email === 'string' && !user.email.endsWith('.invalid')) {
-      emailBindingForm.email = user.email
+    // Profile polling must not overwrite an in-progress email verification flow.
+    if (user?.id !== previousUser?.id || !isEmailBindingFormDirty.value) {
+      resetEmailBindingForm(user)
     }
   },
   { immediate: true }
@@ -281,6 +309,7 @@ watch(
 
 const currentUser = computed(() => localUser.value ?? props.user)
 const compact = computed(() => props.compact)
+const phoneCodeLength = computed(() => appStore.cachedPublicSettings?.phone_code_length || 6)
 const rowClass = computed(() =>
   props.embedded
     ? compact.value
@@ -290,6 +319,7 @@ const rowClass = computed(() =>
 )
 const emailBound = computed(() => getBindingStatus('email'))
 const showEmailForm = computed(() => !compact.value || isEmailFormExpanded.value)
+const showPhoneForm = computed(() => !compact.value || isPhoneFormExpanded.value)
 const emailPasswordPlaceholder = computed(() =>
   emailBound.value
     ? t('profile.authBindings.replaceEmailPasswordPlaceholder')
@@ -405,6 +435,9 @@ function getDisplayableEmail(user: User | null | undefined): string {
 }
 
 function isProviderEnabledForBinding(provider: BindableProvider): boolean {
+  if (provider === 'phone') {
+    return appStore.cachedPublicSettings?.phone_binding_enabled === true
+  }
   if (provider === 'linuxdo') {
     return props.linuxdoEnabled
   }
@@ -418,6 +451,17 @@ function isProviderEnabledForBinding(provider: BindableProvider): boolean {
 }
 
 const providerItems = computed(() => [
+  {
+    provider: 'phone' as const,
+    label: t('profile.authBindings.providers.phone'),
+    bound: getBindingStatus('phone'),
+    canBind:
+      !getBindingStatus('phone') &&
+      isProviderEnabledForBinding('phone') &&
+      (getBindingDetails('phone')?.can_bind ?? true),
+    canUnbind: Boolean(getBindingStatus('phone') && getBindingDetails('phone')?.can_unbind),
+    details: getBindingDetails('phone'),
+  },
   {
     provider: 'email' as const,
     label: t('profile.authBindings.providers.email'),
@@ -473,6 +517,7 @@ const providerItems = computed(() => [
 ])
 
 function providerInitial(provider: UserAuthProvider): string {
+  if (provider === 'phone') return '☎'
   if (provider === 'linuxdo') {
     return 'L'
   }
@@ -489,6 +534,9 @@ function providerInitial(provider: UserAuthProvider): string {
 }
 
 function providerIconClass(provider: UserAuthProvider): string {
+  if (provider === 'phone') {
+    return 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-300'
+  }
   if (provider === 'linuxdo') {
     return 'bg-orange-100 text-orange-600 dark:bg-orange-900/20 dark:text-orange-300'
   }
@@ -556,6 +604,10 @@ function startBinding(provider: UserAuthProvider): void {
   if (provider === 'email') {
     return
   }
+  if (provider === 'phone') {
+    isPhoneFormExpanded.value = true
+    return
+  }
   startOAuthBinding(provider, {
     redirectTo: route.fullPath || '/profile',
     wechatOAuthSettings: provider === 'wechat' ? wechatOAuthSettings.value : null,
@@ -616,6 +668,7 @@ async function sendEmailCode(): Promise<void> {
     return
   }
 
+  isEmailBindingFormDirty.value = true
   isSendingEmailCode.value = true
   try {
     await sendEmailBindingCode(emailBindingForm.email)
@@ -632,6 +685,7 @@ async function bindEmail(): Promise<void> {
     return
   }
 
+  isEmailBindingFormDirty.value = true
   isBindingEmail.value = true
   try {
     const user = await bindEmailIdentity({
@@ -641,8 +695,7 @@ async function bindEmail(): Promise<void> {
     })
     const replacingBoundEmail = emailBound.value
     applyUpdatedUser(user)
-    emailBindingForm.verifyCode = ''
-    emailBindingForm.password = ''
+    resetEmailBindingForm(user)
     if (compact.value) {
       isEmailFormExpanded.value = false
     }
@@ -656,5 +709,10 @@ async function bindEmail(): Promise<void> {
   } finally {
     isBindingEmail.value = false
   }
+}
+
+function handlePhoneUpdated(user: User): void {
+  applyUpdatedUser(user)
+  isPhoneFormExpanded.value = false
 }
 </script>

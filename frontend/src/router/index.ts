@@ -50,6 +50,16 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/desktop/captcha',
+    name: 'DesktopCaptcha',
+    component: () => import('@/views/auth/DesktopCaptchaView.vue'),
+    meta: {
+      requiresAuth: false,
+      isolatedPublic: true,
+      title: 'Captcha'
+    }
+  },
+  {
     path: '/register',
     name: 'Register',
     component: () => import('@/views/auth/RegisterView.vue'),
@@ -199,7 +209,7 @@ const routes: RouteRecordRaw[] = [
       requiresAuth: true,
       requiresAdmin: false,
       title: 'Dashboard',
-      titleKey: 'dashboard.title',
+      titleKey: 'workspace.overview',
       descriptionKey: 'dashboard.welcomeMessage'
     }
   },
@@ -277,6 +287,29 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/settings/mcp',
+    name: 'MCP',
+    component: () => import('@/views/user/MCPView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'MCP Connection',
+      titleKey: 'mcp.title',
+      descriptionKey: 'mcp.description'
+    }
+  },
+  {
+    path: '/oauth/mcp/authorize',
+    name: 'MCPOAuthAuthorize',
+    component: () => import('@/views/auth/MCPOAuthAuthorizeView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'Authorize MCP Application',
+      titleKey: 'mcp.consentTitle'
+    }
+  },
+  {
     path: '/profile',
     name: 'Profile',
     component: () => import('@/views/user/ProfileView.vue'),
@@ -286,6 +319,18 @@ const routes: RouteRecordRaw[] = [
       title: 'Profile',
       titleKey: 'profile.title',
       descriptionKey: 'profile.description'
+    }
+  },
+  {
+    path: '/contact',
+    name: 'Contact',
+    component: () => import('@/views/user/ContactView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'Contact Us',
+      titleKey: 'contact.title',
+      descriptionKey: 'contact.description'
     }
   },
   {
@@ -415,6 +460,12 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/diagnostics',
+    name: 'AdminDiagnostics',
+    component: () => import('@/views/admin/DiagnosticsView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true, title: 'Desktop Diagnostics', titleKey: 'admin.diagnostics.title' }
+  },
+  {
     path: '/admin/ops',
     name: 'AdminOps',
     component: () => import('@/views/admin/ops/OpsDashboard.vue'),
@@ -488,6 +539,23 @@ const routes: RouteRecordRaw[] = [
       title: 'Channel Monitor',
       titleKey: 'admin.channelMonitor.title',
       descriptionKey: 'admin.channelMonitor.description'
+    }
+  },
+  {
+    path: '/iq-test',
+    name: 'ModelIQTest',
+    component: () => import('@/views/user/IQTestView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: false, title: 'Model IQ Test', titleKey: 'iqTest.title' }
+  },
+  {
+    path: '/iq-radar',
+    name: 'IntelligenceRadar',
+    component: () => import('@/views/user/IQRadarView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'Intelligence Radar',
+      titleKey: 'iqRadar.title'
     }
   },
   {
@@ -595,6 +663,18 @@ const routes: RouteRecordRaw[] = [
       title: 'System Settings',
       titleKey: 'admin.settings.title',
       descriptionKey: 'admin.settings.description'
+    }
+  },
+  {
+    path: '/admin/contact',
+    name: 'AdminContact',
+    component: () => import('@/views/admin/ContactSettingsView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Manage Contact Details',
+      titleKey: 'contact.admin.title',
+      descriptionKey: 'contact.admin.description'
     }
   },
   {
@@ -782,6 +862,12 @@ function isBackendModePublicRouteAllowed(path: string, hasPendingAuthSession: bo
 router.beforeEach(async (to, _from, next) => {
   // 开始导航加载状态
   navigationLoading.startNavigation()
+
+  if (to.meta.isolatedPublic === true) {
+    document.title = typeof to.meta.title === 'string' ? to.meta.title : 'Captcha'
+    next()
+    return
+  }
 
   const authStore = useAuthStore()
 

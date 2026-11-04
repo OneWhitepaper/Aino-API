@@ -1,5 +1,10 @@
 <template>
   <AppLayout>
+    <div class="workspace-page workspace-keys">
+    <header class="workspace-intro workspace-key-intro">
+      <div><h2>{{ t('workspace.models') }}</h2><p>{{ t('workspace.modelPageDescription') }}</p></div>
+      <router-link to="/keys?create=1" class="btn btn-primary">{{ t('workspace.create') }}</router-link>
+    </header>
     <TablePageLayout>
       <template #filters>
         <div class="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
@@ -45,6 +50,7 @@
         />
       </template>
     </TablePageLayout>
+    </div>
   </AppLayout>
 </template>
 

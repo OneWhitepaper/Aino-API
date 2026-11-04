@@ -27,6 +27,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitorhistory"
 	"github.com/Wei-Shaw/sub2api/ent/channelmonitorrequesttemplate"
 	"github.com/Wei-Shaw/sub2api/ent/compositemodelroute"
+	"github.com/Wei-Shaw/sub2api/ent/desktopmodelcredential"
 	"github.com/Wei-Shaw/sub2api/ent/errorpassthroughrule"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/idempotencyrecord"
@@ -79,6 +80,7 @@ const (
 	TypeChannelMonitorHistory         = "ChannelMonitorHistory"
 	TypeChannelMonitorRequestTemplate = "ChannelMonitorRequestTemplate"
 	TypeCompositeModelRoute           = "CompositeModelRoute"
+	TypeDesktopModelCredential        = "DesktopModelCredential"
 	TypeErrorPassthroughRule          = "ErrorPassthroughRule"
 	TypeGroup                         = "Group"
 	TypeIdempotencyRecord             = "IdempotencyRecord"
@@ -108,51 +110,55 @@ const (
 // APIKeyMutation represents an operation that mutates the APIKey nodes in the graph.
 type APIKeyMutation struct {
 	config
-	op                 Op
-	typ                string
-	id                 *int64
-	created_at         *time.Time
-	updated_at         *time.Time
-	deleted_at         *time.Time
-	key                *string
-	name               *string
-	status             *string
-	last_used_at       *time.Time
-	ip_whitelist       *[]string
-	appendip_whitelist []string
-	ip_blacklist       *[]string
-	appendip_blacklist []string
-	quota              *float64
-	addquota           *float64
-	quota_used         *float64
-	addquota_used      *float64
-	expires_at         *time.Time
-	rate_limit_5h      *float64
-	addrate_limit_5h   *float64
-	rate_limit_1d      *float64
-	addrate_limit_1d   *float64
-	rate_limit_7d      *float64
-	addrate_limit_7d   *float64
-	usage_5h           *float64
-	addusage_5h        *float64
-	usage_1d           *float64
-	addusage_1d        *float64
-	usage_7d           *float64
-	addusage_7d        *float64
-	window_5h_start    *time.Time
-	window_1d_start    *time.Time
-	window_7d_start    *time.Time
-	clearedFields      map[string]struct{}
-	user               *int64
-	cleareduser        bool
-	group              *int64
-	clearedgroup       bool
-	usage_logs         map[int64]struct{}
-	removedusage_logs  map[int64]struct{}
-	clearedusage_logs  bool
-	done               bool
-	oldValue           func(context.Context) (*APIKey, error)
-	predicates         []predicate.APIKey
+	op                               Op
+	typ                              string
+	id                               *int64
+	created_at                       *time.Time
+	updated_at                       *time.Time
+	deleted_at                       *time.Time
+	desktop_managed                  *bool
+	key                              *string
+	name                             *string
+	status                           *string
+	last_used_at                     *time.Time
+	ip_whitelist                     *[]string
+	appendip_whitelist               []string
+	ip_blacklist                     *[]string
+	appendip_blacklist               []string
+	quota                            *float64
+	addquota                         *float64
+	quota_used                       *float64
+	addquota_used                    *float64
+	expires_at                       *time.Time
+	rate_limit_5h                    *float64
+	addrate_limit_5h                 *float64
+	rate_limit_1d                    *float64
+	addrate_limit_1d                 *float64
+	rate_limit_7d                    *float64
+	addrate_limit_7d                 *float64
+	usage_5h                         *float64
+	addusage_5h                      *float64
+	usage_1d                         *float64
+	addusage_1d                      *float64
+	usage_7d                         *float64
+	addusage_7d                      *float64
+	window_5h_start                  *time.Time
+	window_1d_start                  *time.Time
+	window_7d_start                  *time.Time
+	clearedFields                    map[string]struct{}
+	user                             *int64
+	cleareduser                      bool
+	group                            *int64
+	clearedgroup                     bool
+	usage_logs                       map[int64]struct{}
+	removedusage_logs                map[int64]struct{}
+	clearedusage_logs                bool
+	desktop_model_credentials        map[int64]struct{}
+	removeddesktop_model_credentials map[int64]struct{}
+	cleareddesktop_model_credentials bool
+	done                             bool
+	oldValue                         func(context.Context) (*APIKey, error)
+	predicates                       []predicate.APIKey
 }
 
 var _ ent.Mutation = (*APIKeyMutation)(nil)
@@ -372,6 +378,42 @@ func (m *APIKeyMutation) DeletedAtCleared() bool {
 func (m *APIKeyMutation) ResetDeletedAt() {
 	m.deleted_at = nil
 	delete(m.clearedFields, apikey.FieldDeletedAt)
+}
+
+// SetDesktopManaged sets the "desktop_managed" field.
+func (m *APIKeyMutation) SetDesktopManaged(b bool) {
+	m.desktop_managed = &b
+}
+
+// DesktopManaged returns the value of the "desktop_managed" field in the mutation.
+func (m *APIKeyMutation) DesktopManaged() (r bool, exists bool) {
+	v := m.desktop_managed
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDesktopManaged returns the old "desktop_managed" field's value of the APIKey entity.
+// If the APIKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *APIKeyMutation) OldDesktopManaged(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDesktopManaged is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDesktopManaged requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDesktopManaged: %w", err)
+	}
+	return oldValue.DesktopManaged, nil
+}
+
+// ResetDesktopManaged resets all changes to the "desktop_managed" field.
+func (m *APIKeyMutation) ResetDesktopManaged() {
+	m.desktop_managed = nil
 }
 
 // SetUserID sets the "user_id" field.
@@ -1498,6 +1540,60 @@ func (m *APIKeyMutation) ResetUsageLogs() {
 	m.removedusage_logs = nil
 }
 
+// AddDesktopModelCredentialIDs adds the "desktop_model_credentials" edge to the DesktopModelCredential entity by ids.
+func (m *APIKeyMutation) AddDesktopModelCredentialIDs(ids ...int64) {
+	if m.desktop_model_credentials == nil {
+		m.desktop_model_credentials = make(map[int64]struct{})
+	}
+	for i := range ids {
+		m.desktop_model_credentials[ids[i]] = struct{}{}
+	}
+}
+
+// ClearDesktopModelCredentials clears the "desktop_model_credentials" edge to the DesktopModelCredential entity.
+func (m *APIKeyMutation) ClearDesktopModelCredentials() {
+	m.cleareddesktop_model_credentials = true
+}
+
+// DesktopModelCredentialsCleared reports if the "desktop_model_credentials" edge to the DesktopModelCredential entity was cleared.
+func (m *APIKeyMutation) DesktopModelCredentialsCleared() bool {
+	return m.cleareddesktop_model_credentials
+}
+
+// RemoveDesktopModelCredentialIDs removes the "desktop_model_credentials" edge to the DesktopModelCredential entity by IDs.
+func (m *APIKeyMutation) RemoveDesktopModelCredentialIDs(ids ...int64) {
+	if m.removeddesktop_model_credentials == nil {
+		m.removeddesktop_model_credentials = make(map[int64]struct{})
+	}
+	for i := range ids {
+		delete(m.desktop_model_credentials, ids[i])
+		m.removeddesktop_model_credentials[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedDesktopModelCredentials returns the removed IDs of the "desktop_model_credentials" edge to the DesktopModelCredential entity.
+func (m *APIKeyMutation) RemovedDesktopModelCredentialsIDs() (ids []int64) {
+	for id := range m.removeddesktop_model_credentials {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// DesktopModelCredentialsIDs returns the "desktop_model_credentials" edge IDs in the mutation.
+func (m *APIKeyMutation) DesktopModelCredentialsIDs() (ids []int64) {
+	for id := range m.desktop_model_credentials {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetDesktopModelCredentials resets all changes to the "desktop_model_credentials" edge.
+func (m *APIKeyMutation) ResetDesktopModelCredentials() {
+	m.desktop_model_credentials = nil
+	m.cleareddesktop_model_credentials = false
+	m.removeddesktop_model_credentials = nil
+}
+
 // Where appends a list predicates to the APIKeyMutation builder.
 func (m *APIKeyMutation) Where(ps ...predicate.APIKey) {
 	m.predicates = append(m.predicates, ps...)
@@ -1532,7 +1628,7 @@ func (m *APIKeyMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *APIKeyMutation) Fields() []string {
-	fields := make([]string, 0, 23)
+	fields := make([]string, 0, 24)
 	if m.created_at != nil {
 		fields = append(fields, apikey.FieldCreatedAt)
 	}
@@ -1541,6 +1637,9 @@ func (m *APIKeyMutation) Fields() []string {
 	}
 	if m.deleted_at != nil {
 		fields = append(fields, apikey.FieldDeletedAt)
+	}
+	if m.desktop_managed != nil {
+		fields = append(fields, apikey.FieldDesktopManaged)
 	}
 	if m.user != nil {
 		fields = append(fields, apikey.FieldUserID)
@@ -1616,6 +1715,8 @@ func (m *APIKeyMutation) Field(name string) (ent.Value, bool) {
 		return m.UpdatedAt()
 	case apikey.FieldDeletedAt:
 		return m.DeletedAt()
+	case apikey.FieldDesktopManaged:
+		return m.DesktopManaged()
 	case apikey.FieldUserID:
 		return m.UserID()
 	case apikey.FieldKey:
@@ -1671,6 +1772,8 @@ func (m *APIKeyMutation) OldField(ctx context.Context, name string) (ent.Value, 
 		return m.OldUpdatedAt(ctx)
 	case apikey.FieldDeletedAt:
 		return m.OldDeletedAt(ctx)
+	case apikey.FieldDesktopManaged:
+		return m.OldDesktopManaged(ctx)
 	case apikey.FieldUserID:
 		return m.OldUserID(ctx)
 	case apikey.FieldKey:
@@ -1740,6 +1843,13 @@ func (m *APIKeyMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetDeletedAt(v)
+		return nil
+	case apikey.FieldDesktopManaged:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDesktopManaged(v)
 		return nil
 	case apikey.FieldUserID:
 		v, ok := value.(int64)
@@ -2095,6 +2205,9 @@ func (m *APIKeyMutation) ResetField(name string) error {
 	case apikey.FieldDeletedAt:
 		m.ResetDeletedAt()
 		return nil
+	case apikey.FieldDesktopManaged:
+		m.ResetDesktopManaged()
+		return nil
 	case apikey.FieldUserID:
 		m.ResetUserID()
 		return nil
@@ -2161,7 +2274,7 @@ func (m *APIKeyMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *APIKeyMutation) AddedEdges() []string {
-	edges := make([]string, 0, 3)
+	edges := make([]string, 0, 4)
 	if m.user != nil {
 		edges = append(edges, apikey.EdgeUser)
 	}
@@ -2170,6 +2283,9 @@ func (m *APIKeyMutation) AddedEdges() []string {
 	}
 	if m.usage_logs != nil {
 		edges = append(edges, apikey.EdgeUsageLogs)
+	}
+	if m.desktop_model_credentials != nil {
+		edges = append(edges, apikey.EdgeDesktopModelCredentials)
 	}
 	return edges
 }
@@ -2192,15 +2308,24 @@ func (m *APIKeyMutation) AddedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case apikey.EdgeDesktopModelCredentials:
+		ids := make([]ent.Value, 0, len(m.desktop_model_credentials))
+		for id := range m.desktop_model_credentials {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *APIKeyMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 3)
+	edges := make([]string, 0, 4)
 	if m.removedusage_logs != nil {
 		edges = append(edges, apikey.EdgeUsageLogs)
+	}
+	if m.removeddesktop_model_credentials != nil {
+		edges = append(edges, apikey.EdgeDesktopModelCredentials)
 	}
 	return edges
 }
@@ -2215,13 +2340,19 @@ func (m *APIKeyMutation) RemovedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case apikey.EdgeDesktopModelCredentials:
+		ids := make([]ent.Value, 0, len(m.removeddesktop_model_credentials))
+		for id := range m.removeddesktop_model_credentials {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *APIKeyMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 3)
+	edges := make([]string, 0, 4)
 	if m.cleareduser {
 		edges = append(edges, apikey.EdgeUser)
 	}
@@ -2230,6 +2361,9 @@ func (m *APIKeyMutation) ClearedEdges() []string {
 	}
 	if m.clearedusage_logs {
 		edges = append(edges, apikey.EdgeUsageLogs)
+	}
+	if m.cleareddesktop_model_credentials {
+		edges = append(edges, apikey.EdgeDesktopModelCredentials)
 	}
 	return edges
 }
@@ -2244,6 +2378,8 @@ func (m *APIKeyMutation) EdgeCleared(name string) bool {
 		return m.clearedgroup
 	case apikey.EdgeUsageLogs:
 		return m.clearedusage_logs
+	case apikey.EdgeDesktopModelCredentials:
+		return m.cleareddesktop_model_credentials
 	}
 	return false
 }
@@ -2274,6 +2410,9 @@ func (m *APIKeyMutation) ResetEdge(name string) error {
 		return nil
 	case apikey.EdgeUsageLogs:
 		m.ResetUsageLogs()
+		return nil
+	case apikey.EdgeDesktopModelCredentials:
+		m.ResetDesktopModelCredentials()
 		return nil
 	}
 	return fmt.Errorf("unknown APIKey edge %s", name)
@@ -20755,6 +20894,1263 @@ func (m *CompositeModelRouteMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown CompositeModelRoute edge %s", name)
 }
 
+// DesktopModelCredentialMutation represents an operation that mutates the DesktopModelCredential nodes in the graph.
+type DesktopModelCredentialMutation struct {
+	config
+	op                  Op
+	typ                 string
+	id                  *int64
+	created_at          *time.Time
+	updated_at          *time.Time
+	device_id           *string
+	connection_grant_id *string
+	session_family_id   *string
+	token_version       *int64
+	addtoken_version    *int64
+	model_id            *string
+	purpose             *string
+	expires_at          *time.Time
+	revoked_at          *time.Time
+	revoke_reason       *string
+	clearedFields       map[string]struct{}
+	group               *int64
+	clearedgroup        bool
+	user                *int64
+	cleareduser         bool
+	api_key             *int64
+	clearedapi_key      bool
+	done                bool
+	oldValue            func(context.Context) (*DesktopModelCredential, error)
+	predicates          []predicate.DesktopModelCredential
+}
+
+var _ ent.Mutation = (*DesktopModelCredentialMutation)(nil)
+
+// desktopmodelcredentialOption allows management of the mutation configuration using functional options.
+type desktopmodelcredentialOption func(*DesktopModelCredentialMutation)
+
+// newDesktopModelCredentialMutation creates new mutation for the DesktopModelCredential entity.
+func newDesktopModelCredentialMutation(c config, op Op, opts ...desktopmodelcredentialOption) *DesktopModelCredentialMutation {
+	m := &DesktopModelCredentialMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeDesktopModelCredential,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withDesktopModelCredentialID sets the ID field of the mutation.
+func withDesktopModelCredentialID(id int64) desktopmodelcredentialOption {
+	return func(m *DesktopModelCredentialMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *DesktopModelCredential
+		)
+		m.oldValue = func(ctx context.Context) (*DesktopModelCredential, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().DesktopModelCredential.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withDesktopModelCredential sets the old DesktopModelCredential of the mutation.
+func withDesktopModelCredential(node *DesktopModelCredential) desktopmodelcredentialOption {
+	return func(m *DesktopModelCredentialMutation) {
+		m.oldValue = func(context.Context) (*DesktopModelCredential, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m DesktopModelCredentialMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m DesktopModelCredentialMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of DesktopModelCredential entities.
+func (m *DesktopModelCredentialMutation) SetID(id int64) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *DesktopModelCredentialMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *DesktopModelCredentialMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().DesktopModelCredential.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *DesktopModelCredentialMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *DesktopModelCredentialMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the DesktopModelCredential entity.
+// If the DesktopModelCredential object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DesktopModelCredentialMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *DesktopModelCredentialMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *DesktopModelCredentialMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *DesktopModelCredentialMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the DesktopModelCredential entity.
+// If the DesktopModelCredential object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DesktopModelCredentialMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *DesktopModelCredentialMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetUserID sets the "user_id" field.
+func (m *DesktopModelCredentialMutation) SetUserID(i int64) {
+	m.user = &i
+}
+
+// UserID returns the value of the "user_id" field in the mutation.
+func (m *DesktopModelCredentialMutation) UserID() (r int64, exists bool) {
+	v := m.user
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUserID returns the old "user_id" field's value of the DesktopModelCredential entity.
+// If the DesktopModelCredential object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DesktopModelCredentialMutation) OldUserID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUserID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUserID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUserID: %w", err)
+	}
+	return oldValue.UserID, nil
+}
+
+// ResetUserID resets all changes to the "user_id" field.
+func (m *DesktopModelCredentialMutation) ResetUserID() {
+	m.user = nil
+}
+
+// SetDeviceID sets the "device_id" field.
+func (m *DesktopModelCredentialMutation) SetDeviceID(s string) {
+	m.device_id = &s
+}
+
+// DeviceID returns the value of the "device_id" field in the mutation.
+func (m *DesktopModelCredentialMutation) DeviceID() (r string, exists bool) {
+	v := m.device_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDeviceID returns the old "device_id" field's value of the DesktopModelCredential entity.
+// If the DesktopModelCredential object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DesktopModelCredentialMutation) OldDeviceID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDeviceID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDeviceID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDeviceID: %w", err)
+	}
+	return oldValue.DeviceID, nil
+}
+
+// ResetDeviceID resets all changes to the "device_id" field.
+func (m *DesktopModelCredentialMutation) ResetDeviceID() {
+	m.device_id = nil
+}
+
+// SetConnectionGrantID sets the "connection_grant_id" field.
+func (m *DesktopModelCredentialMutation) SetConnectionGrantID(s string) {
+	m.connection_grant_id = &s
+}
+
+// ConnectionGrantID returns the value of the "connection_grant_id" field in the mutation.
+func (m *DesktopModelCredentialMutation) ConnectionGrantID() (r string, exists bool) {
+	v := m.connection_grant_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldConnectionGrantID returns the old "connection_grant_id" field's value of the DesktopModelCredential entity.
+// If the DesktopModelCredential object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DesktopModelCredentialMutation) OldConnectionGrantID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldConnectionGrantID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldConnectionGrantID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldConnectionGrantID: %w", err)
+	}
+	return oldValue.ConnectionGrantID, nil
+}
+
+// ResetConnectionGrantID resets all changes to the "connection_grant_id" field.
+func (m *DesktopModelCredentialMutation) ResetConnectionGrantID() {
+	m.connection_grant_id = nil
+}
+
+// SetSessionFamilyID sets the "session_family_id" field.
+func (m *DesktopModelCredentialMutation) SetSessionFamilyID(s string) {
+	m.session_family_id = &s
+}
+
+// SessionFamilyID returns the value of the "session_family_id" field in the mutation.
+func (m *DesktopModelCredentialMutation) SessionFamilyID() (r string, exists bool) {
+	v := m.session_family_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSessionFamilyID returns the old "session_family_id" field's value of the DesktopModelCredential entity.
+// If the DesktopModelCredential object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DesktopModelCredentialMutation) OldSessionFamilyID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSessionFamilyID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSessionFamilyID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSessionFamilyID: %w", err)
+	}
+	return oldValue.SessionFamilyID, nil
+}
+
+// ResetSessionFamilyID resets all changes to the "session_family_id" field.
+func (m *DesktopModelCredentialMutation) ResetSessionFamilyID() {
+	m.session_family_id = nil
+}
+
+// SetTokenVersion sets the "token_version" field.
+func (m *DesktopModelCredentialMutation) SetTokenVersion(i int64) {
+	m.token_version = &i
+	m.addtoken_version = nil
+}
+
+// TokenVersion returns the value of the "token_version" field in the mutation.
+func (m *DesktopModelCredentialMutation) TokenVersion() (r int64, exists bool) {
+	v := m.token_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTokenVersion returns the old "token_version" field's value of the DesktopModelCredential entity.
+// If the DesktopModelCredential object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DesktopModelCredentialMutation) OldTokenVersion(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTokenVersion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTokenVersion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTokenVersion: %w", err)
+	}
+	return oldValue.TokenVersion, nil
+}
+
+// AddTokenVersion adds i to the "token_version" field.
+func (m *DesktopModelCredentialMutation) AddTokenVersion(i int64) {
+	if m.addtoken_version != nil {
+		*m.addtoken_version += i
+	} else {
+		m.addtoken_version = &i
+	}
+}
+
+// AddedTokenVersion returns the value that was added to the "token_version" field in this mutation.
+func (m *DesktopModelCredentialMutation) AddedTokenVersion() (r int64, exists bool) {
+	v := m.addtoken_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetTokenVersion resets all changes to the "token_version" field.
+func (m *DesktopModelCredentialMutation) ResetTokenVersion() {
+	m.token_version = nil
+	m.addtoken_version = nil
+}
+
+// SetGroupID sets the "group_id" field.
+func (m *DesktopModelCredentialMutation) SetGroupID(i int64) {
+	m.group = &i
+}
+
+// GroupID returns the value of the "group_id" field in the mutation.
+func (m *DesktopModelCredentialMutation) GroupID() (r int64, exists bool) {
+	v := m.group
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGroupID returns the old "group_id" field's value of the DesktopModelCredential entity.
+// If the DesktopModelCredential object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DesktopModelCredentialMutation) OldGroupID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGroupID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGroupID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGroupID: %w", err)
+	}
+	return oldValue.GroupID, nil
+}
+
+// ResetGroupID resets all changes to the "group_id" field.
+func (m *DesktopModelCredentialMutation) ResetGroupID() {
+	m.group = nil
+}
+
+// SetModelID sets the "model_id" field.
+func (m *DesktopModelCredentialMutation) SetModelID(s string) {
+	m.model_id = &s
+}
+
+// ModelID returns the value of the "model_id" field in the mutation.
+func (m *DesktopModelCredentialMutation) ModelID() (r string, exists bool) {
+	v := m.model_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldModelID returns the old "model_id" field's value of the DesktopModelCredential entity.
+// If the DesktopModelCredential object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DesktopModelCredentialMutation) OldModelID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldModelID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldModelID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldModelID: %w", err)
+	}
+	return oldValue.ModelID, nil
+}
+
+// ResetModelID resets all changes to the "model_id" field.
+func (m *DesktopModelCredentialMutation) ResetModelID() {
+	m.model_id = nil
+}
+
+// SetPurpose sets the "purpose" field.
+func (m *DesktopModelCredentialMutation) SetPurpose(s string) {
+	m.purpose = &s
+}
+
+// Purpose returns the value of the "purpose" field in the mutation.
+func (m *DesktopModelCredentialMutation) Purpose() (r string, exists bool) {
+	v := m.purpose
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPurpose returns the old "purpose" field's value of the DesktopModelCredential entity.
+// If the DesktopModelCredential object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DesktopModelCredentialMutation) OldPurpose(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPurpose is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPurpose requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPurpose: %w", err)
+	}
+	return oldValue.Purpose, nil
+}
+
+// ResetPurpose resets all changes to the "purpose" field.
+func (m *DesktopModelCredentialMutation) ResetPurpose() {
+	m.purpose = nil
+}
+
+// SetAPIKeyID sets the "api_key_id" field.
+func (m *DesktopModelCredentialMutation) SetAPIKeyID(i int64) {
+	m.api_key = &i
+}
+
+// APIKeyID returns the value of the "api_key_id" field in the mutation.
+func (m *DesktopModelCredentialMutation) APIKeyID() (r int64, exists bool) {
+	v := m.api_key
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAPIKeyID returns the old "api_key_id" field's value of the DesktopModelCredential entity.
+// If the DesktopModelCredential object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DesktopModelCredentialMutation) OldAPIKeyID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAPIKeyID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAPIKeyID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAPIKeyID: %w", err)
+	}
+	return oldValue.APIKeyID, nil
+}
+
+// ResetAPIKeyID resets all changes to the "api_key_id" field.
+func (m *DesktopModelCredentialMutation) ResetAPIKeyID() {
+	m.api_key = nil
+}
+
+// SetExpiresAt sets the "expires_at" field.
+func (m *DesktopModelCredentialMutation) SetExpiresAt(t time.Time) {
+	m.expires_at = &t
+}
+
+// ExpiresAt returns the value of the "expires_at" field in the mutation.
+func (m *DesktopModelCredentialMutation) ExpiresAt() (r time.Time, exists bool) {
+	v := m.expires_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExpiresAt returns the old "expires_at" field's value of the DesktopModelCredential entity.
+// If the DesktopModelCredential object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DesktopModelCredentialMutation) OldExpiresAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExpiresAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExpiresAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExpiresAt: %w", err)
+	}
+	return oldValue.ExpiresAt, nil
+}
+
+// ResetExpiresAt resets all changes to the "expires_at" field.
+func (m *DesktopModelCredentialMutation) ResetExpiresAt() {
+	m.expires_at = nil
+}
+
+// SetRevokedAt sets the "revoked_at" field.
+func (m *DesktopModelCredentialMutation) SetRevokedAt(t time.Time) {
+	m.revoked_at = &t
+}
+
+// RevokedAt returns the value of the "revoked_at" field in the mutation.
+func (m *DesktopModelCredentialMutation) RevokedAt() (r time.Time, exists bool) {
+	v := m.revoked_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRevokedAt returns the old "revoked_at" field's value of the DesktopModelCredential entity.
+// If the DesktopModelCredential object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DesktopModelCredentialMutation) OldRevokedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRevokedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRevokedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRevokedAt: %w", err)
+	}
+	return oldValue.RevokedAt, nil
+}
+
+// ClearRevokedAt clears the value of the "revoked_at" field.
+func (m *DesktopModelCredentialMutation) ClearRevokedAt() {
+	m.revoked_at = nil
+	m.clearedFields[desktopmodelcredential.FieldRevokedAt] = struct{}{}
+}
+
+// RevokedAtCleared returns if the "revoked_at" field was cleared in this mutation.
+func (m *DesktopModelCredentialMutation) RevokedAtCleared() bool {
+	_, ok := m.clearedFields[desktopmodelcredential.FieldRevokedAt]
+	return ok
+}
+
+// ResetRevokedAt resets all changes to the "revoked_at" field.
+func (m *DesktopModelCredentialMutation) ResetRevokedAt() {
+	m.revoked_at = nil
+	delete(m.clearedFields, desktopmodelcredential.FieldRevokedAt)
+}
+
+// SetRevokeReason sets the "revoke_reason" field.
+func (m *DesktopModelCredentialMutation) SetRevokeReason(s string) {
+	m.revoke_reason = &s
+}
+
+// RevokeReason returns the value of the "revoke_reason" field in the mutation.
+func (m *DesktopModelCredentialMutation) RevokeReason() (r string, exists bool) {
+	v := m.revoke_reason
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRevokeReason returns the old "revoke_reason" field's value of the DesktopModelCredential entity.
+// If the DesktopModelCredential object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DesktopModelCredentialMutation) OldRevokeReason(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRevokeReason is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRevokeReason requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRevokeReason: %w", err)
+	}
+	return oldValue.RevokeReason, nil
+}
+
+// ClearRevokeReason clears the value of the "revoke_reason" field.
+func (m *DesktopModelCredentialMutation) ClearRevokeReason() {
+	m.revoke_reason = nil
+	m.clearedFields[desktopmodelcredential.FieldRevokeReason] = struct{}{}
+}
+
+// RevokeReasonCleared returns if the "revoke_reason" field was cleared in this mutation.
+func (m *DesktopModelCredentialMutation) RevokeReasonCleared() bool {
+	_, ok := m.clearedFields[desktopmodelcredential.FieldRevokeReason]
+	return ok
+}
+
+// ResetRevokeReason resets all changes to the "revoke_reason" field.
+func (m *DesktopModelCredentialMutation) ResetRevokeReason() {
+	m.revoke_reason = nil
+	delete(m.clearedFields, desktopmodelcredential.FieldRevokeReason)
+}
+
+// ClearGroup clears the "group" edge to the Group entity.
+func (m *DesktopModelCredentialMutation) ClearGroup() {
+	m.clearedgroup = true
+	m.clearedFields[desktopmodelcredential.FieldGroupID] = struct{}{}
+}
+
+// GroupCleared reports if the "group" edge to the Group entity was cleared.
+func (m *DesktopModelCredentialMutation) GroupCleared() bool {
+	return m.clearedgroup
+}
+
+// GroupIDs returns the "group" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// GroupID instead. It exists only for internal usage by the builders.
+func (m *DesktopModelCredentialMutation) GroupIDs() (ids []int64) {
+	if id := m.group; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetGroup resets all changes to the "group" edge.
+func (m *DesktopModelCredentialMutation) ResetGroup() {
+	m.group = nil
+	m.clearedgroup = false
+}
+
+// ClearUser clears the "user" edge to the User entity.
+func (m *DesktopModelCredentialMutation) ClearUser() {
+	m.cleareduser = true
+	m.clearedFields[desktopmodelcredential.FieldUserID] = struct{}{}
+}
+
+// UserCleared reports if the "user" edge to the User entity was cleared.
+func (m *DesktopModelCredentialMutation) UserCleared() bool {
+	return m.cleareduser
+}
+
+// UserIDs returns the "user" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// UserID instead. It exists only for internal usage by the builders.
+func (m *DesktopModelCredentialMutation) UserIDs() (ids []int64) {
+	if id := m.user; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetUser resets all changes to the "user" edge.
+func (m *DesktopModelCredentialMutation) ResetUser() {
+	m.user = nil
+	m.cleareduser = false
+}
+
+// ClearAPIKey clears the "api_key" edge to the APIKey entity.
+func (m *DesktopModelCredentialMutation) ClearAPIKey() {
+	m.clearedapi_key = true
+	m.clearedFields[desktopmodelcredential.FieldAPIKeyID] = struct{}{}
+}
+
+// APIKeyCleared reports if the "api_key" edge to the APIKey entity was cleared.
+func (m *DesktopModelCredentialMutation) APIKeyCleared() bool {
+	return m.clearedapi_key
+}
+
+// APIKeyIDs returns the "api_key" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// APIKeyID instead. It exists only for internal usage by the builders.
+func (m *DesktopModelCredentialMutation) APIKeyIDs() (ids []int64) {
+	if id := m.api_key; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetAPIKey resets all changes to the "api_key" edge.
+func (m *DesktopModelCredentialMutation) ResetAPIKey() {
+	m.api_key = nil
+	m.clearedapi_key = false
+}
+
+// Where appends a list predicates to the DesktopModelCredentialMutation builder.
+func (m *DesktopModelCredentialMutation) Where(ps ...predicate.DesktopModelCredential) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the DesktopModelCredentialMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *DesktopModelCredentialMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.DesktopModelCredential, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *DesktopModelCredentialMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *DesktopModelCredentialMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (DesktopModelCredential).
+func (m *DesktopModelCredentialMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *DesktopModelCredentialMutation) Fields() []string {
+	fields := make([]string, 0, 14)
+	if m.created_at != nil {
+		fields = append(fields, desktopmodelcredential.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, desktopmodelcredential.FieldUpdatedAt)
+	}
+	if m.user != nil {
+		fields = append(fields, desktopmodelcredential.FieldUserID)
+	}
+	if m.device_id != nil {
+		fields = append(fields, desktopmodelcredential.FieldDeviceID)
+	}
+	if m.connection_grant_id != nil {
+		fields = append(fields, desktopmodelcredential.FieldConnectionGrantID)
+	}
+	if m.session_family_id != nil {
+		fields = append(fields, desktopmodelcredential.FieldSessionFamilyID)
+	}
+	if m.token_version != nil {
+		fields = append(fields, desktopmodelcredential.FieldTokenVersion)
+	}
+	if m.group != nil {
+		fields = append(fields, desktopmodelcredential.FieldGroupID)
+	}
+	if m.model_id != nil {
+		fields = append(fields, desktopmodelcredential.FieldModelID)
+	}
+	if m.purpose != nil {
+		fields = append(fields, desktopmodelcredential.FieldPurpose)
+	}
+	if m.api_key != nil {
+		fields = append(fields, desktopmodelcredential.FieldAPIKeyID)
+	}
+	if m.expires_at != nil {
+		fields = append(fields, desktopmodelcredential.FieldExpiresAt)
+	}
+	if m.revoked_at != nil {
+		fields = append(fields, desktopmodelcredential.FieldRevokedAt)
+	}
+	if m.revoke_reason != nil {
+		fields = append(fields, desktopmodelcredential.FieldRevokeReason)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *DesktopModelCredentialMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case desktopmodelcredential.FieldCreatedAt:
+		return m.CreatedAt()
+	case desktopmodelcredential.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case desktopmodelcredential.FieldUserID:
+		return m.UserID()
+	case desktopmodelcredential.FieldDeviceID:
+		return m.DeviceID()
+	case desktopmodelcredential.FieldConnectionGrantID:
+		return m.ConnectionGrantID()
+	case desktopmodelcredential.FieldSessionFamilyID:
+		return m.SessionFamilyID()
+	case desktopmodelcredential.FieldTokenVersion:
+		return m.TokenVersion()
+	case desktopmodelcredential.FieldGroupID:
+		return m.GroupID()
+	case desktopmodelcredential.FieldModelID:
+		return m.ModelID()
+	case desktopmodelcredential.FieldPurpose:
+		return m.Purpose()
+	case desktopmodelcredential.FieldAPIKeyID:
+		return m.APIKeyID()
+	case desktopmodelcredential.FieldExpiresAt:
+		return m.ExpiresAt()
+	case desktopmodelcredential.FieldRevokedAt:
+		return m.RevokedAt()
+	case desktopmodelcredential.FieldRevokeReason:
+		return m.RevokeReason()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *DesktopModelCredentialMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case desktopmodelcredential.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case desktopmodelcredential.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case desktopmodelcredential.FieldUserID:
+		return m.OldUserID(ctx)
+	case desktopmodelcredential.FieldDeviceID:
+		return m.OldDeviceID(ctx)
+	case desktopmodelcredential.FieldConnectionGrantID:
+		return m.OldConnectionGrantID(ctx)
+	case desktopmodelcredential.FieldSessionFamilyID:
+		return m.OldSessionFamilyID(ctx)
+	case desktopmodelcredential.FieldTokenVersion:
+		return m.OldTokenVersion(ctx)
+	case desktopmodelcredential.FieldGroupID:
+		return m.OldGroupID(ctx)
+	case desktopmodelcredential.FieldModelID:
+		return m.OldModelID(ctx)
+	case desktopmodelcredential.FieldPurpose:
+		return m.OldPurpose(ctx)
+	case desktopmodelcredential.FieldAPIKeyID:
+		return m.OldAPIKeyID(ctx)
+	case desktopmodelcredential.FieldExpiresAt:
+		return m.OldExpiresAt(ctx)
+	case desktopmodelcredential.FieldRevokedAt:
+		return m.OldRevokedAt(ctx)
+	case desktopmodelcredential.FieldRevokeReason:
+		return m.OldRevokeReason(ctx)
+	}
+	return nil, fmt.Errorf("unknown DesktopModelCredential field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *DesktopModelCredentialMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case desktopmodelcredential.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case desktopmodelcredential.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case desktopmodelcredential.FieldUserID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUserID(v)
+		return nil
+	case desktopmodelcredential.FieldDeviceID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDeviceID(v)
+		return nil
+	case desktopmodelcredential.FieldConnectionGrantID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetConnectionGrantID(v)
+		return nil
+	case desktopmodelcredential.FieldSessionFamilyID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSessionFamilyID(v)
+		return nil
+	case desktopmodelcredential.FieldTokenVersion:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTokenVersion(v)
+		return nil
+	case desktopmodelcredential.FieldGroupID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGroupID(v)
+		return nil
+	case desktopmodelcredential.FieldModelID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetModelID(v)
+		return nil
+	case desktopmodelcredential.FieldPurpose:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPurpose(v)
+		return nil
+	case desktopmodelcredential.FieldAPIKeyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAPIKeyID(v)
+		return nil
+	case desktopmodelcredential.FieldExpiresAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExpiresAt(v)
+		return nil
+	case desktopmodelcredential.FieldRevokedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRevokedAt(v)
+		return nil
+	case desktopmodelcredential.FieldRevokeReason:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRevokeReason(v)
+		return nil
+	}
+	return fmt.Errorf("unknown DesktopModelCredential field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *DesktopModelCredentialMutation) AddedFields() []string {
+	var fields []string
+	if m.addtoken_version != nil {
+		fields = append(fields, desktopmodelcredential.FieldTokenVersion)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *DesktopModelCredentialMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case desktopmodelcredential.FieldTokenVersion:
+		return m.AddedTokenVersion()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *DesktopModelCredentialMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case desktopmodelcredential.FieldTokenVersion:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddTokenVersion(v)
+		return nil
+	}
+	return fmt.Errorf("unknown DesktopModelCredential numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *DesktopModelCredentialMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(desktopmodelcredential.FieldRevokedAt) {
+		fields = append(fields, desktopmodelcredential.FieldRevokedAt)
+	}
+	if m.FieldCleared(desktopmodelcredential.FieldRevokeReason) {
+		fields = append(fields, desktopmodelcredential.FieldRevokeReason)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *DesktopModelCredentialMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *DesktopModelCredentialMutation) ClearField(name string) error {
+	switch name {
+	case desktopmodelcredential.FieldRevokedAt:
+		m.ClearRevokedAt()
+		return nil
+	case desktopmodelcredential.FieldRevokeReason:
+		m.ClearRevokeReason()
+		return nil
+	}
+	return fmt.Errorf("unknown DesktopModelCredential nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *DesktopModelCredentialMutation) ResetField(name string) error {
+	switch name {
+	case desktopmodelcredential.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case desktopmodelcredential.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case desktopmodelcredential.FieldUserID:
+		m.ResetUserID()
+		return nil
+	case desktopmodelcredential.FieldDeviceID:
+		m.ResetDeviceID()
+		return nil
+	case desktopmodelcredential.FieldConnectionGrantID:
+		m.ResetConnectionGrantID()
+		return nil
+	case desktopmodelcredential.FieldSessionFamilyID:
+		m.ResetSessionFamilyID()
+		return nil
+	case desktopmodelcredential.FieldTokenVersion:
+		m.ResetTokenVersion()
+		return nil
+	case desktopmodelcredential.FieldGroupID:
+		m.ResetGroupID()
+		return nil
+	case desktopmodelcredential.FieldModelID:
+		m.ResetModelID()
+		return nil
+	case desktopmodelcredential.FieldPurpose:
+		m.ResetPurpose()
+		return nil
+	case desktopmodelcredential.FieldAPIKeyID:
+		m.ResetAPIKeyID()
+		return nil
+	case desktopmodelcredential.FieldExpiresAt:
+		m.ResetExpiresAt()
+		return nil
+	case desktopmodelcredential.FieldRevokedAt:
+		m.ResetRevokedAt()
+		return nil
+	case desktopmodelcredential.FieldRevokeReason:
+		m.ResetRevokeReason()
+		return nil
+	}
+	return fmt.Errorf("unknown DesktopModelCredential field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *DesktopModelCredentialMutation) AddedEdges() []string {
+	edges := make([]string, 0, 3)
+	if m.group != nil {
+		edges = append(edges, desktopmodelcredential.EdgeGroup)
+	}
+	if m.user != nil {
+		edges = append(edges, desktopmodelcredential.EdgeUser)
+	}
+	if m.api_key != nil {
+		edges = append(edges, desktopmodelcredential.EdgeAPIKey)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *DesktopModelCredentialMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case desktopmodelcredential.EdgeGroup:
+		if id := m.group; id != nil {
+			return []ent.Value{*id}
+		}
+	case desktopmodelcredential.EdgeUser:
+		if id := m.user; id != nil {
+			return []ent.Value{*id}
+		}
+	case desktopmodelcredential.EdgeAPIKey:
+		if id := m.api_key; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *DesktopModelCredentialMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 3)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *DesktopModelCredentialMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *DesktopModelCredentialMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 3)
+	if m.clearedgroup {
+		edges = append(edges, desktopmodelcredential.EdgeGroup)
+	}
+	if m.cleareduser {
+		edges = append(edges, desktopmodelcredential.EdgeUser)
+	}
+	if m.clearedapi_key {
+		edges = append(edges, desktopmodelcredential.EdgeAPIKey)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *DesktopModelCredentialMutation) EdgeCleared(name string) bool {
+	switch name {
+	case desktopmodelcredential.EdgeGroup:
+		return m.clearedgroup
+	case desktopmodelcredential.EdgeUser:
+		return m.cleareduser
+	case desktopmodelcredential.EdgeAPIKey:
+		return m.clearedapi_key
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *DesktopModelCredentialMutation) ClearEdge(name string) error {
+	switch name {
+	case desktopmodelcredential.EdgeGroup:
+		m.ClearGroup()
+		return nil
+	case desktopmodelcredential.EdgeUser:
+		m.ClearUser()
+		return nil
+	case desktopmodelcredential.EdgeAPIKey:
+		m.ClearAPIKey()
+		return nil
+	}
+	return fmt.Errorf("unknown DesktopModelCredential unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *DesktopModelCredentialMutation) ResetEdge(name string) error {
+	switch name {
+	case desktopmodelcredential.EdgeGroup:
+		m.ResetGroup()
+		return nil
+	case desktopmodelcredential.EdgeUser:
+		m.ResetUser()
+		return nil
+	case desktopmodelcredential.EdgeAPIKey:
+		m.ResetAPIKey()
+		return nil
+	}
+	return fmt.Errorf("unknown DesktopModelCredential edge %s", name)
+}
+
 // ErrorPassthroughRuleMutation represents an operation that mutates the ErrorPassthroughRule nodes in the graph.
 type ErrorPassthroughRuleMutation struct {
 	config
@@ -22086,6 +23482,7 @@ type GroupMutation struct {
 	deleted_at                              *time.Time
 	name                                    *string
 	description                             *string
+	i18n                                    *domain.GroupI18n
 	rate_multiplier                         *float64
 	addrate_multiplier                      *float64
 	peak_rate_enabled                       *bool
@@ -22108,6 +23505,7 @@ type GroupMutation struct {
 	adddefault_validity_days                *int
 	allow_image_generation                  *bool
 	allow_batch_image_generation            *bool
+	image_count_billing                     *bool
 	image_rate_independent                  *bool
 	image_rate_multiplier                   *float64
 	addimage_rate_multiplier                *float64
@@ -22181,6 +23579,9 @@ type GroupMutation struct {
 	api_keys                                map[int64]struct{}
 	removedapi_keys                         map[int64]struct{}
 	clearedapi_keys                         bool
+	desktop_model_credentials               map[int64]struct{}
+	removeddesktop_model_credentials        map[int64]struct{}
+	cleareddesktop_model_credentials        bool
 	redeem_codes                            map[int64]struct{}
 	removedredeem_codes                     map[int64]struct{}
 	clearedredeem_codes                     bool
@@ -22503,6 +23904,42 @@ func (m *GroupMutation) DescriptionCleared() bool {
 func (m *GroupMutation) ResetDescription() {
 	m.description = nil
 	delete(m.clearedFields, group.FieldDescription)
+}
+
+// SetI18n sets the "i18n" field.
+func (m *GroupMutation) SetI18n(di domain.GroupI18n) {
+	m.i18n = &di
+}
+
+// I18n returns the value of the "i18n" field in the mutation.
+func (m *GroupMutation) I18n() (r domain.GroupI18n, exists bool) {
+	v := m.i18n
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldI18n returns the old "i18n" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldI18n(ctx context.Context) (v domain.GroupI18n, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldI18n is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldI18n requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldI18n: %w", err)
+	}
+	return oldValue.I18n, nil
+}
+
+// ResetI18n resets all changes to the "i18n" field.
+func (m *GroupMutation) ResetI18n() {
+	m.i18n = nil
 }
 
 // SetRateMultiplier sets the "rate_multiplier" field.
@@ -23254,6 +24691,42 @@ func (m *GroupMutation) OldAllowBatchImageGeneration(ctx context.Context) (v boo
 // ResetAllowBatchImageGeneration resets all changes to the "allow_batch_image_generation" field.
 func (m *GroupMutation) ResetAllowBatchImageGeneration() {
 	m.allow_batch_image_generation = nil
+}
+
+// SetImageCountBilling sets the "image_count_billing" field.
+func (m *GroupMutation) SetImageCountBilling(b bool) {
+	m.image_count_billing = &b
+}
+
+// ImageCountBilling returns the value of the "image_count_billing" field in the mutation.
+func (m *GroupMutation) ImageCountBilling() (r bool, exists bool) {
+	v := m.image_count_billing
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldImageCountBilling returns the old "image_count_billing" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldImageCountBilling(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldImageCountBilling is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldImageCountBilling requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldImageCountBilling: %w", err)
+	}
+	return oldValue.ImageCountBilling, nil
+}
+
+// ResetImageCountBilling resets all changes to the "image_count_billing" field.
+func (m *GroupMutation) ResetImageCountBilling() {
+	m.image_count_billing = nil
 }
 
 // SetImageRateIndependent sets the "image_rate_independent" field.
@@ -25617,6 +27090,60 @@ func (m *GroupMutation) ResetAPIKeys() {
 	m.removedapi_keys = nil
 }
 
+// AddDesktopModelCredentialIDs adds the "desktop_model_credentials" edge to the DesktopModelCredential entity by ids.
+func (m *GroupMutation) AddDesktopModelCredentialIDs(ids ...int64) {
+	if m.desktop_model_credentials == nil {
+		m.desktop_model_credentials = make(map[int64]struct{})
+	}
+	for i := range ids {
+		m.desktop_model_credentials[ids[i]] = struct{}{}
+	}
+}
+
+// ClearDesktopModelCredentials clears the "desktop_model_credentials" edge to the DesktopModelCredential entity.
+func (m *GroupMutation) ClearDesktopModelCredentials() {
+	m.cleareddesktop_model_credentials = true
+}
+
+// DesktopModelCredentialsCleared reports if the "desktop_model_credentials" edge to the DesktopModelCredential entity was cleared.
+func (m *GroupMutation) DesktopModelCredentialsCleared() bool {
+	return m.cleareddesktop_model_credentials
+}
+
+// RemoveDesktopModelCredentialIDs removes the "desktop_model_credentials" edge to the DesktopModelCredential entity by IDs.
+func (m *GroupMutation) RemoveDesktopModelCredentialIDs(ids ...int64) {
+	if m.removeddesktop_model_credentials == nil {
+		m.removeddesktop_model_credentials = make(map[int64]struct{})
+	}
+	for i := range ids {
+		delete(m.desktop_model_credentials, ids[i])
+		m.removeddesktop_model_credentials[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedDesktopModelCredentials returns the removed IDs of the "desktop_model_credentials" edge to the DesktopModelCredential entity.
+func (m *GroupMutation) RemovedDesktopModelCredentialsIDs() (ids []int64) {
+	for id := range m.removeddesktop_model_credentials {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// DesktopModelCredentialsIDs returns the "desktop_model_credentials" edge IDs in the mutation.
+func (m *GroupMutation) DesktopModelCredentialsIDs() (ids []int64) {
+	for id := range m.desktop_model_credentials {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetDesktopModelCredentials resets all changes to the "desktop_model_credentials" edge.
+func (m *GroupMutation) ResetDesktopModelCredentials() {
+	m.desktop_model_credentials = nil
+	m.cleareddesktop_model_credentials = false
+	m.removeddesktop_model_credentials = nil
+}
+
 // AddRedeemCodeIDs adds the "redeem_codes" edge to the RedeemCode entity by ids.
 func (m *GroupMutation) AddRedeemCodeIDs(ids ...int64) {
 	if m.redeem_codes == nil {
@@ -25921,7 +27448,7 @@ func (m *GroupMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GroupMutation) Fields() []string {
-	fields := make([]string, 0, 66)
+	fields := make([]string, 0, 68)
 	if m.created_at != nil {
 		fields = append(fields, group.FieldCreatedAt)
 	}
@@ -25936,6 +27463,9 @@ func (m *GroupMutation) Fields() []string {
 	}
 	if m.description != nil {
 		fields = append(fields, group.FieldDescription)
+	}
+	if m.i18n != nil {
+		fields = append(fields, group.FieldI18n)
 	}
 	if m.rate_multiplier != nil {
 		fields = append(fields, group.FieldRateMultiplier)
@@ -25984,6 +27514,9 @@ func (m *GroupMutation) Fields() []string {
 	}
 	if m.allow_batch_image_generation != nil {
 		fields = append(fields, group.FieldAllowBatchImageGeneration)
+	}
+	if m.image_count_billing != nil {
+		fields = append(fields, group.FieldImageCountBilling)
 	}
 	if m.image_rate_independent != nil {
 		fields = append(fields, group.FieldImageRateIndependent)
@@ -26138,6 +27671,8 @@ func (m *GroupMutation) Field(name string) (ent.Value, bool) {
 		return m.Name()
 	case group.FieldDescription:
 		return m.Description()
+	case group.FieldI18n:
+		return m.I18n()
 	case group.FieldRateMultiplier:
 		return m.RateMultiplier()
 	case group.FieldPeakRateEnabled:
@@ -26170,6 +27705,8 @@ func (m *GroupMutation) Field(name string) (ent.Value, bool) {
 		return m.AllowImageGeneration()
 	case group.FieldAllowBatchImageGeneration:
 		return m.AllowBatchImageGeneration()
+	case group.FieldImageCountBilling:
+		return m.ImageCountBilling()
 	case group.FieldImageRateIndependent:
 		return m.ImageRateIndependent()
 	case group.FieldImageRateMultiplier:
@@ -26279,6 +27816,8 @@ func (m *GroupMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldName(ctx)
 	case group.FieldDescription:
 		return m.OldDescription(ctx)
+	case group.FieldI18n:
+		return m.OldI18n(ctx)
 	case group.FieldRateMultiplier:
 		return m.OldRateMultiplier(ctx)
 	case group.FieldPeakRateEnabled:
@@ -26311,6 +27850,8 @@ func (m *GroupMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldAllowImageGeneration(ctx)
 	case group.FieldAllowBatchImageGeneration:
 		return m.OldAllowBatchImageGeneration(ctx)
+	case group.FieldImageCountBilling:
+		return m.OldImageCountBilling(ctx)
 	case group.FieldImageRateIndependent:
 		return m.OldImageRateIndependent(ctx)
 	case group.FieldImageRateMultiplier:
@@ -26445,6 +27986,13 @@ func (m *GroupMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetDescription(v)
 		return nil
+	case group.FieldI18n:
+		v, ok := value.(domain.GroupI18n)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetI18n(v)
+		return nil
 	case group.FieldRateMultiplier:
 		v, ok := value.(float64)
 		if !ok {
@@ -26556,6 +28104,13 @@ func (m *GroupMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetAllowBatchImageGeneration(v)
+		return nil
+	case group.FieldImageCountBilling:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetImageCountBilling(v)
 		return nil
 	case group.FieldImageRateIndependent:
 		v, ok := value.(bool)
@@ -27398,6 +28953,9 @@ func (m *GroupMutation) ResetField(name string) error {
 	case group.FieldDescription:
 		m.ResetDescription()
 		return nil
+	case group.FieldI18n:
+		m.ResetI18n()
+		return nil
 	case group.FieldRateMultiplier:
 		m.ResetRateMultiplier()
 		return nil
@@ -27445,6 +29003,9 @@ func (m *GroupMutation) ResetField(name string) error {
 		return nil
 	case group.FieldAllowBatchImageGeneration:
 		m.ResetAllowBatchImageGeneration()
+		return nil
+	case group.FieldImageCountBilling:
+		m.ResetImageCountBilling()
 		return nil
 	case group.FieldImageRateIndependent:
 		m.ResetImageRateIndependent()
@@ -27587,9 +29148,12 @@ func (m *GroupMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *GroupMutation) AddedEdges() []string {
-	edges := make([]string, 0, 6)
+	edges := make([]string, 0, 7)
 	if m.api_keys != nil {
 		edges = append(edges, group.EdgeAPIKeys)
+	}
+	if m.desktop_model_credentials != nil {
+		edges = append(edges, group.EdgeDesktopModelCredentials)
 	}
 	if m.redeem_codes != nil {
 		edges = append(edges, group.EdgeRedeemCodes)
@@ -27616,6 +29180,12 @@ func (m *GroupMutation) AddedIDs(name string) []ent.Value {
 	case group.EdgeAPIKeys:
 		ids := make([]ent.Value, 0, len(m.api_keys))
 		for id := range m.api_keys {
+			ids = append(ids, id)
+		}
+		return ids
+	case group.EdgeDesktopModelCredentials:
+		ids := make([]ent.Value, 0, len(m.desktop_model_credentials))
+		for id := range m.desktop_model_credentials {
 			ids = append(ids, id)
 		}
 		return ids
@@ -27655,9 +29225,12 @@ func (m *GroupMutation) AddedIDs(name string) []ent.Value {
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *GroupMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 6)
+	edges := make([]string, 0, 7)
 	if m.removedapi_keys != nil {
 		edges = append(edges, group.EdgeAPIKeys)
+	}
+	if m.removeddesktop_model_credentials != nil {
+		edges = append(edges, group.EdgeDesktopModelCredentials)
 	}
 	if m.removedredeem_codes != nil {
 		edges = append(edges, group.EdgeRedeemCodes)
@@ -27684,6 +29257,12 @@ func (m *GroupMutation) RemovedIDs(name string) []ent.Value {
 	case group.EdgeAPIKeys:
 		ids := make([]ent.Value, 0, len(m.removedapi_keys))
 		for id := range m.removedapi_keys {
+			ids = append(ids, id)
+		}
+		return ids
+	case group.EdgeDesktopModelCredentials:
+		ids := make([]ent.Value, 0, len(m.removeddesktop_model_credentials))
+		for id := range m.removeddesktop_model_credentials {
 			ids = append(ids, id)
 		}
 		return ids
@@ -27723,9 +29302,12 @@ func (m *GroupMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *GroupMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 6)
+	edges := make([]string, 0, 7)
 	if m.clearedapi_keys {
 		edges = append(edges, group.EdgeAPIKeys)
+	}
+	if m.cleareddesktop_model_credentials {
+		edges = append(edges, group.EdgeDesktopModelCredentials)
 	}
 	if m.clearedredeem_codes {
 		edges = append(edges, group.EdgeRedeemCodes)
@@ -27751,6 +29333,8 @@ func (m *GroupMutation) EdgeCleared(name string) bool {
 	switch name {
 	case group.EdgeAPIKeys:
 		return m.clearedapi_keys
+	case group.EdgeDesktopModelCredentials:
+		return m.cleareddesktop_model_credentials
 	case group.EdgeRedeemCodes:
 		return m.clearedredeem_codes
 	case group.EdgeSubscriptions:
@@ -27779,6 +29363,9 @@ func (m *GroupMutation) ResetEdge(name string) error {
 	switch name {
 	case group.EdgeAPIKeys:
 		m.ResetAPIKeys()
+		return nil
+	case group.EdgeDesktopModelCredentials:
+		m.ResetDesktopModelCredentials()
 		return nil
 	case group.EdgeRedeemCodes:
 		m.ResetRedeemCodes()
@@ -30104,6 +31691,12 @@ type PaymentOrderMutation struct {
 	op                       Op
 	typ                      string
 	id                       *int64
+	client_order_id          *string
+	request_hash             *string
+	creation_state           *string
+	creation_lease_token     *string
+	creation_lease_until     *time.Time
+	confirmation_required    *bool
 	user_email               *string
 	user_name                *string
 	user_notes               *string
@@ -30113,6 +31706,8 @@ type PaymentOrderMutation struct {
 	addpay_amount            *float64
 	fee_rate                 *float64
 	addfee_rate              *float64
+	bonus_amount             *float64
+	addbonus_amount          *float64
 	recharge_code            *string
 	out_trade_no             *string
 	payment_type             *string
@@ -30289,6 +31884,248 @@ func (m *PaymentOrderMutation) OldUserID(ctx context.Context) (v int64, err erro
 // ResetUserID resets all changes to the "user_id" field.
 func (m *PaymentOrderMutation) ResetUserID() {
 	m.user = nil
+}
+
+// SetClientOrderID sets the "client_order_id" field.
+func (m *PaymentOrderMutation) SetClientOrderID(s string) {
+	m.client_order_id = &s
+}
+
+// ClientOrderID returns the value of the "client_order_id" field in the mutation.
+func (m *PaymentOrderMutation) ClientOrderID() (r string, exists bool) {
+	v := m.client_order_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldClientOrderID returns the old "client_order_id" field's value of the PaymentOrder entity.
+// If the PaymentOrder object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentOrderMutation) OldClientOrderID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldClientOrderID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldClientOrderID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldClientOrderID: %w", err)
+	}
+	return oldValue.ClientOrderID, nil
+}
+
+// ClearClientOrderID clears the value of the "client_order_id" field.
+func (m *PaymentOrderMutation) ClearClientOrderID() {
+	m.client_order_id = nil
+	m.clearedFields[paymentorder.FieldClientOrderID] = struct{}{}
+}
+
+// ClientOrderIDCleared returns if the "client_order_id" field was cleared in this mutation.
+func (m *PaymentOrderMutation) ClientOrderIDCleared() bool {
+	_, ok := m.clearedFields[paymentorder.FieldClientOrderID]
+	return ok
+}
+
+// ResetClientOrderID resets all changes to the "client_order_id" field.
+func (m *PaymentOrderMutation) ResetClientOrderID() {
+	m.client_order_id = nil
+	delete(m.clearedFields, paymentorder.FieldClientOrderID)
+}
+
+// SetRequestHash sets the "request_hash" field.
+func (m *PaymentOrderMutation) SetRequestHash(s string) {
+	m.request_hash = &s
+}
+
+// RequestHash returns the value of the "request_hash" field in the mutation.
+func (m *PaymentOrderMutation) RequestHash() (r string, exists bool) {
+	v := m.request_hash
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRequestHash returns the old "request_hash" field's value of the PaymentOrder entity.
+// If the PaymentOrder object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentOrderMutation) OldRequestHash(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRequestHash is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRequestHash requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRequestHash: %w", err)
+	}
+	return oldValue.RequestHash, nil
+}
+
+// ResetRequestHash resets all changes to the "request_hash" field.
+func (m *PaymentOrderMutation) ResetRequestHash() {
+	m.request_hash = nil
+}
+
+// SetCreationState sets the "creation_state" field.
+func (m *PaymentOrderMutation) SetCreationState(s string) {
+	m.creation_state = &s
+}
+
+// CreationState returns the value of the "creation_state" field in the mutation.
+func (m *PaymentOrderMutation) CreationState() (r string, exists bool) {
+	v := m.creation_state
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreationState returns the old "creation_state" field's value of the PaymentOrder entity.
+// If the PaymentOrder object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentOrderMutation) OldCreationState(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreationState is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreationState requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreationState: %w", err)
+	}
+	return oldValue.CreationState, nil
+}
+
+// ResetCreationState resets all changes to the "creation_state" field.
+func (m *PaymentOrderMutation) ResetCreationState() {
+	m.creation_state = nil
+}
+
+// SetCreationLeaseToken sets the "creation_lease_token" field.
+func (m *PaymentOrderMutation) SetCreationLeaseToken(s string) {
+	m.creation_lease_token = &s
+}
+
+// CreationLeaseToken returns the value of the "creation_lease_token" field in the mutation.
+func (m *PaymentOrderMutation) CreationLeaseToken() (r string, exists bool) {
+	v := m.creation_lease_token
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreationLeaseToken returns the old "creation_lease_token" field's value of the PaymentOrder entity.
+// If the PaymentOrder object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentOrderMutation) OldCreationLeaseToken(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreationLeaseToken is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreationLeaseToken requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreationLeaseToken: %w", err)
+	}
+	return oldValue.CreationLeaseToken, nil
+}
+
+// ResetCreationLeaseToken resets all changes to the "creation_lease_token" field.
+func (m *PaymentOrderMutation) ResetCreationLeaseToken() {
+	m.creation_lease_token = nil
+}
+
+// SetCreationLeaseUntil sets the "creation_lease_until" field.
+func (m *PaymentOrderMutation) SetCreationLeaseUntil(t time.Time) {
+	m.creation_lease_until = &t
+}
+
+// CreationLeaseUntil returns the value of the "creation_lease_until" field in the mutation.
+func (m *PaymentOrderMutation) CreationLeaseUntil() (r time.Time, exists bool) {
+	v := m.creation_lease_until
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreationLeaseUntil returns the old "creation_lease_until" field's value of the PaymentOrder entity.
+// If the PaymentOrder object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentOrderMutation) OldCreationLeaseUntil(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreationLeaseUntil is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreationLeaseUntil requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreationLeaseUntil: %w", err)
+	}
+	return oldValue.CreationLeaseUntil, nil
+}
+
+// ClearCreationLeaseUntil clears the value of the "creation_lease_until" field.
+func (m *PaymentOrderMutation) ClearCreationLeaseUntil() {
+	m.creation_lease_until = nil
+	m.clearedFields[paymentorder.FieldCreationLeaseUntil] = struct{}{}
+}
+
+// CreationLeaseUntilCleared returns if the "creation_lease_until" field was cleared in this mutation.
+func (m *PaymentOrderMutation) CreationLeaseUntilCleared() bool {
+	_, ok := m.clearedFields[paymentorder.FieldCreationLeaseUntil]
+	return ok
+}
+
+// ResetCreationLeaseUntil resets all changes to the "creation_lease_until" field.
+func (m *PaymentOrderMutation) ResetCreationLeaseUntil() {
+	m.creation_lease_until = nil
+	delete(m.clearedFields, paymentorder.FieldCreationLeaseUntil)
+}
+
+// SetConfirmationRequired sets the "confirmation_required" field.
+func (m *PaymentOrderMutation) SetConfirmationRequired(b bool) {
+	m.confirmation_required = &b
+}
+
+// ConfirmationRequired returns the value of the "confirmation_required" field in the mutation.
+func (m *PaymentOrderMutation) ConfirmationRequired() (r bool, exists bool) {
+	v := m.confirmation_required
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldConfirmationRequired returns the old "confirmation_required" field's value of the PaymentOrder entity.
+// If the PaymentOrder object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentOrderMutation) OldConfirmationRequired(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldConfirmationRequired is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldConfirmationRequired requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldConfirmationRequired: %w", err)
+	}
+	return oldValue.ConfirmationRequired, nil
+}
+
+// ResetConfirmationRequired resets all changes to the "confirmation_required" field.
+func (m *PaymentOrderMutation) ResetConfirmationRequired() {
+	m.confirmation_required = nil
 }
 
 // SetUserEmail sets the "user_email" field.
@@ -30578,6 +32415,62 @@ func (m *PaymentOrderMutation) AddedFeeRate() (r float64, exists bool) {
 func (m *PaymentOrderMutation) ResetFeeRate() {
 	m.fee_rate = nil
 	m.addfee_rate = nil
+}
+
+// SetBonusAmount sets the "bonus_amount" field.
+func (m *PaymentOrderMutation) SetBonusAmount(f float64) {
+	m.bonus_amount = &f
+	m.addbonus_amount = nil
+}
+
+// BonusAmount returns the value of the "bonus_amount" field in the mutation.
+func (m *PaymentOrderMutation) BonusAmount() (r float64, exists bool) {
+	v := m.bonus_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBonusAmount returns the old "bonus_amount" field's value of the PaymentOrder entity.
+// If the PaymentOrder object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentOrderMutation) OldBonusAmount(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBonusAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBonusAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBonusAmount: %w", err)
+	}
+	return oldValue.BonusAmount, nil
+}
+
+// AddBonusAmount adds f to the "bonus_amount" field.
+func (m *PaymentOrderMutation) AddBonusAmount(f float64) {
+	if m.addbonus_amount != nil {
+		*m.addbonus_amount += f
+	} else {
+		m.addbonus_amount = &f
+	}
+}
+
+// AddedBonusAmount returns the value that was added to the "bonus_amount" field in this mutation.
+func (m *PaymentOrderMutation) AddedBonusAmount() (r float64, exists bool) {
+	v := m.addbonus_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetBonusAmount resets all changes to the "bonus_amount" field.
+func (m *PaymentOrderMutation) ResetBonusAmount() {
+	m.bonus_amount = nil
+	m.addbonus_amount = nil
 }
 
 // SetRechargeCode sets the "recharge_code" field.
@@ -32123,9 +34016,27 @@ func (m *PaymentOrderMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *PaymentOrderMutation) Fields() []string {
-	fields := make([]string, 0, 39)
+	fields := make([]string, 0, 46)
 	if m.user != nil {
 		fields = append(fields, paymentorder.FieldUserID)
+	}
+	if m.client_order_id != nil {
+		fields = append(fields, paymentorder.FieldClientOrderID)
+	}
+	if m.request_hash != nil {
+		fields = append(fields, paymentorder.FieldRequestHash)
+	}
+	if m.creation_state != nil {
+		fields = append(fields, paymentorder.FieldCreationState)
+	}
+	if m.creation_lease_token != nil {
+		fields = append(fields, paymentorder.FieldCreationLeaseToken)
+	}
+	if m.creation_lease_until != nil {
+		fields = append(fields, paymentorder.FieldCreationLeaseUntil)
+	}
+	if m.confirmation_required != nil {
+		fields = append(fields, paymentorder.FieldConfirmationRequired)
 	}
 	if m.user_email != nil {
 		fields = append(fields, paymentorder.FieldUserEmail)
@@ -32144,6 +34055,9 @@ func (m *PaymentOrderMutation) Fields() []string {
 	}
 	if m.fee_rate != nil {
 		fields = append(fields, paymentorder.FieldFeeRate)
+	}
+	if m.bonus_amount != nil {
+		fields = append(fields, paymentorder.FieldBonusAmount)
 	}
 	if m.recharge_code != nil {
 		fields = append(fields, paymentorder.FieldRechargeCode)
@@ -32251,6 +34165,18 @@ func (m *PaymentOrderMutation) Field(name string) (ent.Value, bool) {
 	switch name {
 	case paymentorder.FieldUserID:
 		return m.UserID()
+	case paymentorder.FieldClientOrderID:
+		return m.ClientOrderID()
+	case paymentorder.FieldRequestHash:
+		return m.RequestHash()
+	case paymentorder.FieldCreationState:
+		return m.CreationState()
+	case paymentorder.FieldCreationLeaseToken:
+		return m.CreationLeaseToken()
+	case paymentorder.FieldCreationLeaseUntil:
+		return m.CreationLeaseUntil()
+	case paymentorder.FieldConfirmationRequired:
+		return m.ConfirmationRequired()
 	case paymentorder.FieldUserEmail:
 		return m.UserEmail()
 	case paymentorder.FieldUserName:
@@ -32263,6 +34189,8 @@ func (m *PaymentOrderMutation) Field(name string) (ent.Value, bool) {
 		return m.PayAmount()
 	case paymentorder.FieldFeeRate:
 		return m.FeeRate()
+	case paymentorder.FieldBonusAmount:
+		return m.BonusAmount()
 	case paymentorder.FieldRechargeCode:
 		return m.RechargeCode()
 	case paymentorder.FieldOutTradeNo:
@@ -32338,6 +34266,18 @@ func (m *PaymentOrderMutation) OldField(ctx context.Context, name string) (ent.V
 	switch name {
 	case paymentorder.FieldUserID:
 		return m.OldUserID(ctx)
+	case paymentorder.FieldClientOrderID:
+		return m.OldClientOrderID(ctx)
+	case paymentorder.FieldRequestHash:
+		return m.OldRequestHash(ctx)
+	case paymentorder.FieldCreationState:
+		return m.OldCreationState(ctx)
+	case paymentorder.FieldCreationLeaseToken:
+		return m.OldCreationLeaseToken(ctx)
+	case paymentorder.FieldCreationLeaseUntil:
+		return m.OldCreationLeaseUntil(ctx)
+	case paymentorder.FieldConfirmationRequired:
+		return m.OldConfirmationRequired(ctx)
 	case paymentorder.FieldUserEmail:
 		return m.OldUserEmail(ctx)
 	case paymentorder.FieldUserName:
@@ -32350,6 +34290,8 @@ func (m *PaymentOrderMutation) OldField(ctx context.Context, name string) (ent.V
 		return m.OldPayAmount(ctx)
 	case paymentorder.FieldFeeRate:
 		return m.OldFeeRate(ctx)
+	case paymentorder.FieldBonusAmount:
+		return m.OldBonusAmount(ctx)
 	case paymentorder.FieldRechargeCode:
 		return m.OldRechargeCode(ctx)
 	case paymentorder.FieldOutTradeNo:
@@ -32430,6 +34372,48 @@ func (m *PaymentOrderMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetUserID(v)
 		return nil
+	case paymentorder.FieldClientOrderID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetClientOrderID(v)
+		return nil
+	case paymentorder.FieldRequestHash:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRequestHash(v)
+		return nil
+	case paymentorder.FieldCreationState:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreationState(v)
+		return nil
+	case paymentorder.FieldCreationLeaseToken:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreationLeaseToken(v)
+		return nil
+	case paymentorder.FieldCreationLeaseUntil:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreationLeaseUntil(v)
+		return nil
+	case paymentorder.FieldConfirmationRequired:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetConfirmationRequired(v)
+		return nil
 	case paymentorder.FieldUserEmail:
 		v, ok := value.(string)
 		if !ok {
@@ -32471,6 +34455,13 @@ func (m *PaymentOrderMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetFeeRate(v)
+		return nil
+	case paymentorder.FieldBonusAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBonusAmount(v)
 		return nil
 	case paymentorder.FieldRechargeCode:
 		v, ok := value.(string)
@@ -32713,6 +34704,9 @@ func (m *PaymentOrderMutation) AddedFields() []string {
 	if m.addfee_rate != nil {
 		fields = append(fields, paymentorder.FieldFeeRate)
 	}
+	if m.addbonus_amount != nil {
+		fields = append(fields, paymentorder.FieldBonusAmount)
+	}
 	if m.addplan_id != nil {
 		fields = append(fields, paymentorder.FieldPlanID)
 	}
@@ -32739,6 +34733,8 @@ func (m *PaymentOrderMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedPayAmount()
 	case paymentorder.FieldFeeRate:
 		return m.AddedFeeRate()
+	case paymentorder.FieldBonusAmount:
+		return m.AddedBonusAmount()
 	case paymentorder.FieldPlanID:
 		return m.AddedPlanID()
 	case paymentorder.FieldSubscriptionGroupID:
@@ -32777,6 +34773,13 @@ func (m *PaymentOrderMutation) AddField(name string, value ent.Value) error {
 		}
 		m.AddFeeRate(v)
 		return nil
+	case paymentorder.FieldBonusAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddBonusAmount(v)
+		return nil
 	case paymentorder.FieldPlanID:
 		v, ok := value.(int64)
 		if !ok {
@@ -32813,6 +34816,12 @@ func (m *PaymentOrderMutation) AddField(name string, value ent.Value) error {
 // mutation.
 func (m *PaymentOrderMutation) ClearedFields() []string {
 	var fields []string
+	if m.FieldCleared(paymentorder.FieldClientOrderID) {
+		fields = append(fields, paymentorder.FieldClientOrderID)
+	}
+	if m.FieldCleared(paymentorder.FieldCreationLeaseUntil) {
+		fields = append(fields, paymentorder.FieldCreationLeaseUntil)
+	}
 	if m.FieldCleared(paymentorder.FieldUserNotes) {
 		fields = append(fields, paymentorder.FieldUserNotes)
 	}
@@ -32887,6 +34896,12 @@ func (m *PaymentOrderMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *PaymentOrderMutation) ClearField(name string) error {
 	switch name {
+	case paymentorder.FieldClientOrderID:
+		m.ClearClientOrderID()
+		return nil
+	case paymentorder.FieldCreationLeaseUntil:
+		m.ClearCreationLeaseUntil()
+		return nil
 	case paymentorder.FieldUserNotes:
 		m.ClearUserNotes()
 		return nil
@@ -32958,6 +34973,24 @@ func (m *PaymentOrderMutation) ResetField(name string) error {
 	case paymentorder.FieldUserID:
 		m.ResetUserID()
 		return nil
+	case paymentorder.FieldClientOrderID:
+		m.ResetClientOrderID()
+		return nil
+	case paymentorder.FieldRequestHash:
+		m.ResetRequestHash()
+		return nil
+	case paymentorder.FieldCreationState:
+		m.ResetCreationState()
+		return nil
+	case paymentorder.FieldCreationLeaseToken:
+		m.ResetCreationLeaseToken()
+		return nil
+	case paymentorder.FieldCreationLeaseUntil:
+		m.ResetCreationLeaseUntil()
+		return nil
+	case paymentorder.FieldConfirmationRequired:
+		m.ResetConfirmationRequired()
+		return nil
 	case paymentorder.FieldUserEmail:
 		m.ResetUserEmail()
 		return nil
@@ -32975,6 +35008,9 @@ func (m *PaymentOrderMutation) ResetField(name string) error {
 		return nil
 	case paymentorder.FieldFeeRate:
 		m.ResetFeeRate()
+		return nil
+	case paymentorder.FieldBonusAmount:
+		m.ResetBonusAmount()
 		return nil
 	case paymentorder.FieldRechargeCode:
 		m.ResetRechargeCode()
@@ -44541,6 +46577,10 @@ type UsageLogMutation struct {
 	model_mapping_chain          *string
 	billing_tier                 *string
 	billing_mode                 *string
+	desktop_turn_id              *string
+	desktop_call_id              *string
+	desktop_purpose              *string
+	settlement_status            *string
 	input_tokens                 *int
 	addinput_tokens              *int
 	output_tokens                *int
@@ -45298,6 +47338,202 @@ func (m *UsageLogMutation) BillingModeCleared() bool {
 func (m *UsageLogMutation) ResetBillingMode() {
 	m.billing_mode = nil
 	delete(m.clearedFields, usagelog.FieldBillingMode)
+}
+
+// SetDesktopTurnID sets the "desktop_turn_id" field.
+func (m *UsageLogMutation) SetDesktopTurnID(s string) {
+	m.desktop_turn_id = &s
+}
+
+// DesktopTurnID returns the value of the "desktop_turn_id" field in the mutation.
+func (m *UsageLogMutation) DesktopTurnID() (r string, exists bool) {
+	v := m.desktop_turn_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDesktopTurnID returns the old "desktop_turn_id" field's value of the UsageLog entity.
+// If the UsageLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageLogMutation) OldDesktopTurnID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDesktopTurnID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDesktopTurnID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDesktopTurnID: %w", err)
+	}
+	return oldValue.DesktopTurnID, nil
+}
+
+// ClearDesktopTurnID clears the value of the "desktop_turn_id" field.
+func (m *UsageLogMutation) ClearDesktopTurnID() {
+	m.desktop_turn_id = nil
+	m.clearedFields[usagelog.FieldDesktopTurnID] = struct{}{}
+}
+
+// DesktopTurnIDCleared returns if the "desktop_turn_id" field was cleared in this mutation.
+func (m *UsageLogMutation) DesktopTurnIDCleared() bool {
+	_, ok := m.clearedFields[usagelog.FieldDesktopTurnID]
+	return ok
+}
+
+// ResetDesktopTurnID resets all changes to the "desktop_turn_id" field.
+func (m *UsageLogMutation) ResetDesktopTurnID() {
+	m.desktop_turn_id = nil
+	delete(m.clearedFields, usagelog.FieldDesktopTurnID)
+}
+
+// SetDesktopCallID sets the "desktop_call_id" field.
+func (m *UsageLogMutation) SetDesktopCallID(s string) {
+	m.desktop_call_id = &s
+}
+
+// DesktopCallID returns the value of the "desktop_call_id" field in the mutation.
+func (m *UsageLogMutation) DesktopCallID() (r string, exists bool) {
+	v := m.desktop_call_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDesktopCallID returns the old "desktop_call_id" field's value of the UsageLog entity.
+// If the UsageLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageLogMutation) OldDesktopCallID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDesktopCallID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDesktopCallID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDesktopCallID: %w", err)
+	}
+	return oldValue.DesktopCallID, nil
+}
+
+// ClearDesktopCallID clears the value of the "desktop_call_id" field.
+func (m *UsageLogMutation) ClearDesktopCallID() {
+	m.desktop_call_id = nil
+	m.clearedFields[usagelog.FieldDesktopCallID] = struct{}{}
+}
+
+// DesktopCallIDCleared returns if the "desktop_call_id" field was cleared in this mutation.
+func (m *UsageLogMutation) DesktopCallIDCleared() bool {
+	_, ok := m.clearedFields[usagelog.FieldDesktopCallID]
+	return ok
+}
+
+// ResetDesktopCallID resets all changes to the "desktop_call_id" field.
+func (m *UsageLogMutation) ResetDesktopCallID() {
+	m.desktop_call_id = nil
+	delete(m.clearedFields, usagelog.FieldDesktopCallID)
+}
+
+// SetDesktopPurpose sets the "desktop_purpose" field.
+func (m *UsageLogMutation) SetDesktopPurpose(s string) {
+	m.desktop_purpose = &s
+}
+
+// DesktopPurpose returns the value of the "desktop_purpose" field in the mutation.
+func (m *UsageLogMutation) DesktopPurpose() (r string, exists bool) {
+	v := m.desktop_purpose
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDesktopPurpose returns the old "desktop_purpose" field's value of the UsageLog entity.
+// If the UsageLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageLogMutation) OldDesktopPurpose(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDesktopPurpose is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDesktopPurpose requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDesktopPurpose: %w", err)
+	}
+	return oldValue.DesktopPurpose, nil
+}
+
+// ClearDesktopPurpose clears the value of the "desktop_purpose" field.
+func (m *UsageLogMutation) ClearDesktopPurpose() {
+	m.desktop_purpose = nil
+	m.clearedFields[usagelog.FieldDesktopPurpose] = struct{}{}
+}
+
+// DesktopPurposeCleared returns if the "desktop_purpose" field was cleared in this mutation.
+func (m *UsageLogMutation) DesktopPurposeCleared() bool {
+	_, ok := m.clearedFields[usagelog.FieldDesktopPurpose]
+	return ok
+}
+
+// ResetDesktopPurpose resets all changes to the "desktop_purpose" field.
+func (m *UsageLogMutation) ResetDesktopPurpose() {
+	m.desktop_purpose = nil
+	delete(m.clearedFields, usagelog.FieldDesktopPurpose)
+}
+
+// SetSettlementStatus sets the "settlement_status" field.
+func (m *UsageLogMutation) SetSettlementStatus(s string) {
+	m.settlement_status = &s
+}
+
+// SettlementStatus returns the value of the "settlement_status" field in the mutation.
+func (m *UsageLogMutation) SettlementStatus() (r string, exists bool) {
+	v := m.settlement_status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSettlementStatus returns the old "settlement_status" field's value of the UsageLog entity.
+// If the UsageLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageLogMutation) OldSettlementStatus(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSettlementStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSettlementStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSettlementStatus: %w", err)
+	}
+	return oldValue.SettlementStatus, nil
+}
+
+// ClearSettlementStatus clears the value of the "settlement_status" field.
+func (m *UsageLogMutation) ClearSettlementStatus() {
+	m.settlement_status = nil
+	m.clearedFields[usagelog.FieldSettlementStatus] = struct{}{}
+}
+
+// SettlementStatusCleared returns if the "settlement_status" field was cleared in this mutation.
+func (m *UsageLogMutation) SettlementStatusCleared() bool {
+	_, ok := m.clearedFields[usagelog.FieldSettlementStatus]
+	return ok
+}
+
+// ResetSettlementStatus resets all changes to the "settlement_status" field.
+func (m *UsageLogMutation) ResetSettlementStatus() {
+	m.settlement_status = nil
+	delete(m.clearedFields, usagelog.FieldSettlementStatus)
 }
 
 // SetGroupID sets the "group_id" field.
@@ -47279,7 +49515,7 @@ func (m *UsageLogMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UsageLogMutation) Fields() []string {
-	fields := make([]string, 0, 47)
+	fields := make([]string, 0, 51)
 	if m.user != nil {
 		fields = append(fields, usagelog.FieldUserID)
 	}
@@ -47318,6 +49554,18 @@ func (m *UsageLogMutation) Fields() []string {
 	}
 	if m.billing_mode != nil {
 		fields = append(fields, usagelog.FieldBillingMode)
+	}
+	if m.desktop_turn_id != nil {
+		fields = append(fields, usagelog.FieldDesktopTurnID)
+	}
+	if m.desktop_call_id != nil {
+		fields = append(fields, usagelog.FieldDesktopCallID)
+	}
+	if m.desktop_purpose != nil {
+		fields = append(fields, usagelog.FieldDesktopPurpose)
+	}
+	if m.settlement_status != nil {
+		fields = append(fields, usagelog.FieldSettlementStatus)
 	}
 	if m.group != nil {
 		fields = append(fields, usagelog.FieldGroupID)
@@ -47455,6 +49703,14 @@ func (m *UsageLogMutation) Field(name string) (ent.Value, bool) {
 		return m.BillingTier()
 	case usagelog.FieldBillingMode:
 		return m.BillingMode()
+	case usagelog.FieldDesktopTurnID:
+		return m.DesktopTurnID()
+	case usagelog.FieldDesktopCallID:
+		return m.DesktopCallID()
+	case usagelog.FieldDesktopPurpose:
+		return m.DesktopPurpose()
+	case usagelog.FieldSettlementStatus:
+		return m.SettlementStatus()
 	case usagelog.FieldGroupID:
 		return m.GroupID()
 	case usagelog.FieldSubscriptionID:
@@ -47558,6 +49814,14 @@ func (m *UsageLogMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldBillingTier(ctx)
 	case usagelog.FieldBillingMode:
 		return m.OldBillingMode(ctx)
+	case usagelog.FieldDesktopTurnID:
+		return m.OldDesktopTurnID(ctx)
+	case usagelog.FieldDesktopCallID:
+		return m.OldDesktopCallID(ctx)
+	case usagelog.FieldDesktopPurpose:
+		return m.OldDesktopPurpose(ctx)
+	case usagelog.FieldSettlementStatus:
+		return m.OldSettlementStatus(ctx)
 	case usagelog.FieldGroupID:
 		return m.OldGroupID(ctx)
 	case usagelog.FieldSubscriptionID:
@@ -47725,6 +49989,34 @@ func (m *UsageLogMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetBillingMode(v)
+		return nil
+	case usagelog.FieldDesktopTurnID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDesktopTurnID(v)
+		return nil
+	case usagelog.FieldDesktopCallID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDesktopCallID(v)
+		return nil
+	case usagelog.FieldDesktopPurpose:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDesktopPurpose(v)
+		return nil
+	case usagelog.FieldSettlementStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSettlementStatus(v)
 		return nil
 	case usagelog.FieldGroupID:
 		v, ok := value.(int64)
@@ -48273,6 +50565,18 @@ func (m *UsageLogMutation) ClearedFields() []string {
 	if m.FieldCleared(usagelog.FieldBillingMode) {
 		fields = append(fields, usagelog.FieldBillingMode)
 	}
+	if m.FieldCleared(usagelog.FieldDesktopTurnID) {
+		fields = append(fields, usagelog.FieldDesktopTurnID)
+	}
+	if m.FieldCleared(usagelog.FieldDesktopCallID) {
+		fields = append(fields, usagelog.FieldDesktopCallID)
+	}
+	if m.FieldCleared(usagelog.FieldDesktopPurpose) {
+		fields = append(fields, usagelog.FieldDesktopPurpose)
+	}
+	if m.FieldCleared(usagelog.FieldSettlementStatus) {
+		fields = append(fields, usagelog.FieldSettlementStatus)
+	}
 	if m.FieldCleared(usagelog.FieldGroupID) {
 		fields = append(fields, usagelog.FieldGroupID)
 	}
@@ -48352,6 +50656,18 @@ func (m *UsageLogMutation) ClearField(name string) error {
 		return nil
 	case usagelog.FieldBillingMode:
 		m.ClearBillingMode()
+		return nil
+	case usagelog.FieldDesktopTurnID:
+		m.ClearDesktopTurnID()
+		return nil
+	case usagelog.FieldDesktopCallID:
+		m.ClearDesktopCallID()
+		return nil
+	case usagelog.FieldDesktopPurpose:
+		m.ClearDesktopPurpose()
+		return nil
+	case usagelog.FieldSettlementStatus:
+		m.ClearSettlementStatus()
 		return nil
 	case usagelog.FieldGroupID:
 		m.ClearGroupID()
@@ -48441,6 +50757,18 @@ func (m *UsageLogMutation) ResetField(name string) error {
 		return nil
 	case usagelog.FieldBillingMode:
 		m.ResetBillingMode()
+		return nil
+	case usagelog.FieldDesktopTurnID:
+		m.ResetDesktopTurnID()
+		return nil
+	case usagelog.FieldDesktopCallID:
+		m.ResetDesktopCallID()
+		return nil
+	case usagelog.FieldDesktopPurpose:
+		m.ResetDesktopPurpose()
+		return nil
+	case usagelog.FieldSettlementStatus:
+		m.ResetSettlementStatus()
 		return nil
 	case usagelog.FieldGroupID:
 		m.ResetGroupID()
@@ -48697,83 +51025,86 @@ func (m *UsageLogMutation) ResetEdge(name string) error {
 // UserMutation represents an operation that mutates the User nodes in the graph.
 type UserMutation struct {
 	config
-	op                            Op
-	typ                           string
-	id                            *int64
-	created_at                    *time.Time
-	updated_at                    *time.Time
-	deleted_at                    *time.Time
-	email                         *string
-	password_hash                 *string
-	role                          *string
-	balance                       *float64
-	addbalance                    *float64
-	frozen_balance                *float64
-	addfrozen_balance             *float64
-	concurrency                   *int
-	addconcurrency                *int
-	status                        *string
-	username                      *string
-	notes                         *string
-	totp_secret_encrypted         *string
-	totp_enabled                  *bool
-	totp_enabled_at               *time.Time
-	signup_source                 *string
-	last_login_at                 *time.Time
-	last_active_at                *time.Time
-	restrict_public_groups        *bool
-	balance_notify_enabled        *bool
-	balance_notify_threshold_type *string
-	balance_notify_threshold      *float64
-	addbalance_notify_threshold   *float64
-	balance_notify_extra_emails   *string
-	total_recharged               *float64
-	addtotal_recharged            *float64
-	rpm_limit                     *int
-	addrpm_limit                  *int
-	clearedFields                 map[string]struct{}
-	api_keys                      map[int64]struct{}
-	removedapi_keys               map[int64]struct{}
-	clearedapi_keys               bool
-	redeem_codes                  map[int64]struct{}
-	removedredeem_codes           map[int64]struct{}
-	clearedredeem_codes           bool
-	subscriptions                 map[int64]struct{}
-	removedsubscriptions          map[int64]struct{}
-	clearedsubscriptions          bool
-	assigned_subscriptions        map[int64]struct{}
-	removedassigned_subscriptions map[int64]struct{}
-	clearedassigned_subscriptions bool
-	announcement_reads            map[int64]struct{}
-	removedannouncement_reads     map[int64]struct{}
-	clearedannouncement_reads     bool
-	allowed_groups                map[int64]struct{}
-	removedallowed_groups         map[int64]struct{}
-	clearedallowed_groups         bool
-	usage_logs                    map[int64]struct{}
-	removedusage_logs             map[int64]struct{}
-	clearedusage_logs             bool
-	attribute_values              map[int64]struct{}
-	removedattribute_values       map[int64]struct{}
-	clearedattribute_values       bool
-	promo_code_usages             map[int64]struct{}
-	removedpromo_code_usages      map[int64]struct{}
-	clearedpromo_code_usages      bool
-	payment_orders                map[int64]struct{}
-	removedpayment_orders         map[int64]struct{}
-	clearedpayment_orders         bool
-	auth_identities               map[int64]struct{}
-	removedauth_identities        map[int64]struct{}
-	clearedauth_identities        bool
-	pending_auth_sessions         map[int64]struct{}
-	removedpending_auth_sessions  map[int64]struct{}
-	clearedpending_auth_sessions  bool
-	platform_quotas               map[int64]struct{}
-	removedplatform_quotas        map[int64]struct{}
-	clearedplatform_quotas        bool
-	done                          bool
-	oldValue                      func(context.Context) (*User, error)
-	predicates                    []predicate.User
+	op                               Op
+	typ                              string
+	id                               *int64
+	created_at                       *time.Time
+	updated_at                       *time.Time
+	deleted_at                       *time.Time
+	email                            *string
+	password_hash                    *string
+	role                             *string
+	balance                          *float64
+	addbalance                       *float64
+	frozen_balance                   *float64
+	addfrozen_balance                *float64
+	concurrency                      *int
+	addconcurrency                   *int
+	status                           *string
+	username                         *string
+	notes                            *string
+	totp_secret_encrypted            *string
+	totp_enabled                     *bool
+	totp_enabled_at                  *time.Time
+	signup_source                    *string
+	last_login_at                    *time.Time
+	last_active_at                   *time.Time
+	restrict_public_groups           *bool
+	balance_notify_enabled           *bool
+	balance_notify_threshold_type    *string
+	balance_notify_threshold         *float64
+	addbalance_notify_threshold      *float64
+	balance_notify_extra_emails      *string
+	total_recharged                  *float64
+	addtotal_recharged               *float64
+	rpm_limit                        *int
+	addrpm_limit                     *int
+	clearedFields                    map[string]struct{}
+	api_keys                         map[int64]struct{}
+	removedapi_keys                  map[int64]struct{}
+	clearedapi_keys                  bool
+	redeem_codes                     map[int64]struct{}
+	removedredeem_codes              map[int64]struct{}
+	clearedredeem_codes              bool
+	subscriptions                    map[int64]struct{}
+	removedsubscriptions             map[int64]struct{}
+	clearedsubscriptions             bool
+	assigned_subscriptions           map[int64]struct{}
+	removedassigned_subscriptions    map[int64]struct{}
+	clearedassigned_subscriptions    bool
+	announcement_reads               map[int64]struct{}
+	removedannouncement_reads        map[int64]struct{}
+	clearedannouncement_reads        bool
+	allowed_groups                   map[int64]struct{}
+	removedallowed_groups            map[int64]struct{}
+	clearedallowed_groups            bool
+	usage_logs                       map[int64]struct{}
+	removedusage_logs                map[int64]struct{}
+	clearedusage_logs                bool
+	attribute_values                 map[int64]struct{}
+	removedattribute_values          map[int64]struct{}
+	clearedattribute_values          bool
+	promo_code_usages                map[int64]struct{}
+	removedpromo_code_usages         map[int64]struct{}
+	clearedpromo_code_usages         bool
+	payment_orders                   map[int64]struct{}
+	removedpayment_orders            map[int64]struct{}
+	clearedpayment_orders            bool
+	auth_identities                  map[int64]struct{}
+	removedauth_identities           map[int64]struct{}
+	clearedauth_identities           bool
+	pending_auth_sessions            map[int64]struct{}
+	removedpending_auth_sessions     map[int64]struct{}
+	clearedpending_auth_sessions     bool
+	platform_quotas                  map[int64]struct{}
+	removedplatform_quotas           map[int64]struct{}
+	clearedplatform_quotas           bool
+	desktop_model_credentials        map[int64]struct{}
+	removeddesktop_model_credentials map[int64]struct{}
+	cleareddesktop_model_credentials bool
+	done                             bool
+	oldValue                         func(context.Context) (*User, error)
+	predicates                       []predicate.User
 }
 
 var _ ent.Mutation = (*UserMutation)(nil)
@@ -50675,6 +53006,60 @@ func (m *UserMutation) ResetPlatformQuotas() {
 	m.removedplatform_quotas = nil
 }
 
+// AddDesktopModelCredentialIDs adds the "desktop_model_credentials" edge to the DesktopModelCredential entity by ids.
+func (m *UserMutation) AddDesktopModelCredentialIDs(ids ...int64) {
+	if m.desktop_model_credentials == nil {
+		m.desktop_model_credentials = make(map[int64]struct{})
+	}
+	for i := range ids {
+		m.desktop_model_credentials[ids[i]] = struct{}{}
+	}
+}
+
+// ClearDesktopModelCredentials clears the "desktop_model_credentials" edge to the DesktopModelCredential entity.
+func (m *UserMutation) ClearDesktopModelCredentials() {
+	m.cleareddesktop_model_credentials = true
+}
+
+// DesktopModelCredentialsCleared reports if the "desktop_model_credentials" edge to the DesktopModelCredential entity was cleared.
+func (m *UserMutation) DesktopModelCredentialsCleared() bool {
+	return m.cleareddesktop_model_credentials
+}
+
+// RemoveDesktopModelCredentialIDs removes the "desktop_model_credentials" edge to the DesktopModelCredential entity by IDs.
+func (m *UserMutation) RemoveDesktopModelCredentialIDs(ids ...int64) {
+	if m.removeddesktop_model_credentials == nil {
+		m.removeddesktop_model_credentials = make(map[int64]struct{})
+	}
+	for i := range ids {
+		delete(m.desktop_model_credentials, ids[i])
+		m.removeddesktop_model_credentials[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedDesktopModelCredentials returns the removed IDs of the "desktop_model_credentials" edge to the DesktopModelCredential entity.
+func (m *UserMutation) RemovedDesktopModelCredentialsIDs() (ids []int64) {
+	for id := range m.removeddesktop_model_credentials {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// DesktopModelCredentialsIDs returns the "desktop_model_credentials" edge IDs in the mutation.
+func (m *UserMutation) DesktopModelCredentialsIDs() (ids []int64) {
+	for id := range m.desktop_model_credentials {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetDesktopModelCredentials resets all changes to the "desktop_model_credentials" edge.
+func (m *UserMutation) ResetDesktopModelCredentials() {
+	m.desktop_model_credentials = nil
+	m.cleareddesktop_model_credentials = false
+	m.removeddesktop_model_credentials = nil
+}
+
 // Where appends a list predicates to the UserMutation builder.
 func (m *UserMutation) Where(ps ...predicate.User) {
 	m.predicates = append(m.predicates, ps...)
@@ -51330,7 +53715,7 @@ func (m *UserMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *UserMutation) AddedEdges() []string {
-	edges := make([]string, 0, 13)
+	edges := make([]string, 0, 14)
 	if m.api_keys != nil {
 		edges = append(edges, user.EdgeAPIKeys)
 	}
@@ -51369,6 +53754,9 @@ func (m *UserMutation) AddedEdges() []string {
 	}
 	if m.platform_quotas != nil {
 		edges = append(edges, user.EdgePlatformQuotas)
+	}
+	if m.desktop_model_credentials != nil {
+		edges = append(edges, user.EdgeDesktopModelCredentials)
 	}
 	return edges
 }
@@ -51455,13 +53843,19 @@ func (m *UserMutation) AddedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case user.EdgeDesktopModelCredentials:
+		ids := make([]ent.Value, 0, len(m.desktop_model_credentials))
+		for id := range m.desktop_model_credentials {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *UserMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 13)
+	edges := make([]string, 0, 14)
 	if m.removedapi_keys != nil {
 		edges = append(edges, user.EdgeAPIKeys)
 	}
@@ -51500,6 +53894,9 @@ func (m *UserMutation) RemovedEdges() []string {
 	}
 	if m.removedplatform_quotas != nil {
 		edges = append(edges, user.EdgePlatformQuotas)
+	}
+	if m.removeddesktop_model_credentials != nil {
+		edges = append(edges, user.EdgeDesktopModelCredentials)
 	}
 	return edges
 }
@@ -51586,13 +53983,19 @@ func (m *UserMutation) RemovedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case user.EdgeDesktopModelCredentials:
+		ids := make([]ent.Value, 0, len(m.removeddesktop_model_credentials))
+		for id := range m.removeddesktop_model_credentials {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *UserMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 13)
+	edges := make([]string, 0, 14)
 	if m.clearedapi_keys {
 		edges = append(edges, user.EdgeAPIKeys)
 	}
@@ -51632,6 +54035,9 @@ func (m *UserMutation) ClearedEdges() []string {
 	if m.clearedplatform_quotas {
 		edges = append(edges, user.EdgePlatformQuotas)
 	}
+	if m.cleareddesktop_model_credentials {
+		edges = append(edges, user.EdgeDesktopModelCredentials)
+	}
 	return edges
 }
 
@@ -51665,6 +54071,8 @@ func (m *UserMutation) EdgeCleared(name string) bool {
 		return m.clearedpending_auth_sessions
 	case user.EdgePlatformQuotas:
 		return m.clearedplatform_quotas
+	case user.EdgeDesktopModelCredentials:
+		return m.cleareddesktop_model_credentials
 	}
 	return false
 }
@@ -51719,6 +54127,9 @@ func (m *UserMutation) ResetEdge(name string) error {
 		return nil
 	case user.EdgePlatformQuotas:
 		m.ResetPlatformQuotas()
+		return nil
+	case user.EdgeDesktopModelCredentials:
+		m.ResetDesktopModelCredentials()
 		return nil
 	}
 	return fmt.Errorf("unknown User edge %s", name)

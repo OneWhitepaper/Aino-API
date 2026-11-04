@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { nextTick } from 'vue'
+import { createMemoryHistory, createRouter } from 'vue-router'
 
 import type { ApiKey } from '@/types'
+import { keysAPI } from '@/api'
 import KeysView from '../KeysView.vue'
 
 const {
@@ -46,6 +48,9 @@ const messages: Record<string, string> = {
   'keys.group': 'Group',
   'keys.id': 'ID',
   'keys.currentConcurrency': 'Current Concurrency',
+  'keys.keyTypes.label': 'Key type',
+  'keys.keyTypes.manual': 'Personal keys',
+  'keys.keyTypes.desktop': 'Desktop managed',
   'keys.lastUsedAt': 'Last Used',
   'keys.lastUsedIP': 'Last Used IP',
   'keys.rateLimitColumn': 'Rate Limit',
@@ -102,7 +107,9 @@ vi.mock('vue-i18n', async () => {
   return {
     ...actual,
     useI18n: () => ({
-      t: (key: string) => messages[key] ?? key,
+      t: (key: string, params?: { count?: number }) => key === 'keys.bulkEdit.selectedCount'
+        ? `Selected ${params?.count}`
+        : messages[key] ?? key,
     }),
   }
 })
@@ -155,8 +162,8 @@ const TablePageLayoutStub = {
 
 const DataTableStub = {
   name: 'DataTable',
-  props: ['columns', 'data'],
-  emits: ['sort'],
+  props: { columns: Array, data: Array, selectedKeys: Array, selectable: Boolean },
+  emits: ['sort', 'update:selectedKeys'],
   template: `
     <div>
       <div data-test="columns">{{ columns.map((col) => col.key).join(',') }}</div>
@@ -172,7 +179,12 @@ const DataTableStub = {
           <slot name="cell-id" :value="row.id" :row="row" />
         </div>
         <slot name="cell-name" :value="row.name" :row="row" />
+        <slot name="cell-key" :value="row.key" :row="row" />
+        <slot name="cell-group" :row="row" />
         <slot name="cell-actions" :row="row" />
+        <div data-test="key-status">
+          <slot name="cell-status" :value="row.status" :row="row" />
+        </div>
         <div data-test="current-concurrency">
           <slot name="cell-current_concurrency" :value="row.current_concurrency" :row="row" />
         </div>
@@ -209,6 +221,7 @@ const PaginationStub = {
   template: `
     <div>
       <button data-test="page-size-50" @click="$emit('update:pageSize', 50)">50</button>
+      <button data-test="page-2" @click="$emit('update:page', 2)">Page 2</button>
     </div>
   `,
 }
@@ -218,17 +231,22 @@ const IconStub = {
   template: '<span data-test="icon">{{ name }}</span>',
 }
 
-const mountView = async () => {
+const mountView = async (realTable = false, initialRoute = '/keys') => {
+  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/keys', component: { template: '<div />' } }] })
+  await router.push(initialRoute)
+  await router.isReady()
   const wrapper = mount(KeysView, {
     global: {
+      plugins: [router],
       stubs: {
         AppLayout: AppLayoutStub,
         TablePageLayout: TablePageLayoutStub,
-        DataTable: DataTableStub,
+        DataTable: realTable ? false : DataTableStub,
         Pagination: PaginationStub,
         BaseDialog: {
-          props: ['show'],
-          template: '<div v-if="show"><slot /><slot name="footer" /></div>',
+          props: ['show', 'title'],
+          emits: ['close'],
+          template: '<div v-if="show" role="dialog"><button data-test="close-dialog" @click="$emit(\'close\')">Close</button><slot /><slot name="footer" /></div>',
         },
         ConfirmDialog: true,
         EmptyState: true,
@@ -236,6 +254,8 @@ const mountView = async () => {
         SearchInput: SearchInputStub,
         Icon: IconStub,
         UseKeyModal: true,
+        ConnectionGuide: true,
+        BulkEditKeysModal: true,
         EndpointPopover: true,
         GroupBadge: true,
         GroupOptionItem: true,
@@ -263,11 +283,33 @@ const getButtonByText = (wrapper: VueWrapper, text: string) => {
 }
 
 describe('user KeysView column settings', () => {
+  it('opens the create form from the workspace without creating a key and consumes the action', async () => {
+    const wrapper = await mountView(false, '/keys?create=1&source=workspace')
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(true)
+    expect(wrapper.find('[data-tour="key-form-provider"]').exists()).toBe(true)
+    expect(keysAPI.create).not.toHaveBeenCalled()
+    expect(wrapper.vm.$router.currentRoute.value.query).toEqual({ source: 'workspace' })
+    await wrapper.get('[data-test="close-dialog"]').trigger('click')
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
+    await wrapper.vm.$router.push('/keys?create=1')
+    await flushPromises()
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(true)
+  })
+
+  it('opens the connection guide independently of the create form', async () => {
+    const wrapper = await mountView(false, '/keys?guide=1')
+    expect(wrapper.find('connection-guide-stub').exists()).toBe(true)
+    expect(wrapper.find('[data-tour="key-form-provider"]').exists()).toBe(false)
+    expect(keysAPI.create).not.toHaveBeenCalled()
+    expect(wrapper.vm.$router.currentRoute.value.query).toEqual({})
+  })
+
   beforeEach(() => {
     localStorage.clear()
 
     listKeys.mockReset()
     updateKey.mockReset()
+    vi.mocked(keysAPI.create).mockReset()
     getPublicSettings.mockReset()
     getDashboardApiKeysUsage.mockReset()
     getAvailableGroups.mockReset()
@@ -290,6 +332,120 @@ describe('user KeysView column settings', () => {
     getAvailableGroups.mockResolvedValue([])
     getUserGroupRates.mockResolvedValue({})
     isCurrentStep.mockReturnValue(false)
+  })
+
+  it('offers deletion without copy, import, editing or reactivation for managed keys', async () => {
+    listKeys.mockResolvedValueOnce({ items: [{ ...createApiKey(), key: '', desktop_managed: true }], total: 1, page: 1, page_size: 20, pages: 1 })
+    const wrapper = await mountView()
+    expect(wrapper.text()).toContain('keys.desktopManaged')
+    expect(wrapper.find('button[title="keys.copyToClipboard"]').exists()).toBe(false)
+    for (const label of ['keys.useKey', 'keys.importToCcSwitch', 'keys.disable', 'common.edit']) {
+      expect(wrapper.findAll('button').some(button => button.text().includes(label))).toBe(false)
+    }
+    expect(wrapper.get('button[title="keys.desktopManaged"]').attributes('disabled')).toBeDefined()
+    await getButtonByText(wrapper, 'common.delete').trigger('click')
+    expect(wrapper.findComponent({ name: 'ConfirmDialog' }).props('show')).toBe(true)
+    expect(updateKey).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('loads personal keys by default and resets pagination and selection when viewing desktop authorizations', async () => {
+    const wrapper = await mountView()
+    expect(listKeys).toHaveBeenLastCalledWith(1, 20,
+      expect.objectContaining({ desktop_managed: false }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }))
+
+    await wrapper.get('[data-test="page-2"]').trigger('click')
+    await flushPromises()
+    const table = wrapper.findComponent({ name: 'DataTable' })
+    table.vm.$emit('update:selectedKeys', [1])
+    await nextTick()
+    listKeys.mockResolvedValue({ items: [{ ...createApiKey(), key: '', desktop_managed: true }], total: 1, page: 1, page_size: 20, pages: 1 })
+    await getButtonByText(wrapper, 'Desktop managed').trigger('click')
+    await flushPromises()
+
+    expect(listKeys).toHaveBeenLastCalledWith(1, 20,
+      expect.objectContaining({ desktop_managed: true }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }))
+    expect(table.props('selectedKeys')).toEqual([])
+    expect(wrapper.text()).toContain('keys.desktopManaged')
+    expect(wrapper.findAll('button').some(button => button.text().includes('common.delete'))).toBe(true)
+    await getButtonByText(wrapper, 'Personal keys').trigger('click')
+    await flushPromises()
+    expect(listKeys).toHaveBeenLastCalledWith(1, 20,
+      expect.objectContaining({ desktop_managed: false }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }))
+    wrapper.unmount()
+  })
+
+  it('explains automatic desktop authorization without suggesting a manual key for the managed empty state', async () => {
+    listKeys.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20, pages: 0 })
+    const wrapper = await mountView()
+    expect(wrapper.findComponent({ name: 'EmptyState' }).props('actionText')).toBe('Create API Key')
+    await getButtonByText(wrapper, 'Desktop managed').trigger('click')
+    await flushPromises()
+    const empty = wrapper.findComponent({ name: 'EmptyState' })
+    expect(empty.props('title')).toBe('keys.desktopEmptyTitle')
+    expect(empty.props('description')).toBe('keys.desktopManagedHint')
+    expect(empty.props('actionText')).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it('shows a naturally expired active key as expired while preserving explicit disabled status', async () => {
+    listKeys.mockResolvedValue({
+      items: [
+        { ...createApiKey(), expires_at: '2000-01-01T00:00:00Z' },
+        { ...createApiKey(), id: 2, status: 'inactive', expires_at: '2000-01-01T00:00:00Z' },
+        { ...createApiKey(), id: 3, expires_at: '2999-01-01T00:00:00Z' }
+      ], total: 3, page: 1, page_size: 20, pages: 1
+    })
+    const wrapper = await mountView()
+    expect(wrapper.findAll('[data-test="key-status"]').map(status => status.text())).toEqual(['Expired', 'Inactive', 'Active'])
+    wrapper.unmount()
+  })
+
+  it('selects only ordinary keys from mixed managed and ordinary rows', async () => {
+    listKeys.mockResolvedValueOnce({
+      items: [
+        { ...createApiKey(), key: '', desktop_managed: true },
+        { ...createApiKey(), id: 2, name: 'ordinary-key' }
+      ],
+      total: 2, page: 1, page_size: 20, pages: 1
+    })
+    const wrapper = await mountView(true)
+    const rows = wrapper.findAll<HTMLInputElement>('[data-test="select-row"]')
+    expect(rows[0].element.disabled).toBe(true)
+    expect(rows[1].element.disabled).toBe(false)
+
+    await wrapper.get('[data-test="select-all"]').setValue(true)
+    expect(wrapper.get<HTMLInputElement>('[data-test="select-all"]').element.checked).toBe(true)
+    expect(rows[0].element.checked).toBe(false)
+    expect(rows[1].element.checked).toBe(true)
+    expect(wrapper.text()).toContain('Selected 1')
+    await wrapper.get('[data-test="bulk-edit-keys"]').trigger('click')
+    const modal = wrapper.findComponent({ name: 'BulkEditKeysModal' })
+    expect(modal.props('selectedKeys').map((key: ApiKey) => key.id)).toEqual([2])
+
+    wrapper.findComponent({ name: 'DataTable' }).vm.$emit('update:selectedKeys', [1, 2, 99])
+    await nextTick()
+    expect(modal.props('selectedKeys').map((key: ApiKey) => key.id)).toEqual([2])
+    expect(wrapper.text()).toContain('Selected 1')
+    wrapper.unmount()
+  })
+
+  it('disables bulk selection when every key is desktop managed', async () => {
+    listKeys.mockResolvedValueOnce({
+      items: [{ ...createApiKey(), key: '', desktop_managed: true }],
+      total: 1, page: 1, page_size: 20, pages: 1
+    })
+    const wrapper = await mountView(true)
+    expect(wrapper.get<HTMLInputElement>('[data-test="select-all"]').element.disabled).toBe(true)
+    expect(wrapper.get<HTMLInputElement>('[data-test="select-row"]').element.disabled).toBe(true)
+    wrapper.findComponent({ name: 'DataTable' }).vm.$emit('update:selectedKeys', [1])
+    await nextTick()
+    expect(wrapper.find('[data-test="bulk-edit-keys"]').exists()).toBe(false)
+    expect(wrapper.findComponent({ name: 'BulkEditKeysModal' }).props('selectedKeys')).toEqual([])
+    wrapper.unmount()
   })
 
   it.each([
@@ -347,6 +503,66 @@ describe('user KeysView column settings', () => {
     expect(visibleColumnKeys(wrapper)).not.toContain('last_used_at')
     expect(visibleColumnKeys(wrapper)).not.toContain('last_used_ip')
     expect(visibleColumnKeys(wrapper)).not.toContain('id')
+  })
+
+  it('opens bulk editing with only selected visible keys', async () => {
+    const wrapper = await mountView()
+    const table = wrapper.findComponent({ name: 'DataTable' })
+    expect(table.props('selectable')).toBe(true)
+    table.vm.$emit('update:selectedKeys', [1, 99])
+    await nextTick()
+    await wrapper.get('[data-test="bulk-edit-keys"]').trigger('click')
+    const modal = wrapper.findComponent({ name: 'BulkEditKeysModal' })
+    expect(modal.props('show')).toBe(true)
+    expect(modal.props('selectedKeys').map((key: ApiKey) => key.id)).toEqual([1])
+    wrapper.unmount()
+  })
+
+  it.each(['filter', 'page size', 'sort'])('clears selection on %s changes', async (change) => {
+    const wrapper = await mountView()
+    const table = wrapper.findComponent({ name: 'DataTable' })
+    table.vm.$emit('update:selectedKeys', [1])
+    await nextTick()
+    if (change === 'filter') {
+      wrapper.findComponent({ name: 'SearchInput' }).vm.$emit('search')
+    } else if (change === 'page size') {
+      await wrapper.get('[data-test="page-size-50"]').trigger('click')
+    } else {
+      table.vm.$emit('sort', 'created_at', 'asc')
+    }
+    await flushPromises()
+    expect(table.props('selectedKeys')).toEqual([])
+    expect(wrapper.find('[data-test="bulk-edit-keys"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('removes successful keys from the selection and refreshes the table', async () => {
+    listKeys.mockResolvedValue({
+      items: [createApiKey(), { ...createApiKey(), id: 2, name: 'Second' }],
+      total: 2, pages: 1
+    })
+    const wrapper = await mountView()
+    const table = wrapper.findComponent({ name: 'DataTable' })
+    table.vm.$emit('update:selectedKeys', [1, 2])
+    await nextTick()
+    await wrapper.get('[data-test="bulk-edit-keys"]').trigger('click')
+    wrapper.findComponent({ name: 'BulkEditKeysModal' }).vm.$emit('updated', [1])
+    await flushPromises()
+    expect(listKeys).toHaveBeenCalledTimes(2)
+    expect(table.props('selectedKeys')).toEqual([2])
+    wrapper.unmount()
+  })
+
+  it('drops keys that are no longer visible after a refresh', async () => {
+    const wrapper = await mountView()
+    const table = wrapper.findComponent({ name: 'DataTable' })
+    table.vm.$emit('update:selectedKeys', [1])
+    await nextTick()
+    listKeys.mockResolvedValue({ items: [], total: 0, pages: 0 })
+    await wrapper.get('button[title="Refresh"]').trigger('click')
+    await flushPromises()
+    expect(table.props('selectedKeys')).toEqual([])
+    wrapper.unmount()
   })
 
   it('shows a hidden column when toggled and persists the preference', async () => {
@@ -447,7 +663,11 @@ describe('user KeysView column settings', () => {
     expect(currentConcurrencyColumn?.sortable).toBe(true)
   })
 
-  it('keeps filters and selected page size when sorting by current concurrency', async () => {
+  it.each([
+    { key: 'current_concurrency', order: 'asc' },
+    { key: 'group', order: 'asc' },
+    { key: 'group', order: 'desc' },
+  ] as const)('keeps filters and resets pagination and selection when sorting $key $order', async ({ key, order }) => {
     getAvailableGroups.mockResolvedValue([{ id: 42, name: 'OpenAI' }])
     const wrapper = await mountView()
 
@@ -464,22 +684,143 @@ describe('user KeysView column settings', () => {
     await selects[1].vm.$emit('update:modelValue', 'active')
     await flushPromises()
 
+    await wrapper.get('[data-test="page-2"]').trigger('click')
+    await flushPromises()
+    const table = wrapper.findComponent({ name: 'DataTable' })
+    table.vm.$emit('update:selectedKeys', [1])
+    await nextTick()
+    expect(table.props('selectedKeys')).toEqual([1])
+    expect(visibleColumnMeta(wrapper).find((column) => column.key === key)?.sortable).toBe(true)
     listKeys.mockClear()
 
-    await wrapper.get('[data-test="sort-current-concurrency"]').trigger('click')
+    table.vm.$emit('sort', key, order)
     await flushPromises()
 
+    expect(table.props('selectedKeys')).toEqual([])
     expect(listKeys).toHaveBeenLastCalledWith(
       1,
       50,
       {
+        desktop_managed: false,
         search: 'target',
         status: 'active',
         group_id: 42,
-        sort_by: 'current_concurrency',
-        sort_order: 'asc',
+        sort_by: key,
+        sort_order: order,
       },
       expect.objectContaining({ signal: expect.any(AbortSignal) })
     )
+  })
+
+  describe('create provider selection', () => {
+    const platforms = ['anthropic', 'openai', 'kimi', 'zhipu', 'deepseek', 'minimax', 'gemini', 'grok', 'antigravity', 'composite', 'opencode_go', 'typesafe']
+    const availableGroups = platforms.map((platform, index) => ({
+      id: index + 1,
+      // Deliberately ambiguous names: classification must follow the platform.
+      name: `Shared group ${index + 1}`,
+      platform,
+      rate_multiplier: 1,
+      subscription_type: 'standard',
+    }))
+    const groupSelect = (wrapper: VueWrapper) => wrapper.findComponent('[data-tour="key-form-group"]')
+    const optionIds = (wrapper: VueWrapper) => groupSelect(wrapper).props('options').map((option: { value: number }) => option.value)
+    const chooseProvider = (wrapper: VueWrapper, value: string) => wrapper.get(`input[name="key-provider"][value="${value}"]`).setValue()
+    const openCreate = async () => {
+      const wrapper = await mountView()
+      await wrapper.get('[data-tour="keys-create-btn"]').trigger('click')
+      return wrapper
+    }
+
+    beforeEach(() => {
+      getAvailableGroups.mockResolvedValue(availableGroups)
+    })
+
+    it('classifies all configured platforms and retains the complete table filter', async () => {
+      const wrapper = await openCreate()
+      expect(wrapper.findAll('input[name="key-provider"]')).toHaveLength(4)
+      expect(optionIds(wrapper)).toEqual([1])
+      await chooseProvider(wrapper, 'openai')
+      expect(optionIds(wrapper)).toEqual([2])
+      await chooseProvider(wrapper, 'domestic')
+      expect(optionIds(wrapper)).toEqual([3, 4, 5, 6])
+      await chooseProvider(wrapper, 'other')
+      expect(optionIds(wrapper)).toEqual([7, 8, 9, 10, 11, 12])
+      expect(wrapper.findAllComponents({ name: 'Select' })[0].props('options')).toHaveLength(14)
+    })
+
+    it('returns to personal keys after creating a key from the desktop view', async () => {
+      const wrapper = await mountView()
+      await getButtonByText(wrapper, 'Desktop managed').trigger('click')
+      await flushPromises()
+      await wrapper.get('[data-tour="keys-create-btn"]').trigger('click')
+      await wrapper.get('[data-tour="key-form-name"]').setValue('New personal key')
+      await groupSelect(wrapper).vm.$emit('update:modelValue', 1)
+      vi.mocked(keysAPI.create).mockResolvedValue({ ...createApiKey(), group_id: 1 })
+      await wrapper.get('#key-form').trigger('submit')
+      await flushPromises()
+      expect(listKeys).toHaveBeenLastCalledWith(1, 20,
+        expect.objectContaining({ desktop_managed: false }),
+        expect.objectContaining({ signal: expect.any(AbortSignal) }))
+      expect(getButtonByText(wrapper, 'Personal keys').attributes('aria-pressed')).toBe('true')
+      wrapper.unmount()
+    })
+
+    it('clears the previous group on provider change and submits only the newly selected group', async () => {
+      const wrapper = await openCreate()
+      await wrapper.get('[data-tour="key-form-name"]').setValue('My key')
+      await groupSelect(wrapper).vm.$emit('update:modelValue', 1)
+      await chooseProvider(wrapper, 'domestic')
+      expect(groupSelect(wrapper).props('modelValue')).toBeNull()
+      await wrapper.get('#key-form').trigger('submit')
+      expect(keysAPI.create).not.toHaveBeenCalled()
+      expect(showError).toHaveBeenCalledWith('keys.groupRequired')
+
+      await groupSelect(wrapper).vm.$emit('update:modelValue', 5)
+      vi.mocked(keysAPI.create).mockResolvedValue({ ...createApiKey(), group_id: 5 })
+      await wrapper.get('#key-form').trigger('submit')
+      await flushPromises()
+      expect(keysAPI.create).toHaveBeenCalledOnce()
+      expect(vi.mocked(keysAPI.create).mock.calls[0].slice(0, 2)).toEqual(['My key', 5])
+    })
+
+    it('defaults to a provider with available groups and disables empty categories', async () => {
+      getAvailableGroups.mockResolvedValue([availableGroups[5]])
+      const wrapper = await openCreate()
+      expect(wrapper.get<HTMLInputElement>('input[value="domestic"]').element.checked).toBe(true)
+      expect(wrapper.get<HTMLInputElement>('input[value="anthropic"]').element.disabled).toBe(true)
+      expect(optionIds(wrapper)).toEqual([6])
+    })
+
+    it('shows the empty state when no groups are available', async () => {
+      getAvailableGroups.mockResolvedValue([])
+      const wrapper = await openCreate()
+      expect(wrapper.get('[data-tour="key-form-provider"]').text()).toContain('common.noGroupsAvailable')
+      expect(optionIds(wrapper)).toEqual([])
+      expect(wrapper.findAll<HTMLInputElement>('input[name="key-provider"]').every((input) => input.element.disabled)).toBe(true)
+    })
+
+    it('selects an available provider when groups arrive after opening', async () => {
+      let resolveGroups!: (value: typeof availableGroups) => void
+      getAvailableGroups.mockReturnValue(new Promise((resolve) => { resolveGroups = resolve }))
+      const wrapper = await openCreate()
+      resolveGroups([availableGroups[1]])
+      await flushPromises()
+      expect(wrapper.get<HTMLInputElement>('input[value="openai"]').element.checked).toBe(true)
+      expect(optionIds(wrapper)).toEqual([2])
+    })
+
+    it('resets provider and group when reopening create, and preserves edit options', async () => {
+      const wrapper = await openCreate()
+      await chooseProvider(wrapper, 'domestic')
+      await groupSelect(wrapper).vm.$emit('update:modelValue', 5)
+      await wrapper.get('[data-test="close-dialog"]').trigger('click')
+      await wrapper.get('[data-tour="keys-create-btn"]').trigger('click')
+      expect(optionIds(wrapper)).toEqual([1])
+      expect(groupSelect(wrapper).props('modelValue')).toBeNull()
+      await wrapper.get('[data-test="close-dialog"]').trigger('click')
+      await getButtonByText(wrapper, 'common.edit').trigger('click')
+      expect(wrapper.find('[data-tour="key-form-provider"]').exists()).toBe(false)
+      expect(optionIds(wrapper)).toHaveLength(12)
+    })
   })
 })

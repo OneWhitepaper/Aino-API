@@ -288,6 +288,7 @@ type TotpLoginResponse struct {
 	Requires2FA     bool   `json:"requires_2fa"`
 	TempToken       string `json:"temp_token,omitempty"`
 	UserEmailMasked string `json:"user_email_masked,omitempty"`
+	UserPhoneMasked string `json:"user_phone_masked,omitempty"`
 }
 
 // Login2FARequest represents the 2FA login request
@@ -312,20 +313,14 @@ func (h *AuthHandler) Login2FA(c *gin.Context) {
 	// Get the login session
 	session, err := h.totpService.GetLoginSession(c.Request.Context(), req.TempToken)
 	if err != nil || session == nil {
-		tokenPrefix := ""
-		if len(req.TempToken) >= 8 {
-			tokenPrefix = req.TempToken[:8]
-		}
 		slog.Debug("login_2fa_session_invalid",
-			"temp_token_prefix", tokenPrefix,
 			"error", err)
 		response.BadRequest(c, "Invalid or expired 2FA session")
 		return
 	}
 
 	slog.Debug("login_2fa_session_found",
-		"user_id", session.UserID,
-		"email", session.Email)
+		"user_id", session.UserID)
 
 	// Verify the TOTP code
 	if err := h.totpService.VerifyCode(c.Request.Context(), session.UserID, req.TotpCode); err != nil {
@@ -730,7 +725,8 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	if req.RefreshToken != "" {
 		if err := h.authService.RevokeRefreshToken(c.Request.Context(), req.RefreshToken); err != nil {
 			slog.Debug("failed to revoke refresh token", "error", err)
-			// 不影响登出流程
+			response.ErrorFrom(c, service.ErrServiceUnavailable)
+			return
 		}
 	}
 	h.consumePendingOAuthSessionOnLogout(c)

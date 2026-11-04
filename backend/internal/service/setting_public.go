@@ -244,6 +244,8 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeyAllowUserViewErrorRequests,
 	}
 
+	keys = append(keys, smsSettingKeys...)
+	keys = append(keys, "desktop.enabled")
 	settings, err := s.settingRepo.GetMultiple(ctx, keys)
 	if err != nil {
 		return nil, fmt.Errorf("get public settings: %w", err)
@@ -299,8 +301,28 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		balanceLowNotifyThreshold = v
 	}
 
+	// The process refuses to start with an invalid enabled SMS configuration, so
+	// the public capability flag is intentionally derived from the non-secret
+	// enabled bit rather than exposing any credential/configuration details. A
+	// nil config (as used by isolated tests and misconfigured wiring) fails
+	// closed. Registration remains separately controlled by the existing global
+	// registration switch; an SMS-capable server must not reopen registration.
+	sms, smsErr := s.smsSettingsFromValues(settings)
+	phoneEnabled := smsErr == nil && sms.Ready
+	phoneCodeLength := 6
+	if smsErr == nil && sms.CodeLength >= 4 && sms.CodeLength <= 8 {
+		phoneCodeLength = sms.CodeLength
+	}
+	phoneRegions := []string{"CN"}
+
 	return &PublicSettings{
+		DesktopEnabled:                      settings["desktop.enabled"] == "true",
 		RegistrationEnabled:                 settings[SettingKeyRegistrationEnabled] == "true",
+		PhoneLoginEnabled:                   phoneEnabled,
+		PhoneRegistrationEnabled:            phoneEnabled && settings[SettingKeyRegistrationEnabled] == "true",
+		PhoneBindingEnabled:                 phoneEnabled,
+		PhoneRegions:                        phoneRegions,
+		PhoneCodeLength:                     phoneCodeLength,
 		EmailVerifyEnabled:                  emailVerifyEnabled,
 		ForceEmailOnThirdPartySignup:        settings[SettingKeyForceEmailOnThirdPartySignup] == "true",
 		RegistrationEmailSuffixWhitelist:    registrationEmailSuffixWhitelist,
@@ -346,6 +368,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		WeChatOAuthMPEnabled:                weChatMPEnabled,
 		WeChatOAuthMobileEnabled:            weChatMobileEnabled,
 		BackendModeEnabled:                  settings[SettingKeyBackendModeEnabled] == "true",
+		MCPEnabled:                          s.cfg != nil && s.cfg.MCP.Enabled(),
 		PaymentEnabled:                      settings[SettingPaymentEnabled] == "true",
 		PaymentBalanceDisabled:              settings[SettingBalancePayDisabled] == "true",
 		OIDCOAuthEnabled:                    oidcEnabled,
@@ -560,7 +583,14 @@ func (s *SettingService) IsUserErrorViewAllowed(ctx context.Context) bool {
 // A unit test diffs this struct's JSON keys against dto.PublicSettings to catch
 // drift automatically (see setting_service_injection_test.go).
 type PublicSettingsInjectionPayload struct {
+	DesktopAPIVersion                   int                      `json:"desktop_api_version"`
+	DesktopEnabled                      bool                     `json:"desktop_enabled"`
 	RegistrationEnabled                 bool                     `json:"registration_enabled"`
+	PhoneLoginEnabled                   bool                     `json:"phone_login_enabled"`
+	PhoneRegistrationEnabled            bool                     `json:"phone_registration_enabled"`
+	PhoneBindingEnabled                 bool                     `json:"phone_binding_enabled"`
+	PhoneRegions                        []string                 `json:"phone_regions"`
+	PhoneCodeLength                     int                      `json:"phone_code_length"`
 	EmailVerifyEnabled                  bool                     `json:"email_verify_enabled"`
 	RegistrationEmailSuffixWhitelist    []string                 `json:"registration_email_suffix_whitelist"`
 	RegistrationEmailDomainQuotaEnabled bool                     `json:"registration_email_domain_quota_enabled"`
@@ -609,6 +639,7 @@ type PublicSettingsInjectionPayload struct {
 	GitHubOAuthEnabled                  bool                     `json:"github_oauth_enabled"`
 	GoogleOAuthEnabled                  bool                     `json:"google_oauth_enabled"`
 	BackendModeEnabled                  bool                     `json:"backend_mode_enabled"`
+	MCPEnabled                          bool                     `json:"mcp_enabled"`
 	PaymentEnabled                      bool                     `json:"payment_enabled"`
 	PaymentBalanceDisabled              bool                     `json:"payment_balance_disabled"`
 	Version                             string                   `json:"version"`
@@ -654,7 +685,14 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 	}
 
 	return &PublicSettingsInjectionPayload{
+		DesktopAPIVersion:                   DesktopAPIVersion,
+		DesktopEnabled:                      settings.DesktopEnabled,
 		RegistrationEnabled:                 settings.RegistrationEnabled,
+		PhoneLoginEnabled:                   settings.PhoneLoginEnabled,
+		PhoneRegistrationEnabled:            settings.PhoneRegistrationEnabled,
+		PhoneBindingEnabled:                 settings.PhoneBindingEnabled,
+		PhoneRegions:                        settings.PhoneRegions,
+		PhoneCodeLength:                     settings.PhoneCodeLength,
 		EmailVerifyEnabled:                  settings.EmailVerifyEnabled,
 		RegistrationEmailSuffixWhitelist:    settings.RegistrationEmailSuffixWhitelist,
 		RegistrationEmailDomainQuotaEnabled: settings.RegistrationEmailDomainQuotaEnabled,
@@ -703,6 +741,7 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		GitHubOAuthEnabled:                  settings.GitHubOAuthEnabled,
 		GoogleOAuthEnabled:                  settings.GoogleOAuthEnabled,
 		BackendModeEnabled:                  settings.BackendModeEnabled,
+		MCPEnabled:                          settings.MCPEnabled,
 		PaymentEnabled:                      settings.PaymentEnabled,
 		PaymentBalanceDisabled:              settings.PaymentBalanceDisabled,
 		Version:                             s.version,

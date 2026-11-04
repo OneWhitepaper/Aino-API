@@ -11,12 +11,16 @@ const {
   accountsGetById,
   monitorCreate,
   monitorUpdate,
+  keysList,
+  groupRates,
 } = vi.hoisted(() => ({
   listTemplates: vi.fn(),
   accountsList: vi.fn(),
   accountsGetById: vi.fn(),
   monitorCreate: vi.fn(),
   monitorUpdate: vi.fn(),
+  keysList: vi.fn(),
+  groupRates: vi.fn(),
 }))
 
 
@@ -47,11 +51,11 @@ vi.mock('@/api/admin', () => ({
 }))
 
 vi.mock('@/api/keys', () => ({
-  keysAPI: { list: vi.fn() },
+  keysAPI: { list: keysList },
 }))
 
 vi.mock('@/api/groups', () => ({
-  userGroupsAPI: { getUserGroupRates: vi.fn() },
+  userGroupsAPI: { getUserGroupRates: groupRates },
 }))
 
 vi.mock('@/stores/app', () => ({
@@ -168,6 +172,24 @@ describe('MonitorFormDialog linked account selector', () => {
     accountsGetById.mockReset()
     monitorCreate.mockReset().mockResolvedValue({})
     monitorUpdate.mockReset().mockResolvedValue({})
+    keysList.mockReset().mockResolvedValue({ items: [] })
+    groupRates.mockReset().mockResolvedValue({})
+  })
+
+  it('offers only usable personal secrets in the monitor key picker', async () => {
+    const personal = { id: 4, name: 'Personal', key: 'sk-personal', status: 'active' }
+    keysList.mockResolvedValue({ items: [
+      { id: 1, key: '', desktop_managed: true, status: 'active' },
+      { id: 2, key: 'sk-internal', desktop_managed: true, status: 'active' },
+      { id: 3, key: '', status: 'active' },
+      personal,
+    ] })
+    const wrapper = mountDialog()
+    await flushPromises()
+    await wrapper.findAll('button').find(button => button.text() === 'admin.channelMonitor.form.useMyKey')!.trigger('click')
+    await flushPromises()
+    expect(wrapper.findComponent({ name: 'MonitorKeyPickerDialog' }).props('keys')).toEqual([personal])
+    expect(keysList).toHaveBeenCalledWith(1, 100, { status: 'active', desktop_managed: false })
   })
 
   it('loads the first page of provider accounts when quota mode is enabled', async () => {

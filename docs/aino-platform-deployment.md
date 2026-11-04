@@ -1,0 +1,185 @@
+# Aino 平台接入：部署准备与回退操作单
+
+状态：**准备文档，不是已部署回执**。2026-09-16 已核对 API 生产代码至 `6f73d6a58`，隔离回退/备份测试至 `414175e9f`；桌面配对版本仍在开发，最终 SHA/制品哈希必须从 Aino 的交付报告填写后才能发布。本文没有执行生产变更、短信、模型消费或付款。
+
+## 1. 发布前硬性检查
+
+先在隔离预发布环境完成手机号身份、旧账户绑定、原生登录、无 BYOK 模型工具往返、账本扣费、签名支付回调一次入账和旧数据升级验证。生产数据库、Redis、商户和短信凭据不能拿来替代测试夹具。
+
+必须由运营/部署负责人补齐：
+
+- 准确服务器/容器、部署方式、预发布地址、旧服务 SHA、备份及恢复演练回执。
+- 阿里云审核模板全文及变量名、有效期措辞；`SignName` 按控制台原文录入，不能用资质名/模板名代替。已知资源是签名“郑州雾棠”、模板 `SMS_512380723`，仍需逐字核对；电信待验证项不能记三网通过。
+- 专用服务端短信身份及随机 HMAC 密钥、有效协议/隐私 URL 和版本、支持联系渠道。
+- 官方分组/模型 allowlist/默认模型/价格/赠送政策及逐模型工具和流式验收。
+- 支付渠道商户/密钥/回调地址、支付币种/限额/费率和授权实测额度。
+- 短信接收人/次数、模型预算、支付账户/金额以及明确操作授权。
+
+公开 `/health` 成功只说明进程存活，不代表认证、模型或账本可用。版本号也不能替代 git SHA 与安装包/镜像哈希。
+
+## 2. 构建与核对
+
+API 使用 `backend/go.mod` 指定的 Go 版本，不降低版本绕过依赖；前端固定使用已验证的 pnpm 9.15.9，避免全局新版自动改写 lockfile：
+
+```sh
+git rev-parse HEAD
+git status --short
+make -C backend generate
+git diff --exit-code -- backend/ent backend/cmd/server
+corepack pnpm@9.15.9 --dir frontend install --frozen-lockfile
+corepack pnpm@9.15.9 --dir frontend run typecheck
+corepack pnpm@9.15.9 --dir frontend run lint:check
+corepack pnpm@9.15.9 --dir frontend run test:run
+corepack pnpm@9.15.9 --dir frontend run build
+make -C backend build
+```
+
+以上是待执行操作单，不是每一条都已在最终配对版本通过。前端构建写入 `backend/internal/web/dist`；后端产物 `backend/bin/server`。记录制品哈希、Go/Node/pnpm 版本及命令结果。生成物有漂移时先定位，不能将无关生成修改混入发布。
+
+Go 默认、unit 和 integration 是不同门禁；`make test` 还包含 golangci-lint。集成测试必须实际启动隔离 PostgreSQL/Redis，不能把 Docker 不可用导致的 skip 当通过。
+
+## 3. 数据迁移
+
+迁移在服务启动自动执行。不要使用旧 README 中不存在的 `make migrate-up/down`，不要手工插入 schema_migrations 来绕过失败。
+
+| 新迁移 | 内容 |
+| --- | --- |
+| `239_phone_auth_identity.sql` | phone 身份及唯一性兼容 |
+| `240_desktop_model_credentials.sql` | 托管推理凭据关联 |
+| `241_desktop_credential_identity_revocation.sql` | 凭据身份及撤销约束 |
+| `242_desktop_usage_correlation.sql` | 用量关联与结算字段 |
+| `243_desktop_usage_indexes_notx.sql` | 并发查询索引，非事务执行 |
+| `244_payment_client_order_id.sql` | 桌面订单持久幂等及恢复字段 |
+| `250_desktop_image_credential_purpose.sql` | 区分 chat/image 托管凭据；现有凭据默认 chat，不扩大权限 |
+
+先对隔离旧数据副本启动新服务，核对迁移 checksum、原用户 ID、余额、订阅、普通 Key、订单和 email/OAuth 登录。备份必须可恢复。已应用的 SQL 不改内容/文件名/编号，不混入 Down SQL；checksum 不符先停发布核对实际已应用版本，不能强行改表中 checksum。
+
+## 4. 短信与注册配置
+
+基础配置模板是 `deploy/config.example.yaml` 的 `sms` 节。行为参数可通过管理员短信设置保存，映射到 `sms.*`；凭据只从服务端部署配置提供，不从管理员响应回显。
+
+| 配置键 | 要求 |
+| --- | --- |
+| `sms.enabled` | 默认 false；资源核验完成后才开启 |
+| `sms.rollout_phone_allowlist` | 可选、仅部署配置持有；空/省略保持原有全局开启行为，非空时只有列表中的 canonical 中国大陆 E.164 手机号（如 `+8613900000000`）可发码及验码。无效条目使配置校验失败，不能降级成无限制 |
+| `sms.provider` / `sms.region_id` | 当前只支持 aliyun，默认 cn-hangzhou |
+| `sms.access_key_id` / `sms.access_key_secret` | 专用服务端凭据；可由 `SMS_ACCESS_KEY_ID` / `SMS_ACCESS_KEY_SECRET` 注入 |
+| `sms.hmac_secret` | 至少 32 字节随机秘密；多副本一致，可由 `SMS_HMAC_SECRET` 注入；不放 Git |
+| `sms.sign_name` / `sms.template_code` | 控制台核验原文 |
+| `sms.template_params` | 键为正式模板变量名；值为 `code` 或 `ttl_minutes`，当前实现要求两种语义均有映射 |
+| `sms.template_verified` | 核对模板和有效期后才设 true，不用于跳过验证 |
+| `sms.code_length` / `sms.ttl_seconds` | 默认 6 / 300；以实际模板为准 |
+| `sms.request_timeout_seconds` / `sms.cooldown_seconds` | 默认 5 / 60；超时保留未知结果与冷却，不自动重发 |
+| `sms.max_attempts` | 默认 5 |
+| `sms.phone_hour_limit` / `sms.phone_day_limit` | 默认 5 / 10 |
+| `sms.ip_hour_limit` / `sms.global_day_limit` | 默认 30 / 1000 |
+
+如果正式模板只有验证码而没有有效期变量，当前配置校验无法满足：先做明确的模板/实现对齐任务，不伪造 `ttl` 变量。公共 phone 能力由 SMS Ready 派生，`registration_enabled` 另行控制；关闭注册不阻止已绑定手机的老用户登录。人机验证启用时桌面同样必须验证，不能以 desktop 标识豁免。正式 API 不提供固定 `1234` 登录。
+
+Redis 必须与生产身份一致地配置并可用；故障时应拒绝发码/校验，不退回进程内限流。不要记录完整手机号、验证码、AccessKey、令牌或响应秘密。
+
+### 4.1 手机号分批开放
+
+`sms.rollout_phone_allowlist` 是部署方持有的最小灰度边界，不是管理员短信设置或通用用户权限系统。它不会出现在管理员/公共设置、能力响应或客户端；管理员对短信模板、限额等运行时设置的覆盖也不能移除该边界。列表必须只含 canonical `+86` 手机号，且配置错误会阻止服务接受该配置。全局 `sms.enabled: false` 始终优先，列表不能绕过全局关闭。
+
+分批启用时先保持 `sms.enabled: false` 写入经授权的测试号码列表，完成配置审核后再开启 SMS。使用列表中的号码走实际发码、登录/注册或绑定、验码闭环，同时确认列表外号码在供应商调用和 Redis 限额预留之前被拒绝。号码从列表移除后，其尚未消费的 challenge 也不能继续验证。`registration_enabled`、协议、邀请、验证码用途/主体、TOTP、一次性消费及限额政策继续独立生效。
+
+只有授权测试闭环已经验证、扩大范围获得明确批准并记录回执后，才显式把 `sms.rollout_phone_allowlist` 改为空列表以解除限制；空列表不是“暂停”，而是恢复 `sms.enabled` 对所有合法手机号全局生效的兼容行为。需要立即停止手机号入口时设置 `sms.enabled: false`，不要用清空 allowlist 代替停用。配置变更按现有部署流程加载，并用配置校验和健康之外的实际受限/允许请求复核；本文不授权修改生产。
+
+## 5. 内置模型
+
+管理员设置中的 `desktop` 对象映射以下 settings 键，不是新环境变量：
+
+| 键 | 要求 |
+| --- | --- |
+| `desktop.enabled` | 默认 false |
+| `desktop.models` | 默认空；每项引用真实现有 group_id，不另造价格表 |
+| `desktop.default_model_id` | 空表示无默认；必须是当前目录条目 |
+| `desktop.default_image_model_id` | 独立的默认生图模型；必须使用 `images_generations` 且声明生图能力，不参与对话主模型选择 |
+| `desktop.credential_ttl_seconds` | 默认 3600，校验范围 300–3600 |
+
+目录项字段：`id`、`group_id`、`model`、`display_name`、`provider_label`、`platform`、`api_mode`、`sort_order`、`agent_verified`、`context_window`、`max_output_tokens`、`capabilities`（tools/vision/reasoning/image_generation）。对话协议为 `chat_completions` / `responses` / `anthropic_messages`。未知上下文/输出限制为 null；能力未实测不要标 true，默认对话模型必须有已验证 Agent 工具/流式支持。
+
+生图目录选择 `images_generations`，声明 `capabilities.image_generation: true`，实际平台为 OpenAI 或 Grok，并开启原分组的图片生成权限。管理页选择 Images API 后会填写生图能力，无需将纯生图模型假标为支持工具。目录响应的 `purpose` 为 `image`；旧对话条目为 `chat`。图片价格返回 `unit: billing_rules`、空 token 单价和空阶梯，表示按现有尺寸、质量及用量等计费规则结算，不构造固定 token 报价。余额、订阅、额度、审核、并发和扣费全部沿用图片接口。
+
+生图目录的可选 `capabilities.image_quality_options` 声明接口已确认支持的画质档位：`auto`、`low`、`medium`、`high`、`xhigh`、`max`。管理员仅勾选该接口实际支持的值；空列表表示使用模型默认质量。未知值、重复值及文本模型声明画质档位都会被拒绝。画质通过 Images API 的 `quality` 参数传递，与文本推理深度独立；更新档位本身不触发付费出图。
+
+管理后台的「Aino 内置模型」分为「文本模型」和「生图模型」两个标签页，分别维护列表、新增/导入和默认值。切换标签不会清空另一类未保存配置；保存仍使用同一目录设置服务。生图页固定 Images API，不显示文本上下文、工具调用或 Agent 验证字段；默认生图模型与默认文本模型互不替代。模型保存后仅向原有分组/订阅授权的用户开放，桌面生图选择只呈现 Aino 内置模型。
+
+`GET /api/v1/desktop/models` 缺省或 `include_images=false` 只返回对话条目，兼容不能解析图片协议的已发布桌面。支持生图的新桌面必须显式请求 `GET /api/v1/desktop/models?include_images=true`，才能取得对话与生图条目；两者都保留既有用户分组和模型白名单过滤，查询参数不授予任何权限。空值等同缺省，非法布尔值返回 400。Bootstrap 的 `default_model_id` 仍只代表默认对话模型，新增的 `default_image_model_id` 单独代表默认生图模型。
+
+`POST /api/v1/desktop/credentials` 的可选 `purpose` 默认 `chat`；生图请求必须传 `image` 并选对应目录 ID。两种凭据独立复用，返回顶层 `purpose`，各自保留用户、设备、登录会话、分组、失效与模型白名单边界。image 凭据仅授权同步 `POST /v1/images/generations` 和 `POST /v1/images/edits`，不授权对话、异步任务或批量接口；chat 凭据仍不能调用图片接口。改图复用现有图片转发、账号调度和计费，原图由桌面发送至编辑接口，具体支持范围由所选模型决定。用量关联可发送 `X-Aino-Purpose: image`，配合现有三个 UUID 关联头，私有头仍在转发前剥离。发布先执行迁移并部署兼容 API，再更新桌面；本节不代表已部署或完成付费生图验收。
+
+组的 allowlist、用户授权/订阅和原价格服务仍是权威。可用目录不等于扩大用户分组权限。只给测试账户授予测试分组可以限制模型灰度；phone 灰度只由部署配置中的 canonical 手机号列表限制短信发码和验码，不是模型授权，也不能据此扩大模型分组权限。先在预发布验收。
+
+账户地址为 `https://api.agentera.com.cn/api/v1`，模型地址为 `https://api.agentera.com.cn/v1`。`desktop_api_version=1` 只是适配版本；Agent 必须实际报告 `managed_model_binding:1`，不能只看应用版本。账户 JWT 和推理 Key 不可混用，普通网站 Key 不得被托管撤销误伤。
+
+### 5.1 桌面托管密钥的管理与退役
+
+桌面托管凭据按设备、连接授权、登录会话、分组和用途隔离；同一有效授权复用并续期，新的作用域或到期轮换仍创建新密钥。不能为减少数量而跨会话共享密钥。普通密钥页默认请求 `desktop_managed=false`，通过「桌面托管」查看自动授权和执行删除撤销；`GET /api/v1/keys` 未传该参数仍返回全部类型，分页和计数在服务端完成。
+
+同用户申请桌面凭据或打开用户密钥管理时，已过期或已撤销的托管密钥会停用、替换密钥明文并软删除。凭据、设备记录、用量和账单关联保留；有效托管密钥、普通密钥和其他用户的数据不受影响。退役后同作用域可正常轮换，显式撤销的登录会话不能恢复授权。此机制复用现有删除和鉴权缓存失效路径，不需要修改历史迁移或执行生产 SQL。
+
+设备接口新增 `status: active | expired | revoked`，区分临时授权自然到期与主动撤销。桌面优先采用明确状态；旧接口不含该字段时兼容过期时间。过期设备仍可撤销其登录授权。批量生图和监控配置只选择普通、非空的可用密钥。使用记录通过 `GET /api/v1/keys?include_archived=true` 纳入本人已归档托管密钥的脱敏元数据，继续按原密钥 ID 追溯账单；该参数不恢复已删除普通密钥，也不改变鉴权或密钥修改的边界。
+
+此修复仅在部署兼容 API 后收敛线上历史记录，本地验证不代表已经清理生产数据。桌面、前端与 API 可分别升级，发布继续等待用户指令。
+
+本地验证：66 项前端测试、类型检查、目标文件 ESLint 与生产构建通过；真实隔离 PostgreSQL/Redis 回归覆盖并发复用、聊天/生图隔离、跨授权退役、到期轮换、设备多登录会话聚合及显式撤销，并通过 HTTP 验证历史用量与账单金额保留、跨用户拒绝、已退役密钥鉴权拒绝及脱敏元数据分页。桌面 24 项测试和 Electron 设备撤销往返验收通过。网页在 1440px 与 390px 验证类型切换、过期状态和空态，未出现页面溢出或渲染错误；这些验收仅使用合成账户。
+
+## 6. 支付与上线顺序
+
+复用管理员支付配置和原渠道实例。`payment_enabled` 控制支付功能；余额充值的禁用/倍率/费率、可见支付宝/微信方式和商户实例仍使用现有支付配置入口。先核对币种、原价/手续费/到账额度、渠道限额、合法 HTTPS 渠道地址和签名回调，不能直接更新数据库余额。
+
+下表是 `payment_config_service.go` 中实际设置键与管理员 JSON 字段的对应关系，不是新增环境变量；通过原管理员配置入口修改，不手写数据库：
+
+| settings 键 | 管理员 JSON 字段 | 含义 |
+| --- | --- | --- |
+| `payment_enabled` | `enabled` | 支付总开关 |
+| `MIN_RECHARGE_AMOUNT` / `MAX_RECHARGE_AMOUNT` | `min_amount` / `max_amount` | 单笔全局上下限，渠道限额仍另行生效 |
+| `DAILY_RECHARGE_LIMIT` | `daily_limit` | 每日充值限制 |
+| `ORDER_TIMEOUT_MINUTES` | `order_timeout_minutes` | 订单有效期 |
+| `MAX_PENDING_ORDERS` | `max_pending_orders` | 待处理订单数量限制 |
+| `ENABLED_PAYMENT_TYPES` | `enabled_payment_types` | 启用渠道类型；还需有效渠道实例/可见方式配置 |
+| `BALANCE_PAYMENT_DISABLED` | `balance_disabled` | 单独关闭余额充值 |
+| `BALANCE_RECHARGE_MULTIPLIER` | `balance_recharge_multiplier` | 原余额充值倍率政策 |
+| `RECHARGE_FEE_RATE` | `recharge_fee_rate` | 充值手续费百分比 |
+| `SUBSCRIPTION_USD_TO_CNY_RATE` | `subscription_usd_to_cny_rate` | 原订阅换算配置，不能据字段名推断余额兑换计算 |
+
+桌面报价直接复用服务端原金额计算，不复制汇率或费率。实际支付方式由渠道实例、可见方式配置和限额共同决定，启用一个布尔开关不等于充值已可用。
+
+推荐顺序：可恢复备份 → 新 API/迁移（新开关关闭）→ 配置并完成隔离/预发布验证 → 授权测试账户验证模型/账本和支付 → 配对桌面制品灰度 → 观察并扩大。不可用时保持明确禁用提示，保留余额、订单查询。
+
+桌面下单使用 `amount_decimal`、`client_order_id` 和 `payment_source:aino_desktop`；旧站点 numeric amount 保持兼容。商户已接单但超时必须恢复同一 out_trade_no，不重新创建商户单。付款跳回只刷新查询；PAID/RECHARGING 不等于 COMPLETED，重复正确回调也只能一次入账。
+
+## 7. 回退
+
+1. 手机号灰度需要收窄时恢复上一份已审核的非空 `sms.rollout_phone_allowlist`；紧急停止手机号入口时设置 `sms.enabled: false`，不能清空列表（清空会解除限制）。只有授权闭环和扩大范围批准完成后才可显式清空列表。另行停新注册和新托管凭据签发，必要时关闭新充值入口；保留已付订单查询和签名回调/履约，不为停充值切断已付款入账。
+2. 通过受控撤销入口撤销相应设备/父会话托管凭据，确认普通网站 Key、BYOK 不受影响。不要把安装 UUID 当授权秘密。
+3. 桌面提示暂不可用或回到已验证的兼容制品；不要删除用户项目、配置或本机历史。
+4. API 只回退到已经验证能识别新增 phone 身份和订单字段的兼容版本。当前仅在隔离的一次性 PostgreSQL/Redis 上验证了从 `6f73d6a5833266f4eca8df986dbda73e6c2f9aaf` 回退到 `78f962607ba290264d718c6d43e703e7e2864b08`，再恢复前者；旧版本制品 SHA-256 为 `4417f401693818a95bbf5b64a9de4e669587423b73aa2cdaf81ed20d37ab42a1`。降级前必须先设置 `sms.enabled: false`（该旧版本没有 `sms.rollout_phone_allowlist`，不能用列表代替全局关闭），并通过现有管理配置将 `registration_enabled=false`、`desktop.enabled=false`、`payment_enabled=false`。其中 `desktop.enabled=false` 同时停止新托管凭据签发并使现有托管凭据拒绝使用，不能宣称只停签发而保留旧凭据可用。隔离演练证明兼容二进制可在同一已升级数据库上启动、读取身份/余额/订单/订阅、识别普通 Key、执行并保留托管凭据撤销且迁移 checksum 不变；还证明在 `payment_enabled=false` 时，回退前已有的 EasyPay 待支付订单仍可经旧二进制真实签名回调和履约路径一次入账，重复回调不二次入账，恢复当前二进制后余额、订单和兑换账本保持不变。该支付证明只使用 loopback 合成商户夹具，未执行真实渠道付款、备份恢复或真实环境回退，不能据此标记生产回退或部署就绪。
+5. 保留 identity、账本、订单、新列及索引。修复迁移只追加 forward-only 文件，不删数据/改余额/伪造 checksum。需要数据库恢复时按已批准的备份演练流程处理在途付款，不能简单覆盖掉新账本。
+
+### 7.1 已完成的本地隔离备份证明
+
+测试提交 `414175e9f` 的 `TestPostgresBackupRestoreRehearsal` 使用真实 PostgreSQL 18.1 `pg_dump --format=custom`，将仅含合成测试数据的备份通过 `pg_restore --exit-on-error` 恢复到另一新建容器的空数据库；源库未被覆盖。恢复后使用全新 Redis 和同一归档服务 `6f73d6a5833266f4eca8df986dbda73e6c2f9aaf`（SHA-256 `e4215d79d9f6a8862a088e1a2a979ada958fbf83222684a6fa0ee8f3d217db8e`）启动，验证真实登录、订单/账户/Key 查询及完整状态/checksum 保留。
+
+已撤销托管 Key 不因空缓存恢复而复活；已经完成的合成支付订单在恢复后再次收到同一正确签名回调，余额、订单、兑换记录及审计计数保持不变。显式 120 秒上限内实际运行 6.514 秒通过，相关 tagged lint 为 0 issues，独立复核通过。脱敏回执 SHA-256 为 `92ccdb38cb57a00b6b1dfd2bd4f98c1e78ddacdcd1e12239784b932bdc0f3aaa`。
+
+这只证明所记录版本的一条本地备份路径，不能把过期生产备份覆盖新账本称为无损回退。真实部署仍须核定备份时间点、停写窗口、备份后已发生的扣费/付款、商户对账和可接受数据丢失范围；在途款项不能靠本演练自动判定。禁止将上述测试的连接参数替换成生产库执行。
+
+## 8. 发布回执必须填写
+
+记录 API/桌面 SHA、镜像/安装包 hash、迁移列表/checksum、配置审核人、环境、授权范围、短信受理与实际送达、模型工具/流式请求及账本差值、订单/商户号与一次性入账、回退目标及演练结果。没有执行的栏保持“未验证”；本文件不授予生产操作权限。
+
+## 9. v0.2.18 上游兼容基线
+
+本次从 Aino `81119efd596d77825a3a0df39944137419a4b8dd` 合入上游 `5c185c5c5d4f5e409e2139806e0964ae944e03e8`，包含 `v0.2.18` 标签 `ac1b8f1271be0d674fa6f074403c1410f30a3a81` 和仅同步 VERSION 的后续提交。构建版本为 `0.2.18`，Go 工具链沿用上游 `1.27.3`。
+
+- 保留 Aino 首页、登录布局、工作台配色、手机号/TOTP、桌面模型与凭据及手动更新保护；管理员设置同时提供 Aino 短信/内置模型配置和上游充值赠送等新增配置。
+- 新增普通 API Key 数量限制只统计非托管 Key，避免桌面凭据的历史记录耗尽普通 Key 配额。
+- 桌面充值报价、创建、幂等重试及查询统一应用上游赠送/折扣政策；新订单快照保存支付基数以正确计算手续费，旧订单保留原兼容路径，损坏的金额元数据不能匹配有效报价。
+- 原有 295 个 SQL 迁移的文件名和内容不变，追加 8 个上游 SQL 文件。部分数字前缀重叠，但迁移器以完整文件名追踪；旧 Aino 数据库升级与重复执行迁移的隔离测试验证了 checksum、身份、余额、已撤销凭据和客户端订单保留。不要重命名或修改已执行的迁移。
+
+验证包含前端 2,982 项测试、lint、类型检查和生产构建，以及后端默认、unit、integration 测试、静态检查（golangci-lint v2.15.0，0 issues）和嵌入式服务构建。支付渠道确认、并发查询/回调及幂等入账使用本地合成商户和隔离 PostgreSQL/Redis。页面检查覆盖 Aino 首页、登录、工作台、用户 Key 和管理员模型设置的桌面/手机布局与主要交互。
+
+本节记录源码集成和本地验证，不代表完成生产发布。真实短信送达、真实模型工具/流式消费、实际付款及本次版本的生产回退仍按前述发布回执分别验证。

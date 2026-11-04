@@ -28,14 +28,17 @@ func IsWindowExpired(windowStart *time.Time, duration time.Duration) bool {
 }
 
 type APIKey struct {
-	ID          int64
-	UserID      int64
-	Key         string
-	Name        string
-	GroupID     *int64
-	Status      string
-	IPWhitelist []string
-	IPBlacklist []string
+	DesktopPurpose string        `json:"-"`
+	DesktopUsage   *DesktopUsage `json:"-"`
+	DesktopManaged bool
+	ID             int64
+	UserID         int64
+	Key            string
+	Name           string
+	GroupID        *int64
+	Status         string
+	IPWhitelist    []string
+	IPBlacklist    []string
 	// 预编译的 IP 规则，用于认证热路径避免重复 ParseIP/ParseCIDR。
 	CompiledIPWhitelist *ip.CompiledIPRules `json:"-"`
 	CompiledIPBlacklist *ip.CompiledIPRules `json:"-"`
@@ -139,7 +142,9 @@ func (k *APIKey) EffectiveUsage7d() float64 {
 
 // APIKeyListFilters holds optional filtering parameters for listing API keys.
 type APIKeyListFilters struct {
-	Search  string
-	Status  string
-	GroupID *int64 // nil=不筛选, 0=无分组, >0=指定分组
+	Search          string
+	Status          string
+	GroupID         *int64 // nil=不筛选, 0=无分组, >0=指定分组
+	DesktopManaged  *bool  // nil includes both manual and desktop-managed keys.
+	IncludeArchived bool   // Usage history may include archived desktop key metadata.
 }

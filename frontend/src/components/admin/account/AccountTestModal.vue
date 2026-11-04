@@ -42,6 +42,14 @@
       </div>
 
       <!-- Grok: mode first, then optional model / mode params -->
+      <div v-if="isVideoAccount" class="space-y-1.5">
+        <label class="text-sm font-medium text-gray-700 dark:text-gray-300" for="video-test-mode">{{ t('admin.accounts.video.protocol') }}</label>
+        <select id="video-test-mode" v-model="videoTestMode" class="input" :disabled="status === 'connecting'" data-testid="video-test-mode">
+          <option value="default">{{ t('admin.accounts.video.testConnectivity') }}</option>
+          <option value="video">{{ t('admin.accounts.video.testGeneration') }}</option>
+        </select>
+        <p class="input-hint">{{ t('admin.accounts.video.testHint') }}</p>
+      </div>
       <div v-if="isGrokAccount" class="space-y-1.5">
         <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
           {{ t('admin.accounts.grok.testMode') }}
@@ -79,6 +87,30 @@
           :options="openAITestModeOptions"
           :disabled="status === 'connecting'"
         />
+      </div>
+
+      <div v-if="supportsImageQuality" class="space-y-1.5">
+        <label for="image-test-quality" class="text-sm font-medium text-gray-700 dark:text-gray-300">
+          {{ t('admin.accounts.imageQualityLabel') }}
+        </label>
+        <select
+          id="image-test-quality"
+          v-model="imageQuality"
+          class="input"
+          data-testid="image-test-quality"
+          aria-describedby="image-test-quality-hint"
+          :disabled="status === 'connecting'"
+        >
+          <option value="">{{ t('admin.accounts.imageQualityDefault') }}</option>
+          <option value="1k">1k</option>
+          <option value="2k">2k</option>
+          <option value="4k">4k</option>
+          <option value="auto">{{ t('admin.accounts.imageQualityAuto') }}</option>
+          <option value="low">{{ t('admin.accounts.imageQualityLow') }}</option>
+          <option value="medium">{{ t('admin.accounts.imageQualityMedium') }}</option>
+          <option value="high">{{ t('admin.accounts.imageQualityHigh') }}</option>
+        </select>
+        <p id="image-test-quality-hint" class="input-hint">{{ t('admin.accounts.imageQualityHint') }}</p>
       </div>
 
       <div v-if="supportsPromptInput" class="space-y-1.5">
@@ -407,6 +439,7 @@ const errorMessage = ref('')
 const availableModels = ref<ClaudeModel[]>([])
 const selectedModelId = ref('')
 const testPrompt = ref('')
+const imageQuality = ref('')
 const loadingModels = ref(false)
 let abortController: AbortController | null = null
 const generatedImages = ref<PreviewMedia[]>([])
@@ -414,6 +447,8 @@ const generatedAudios = ref<PreviewMedia[]>([])
 const generatedVideos = ref<PreviewMedia[]>([])
 const previewImageUrl = ref('')
 const testMode = ref<'default' | 'compact'>('default')
+const videoTestMode = ref<'default' | 'video'>('default')
+const isVideoAccount = computed(() => props.account?.platform === 'video')
 const grokTestMode = ref<'text' | 'image' | 'video' | 'search' | 'tts' | 'stt' | 'realtime'>('text')
 const uploadImageDataURL = ref('')
 const uploadImagePreview = ref('')
@@ -442,7 +477,7 @@ const supportsGeminiImageTest = computed(() => {
   const modelID = selectedModelId.value.toLowerCase()
   if (!modelID.startsWith('gemini-') || !modelID.includes('-image')) return false
 
-  return props.account?.platform === 'gemini' || (props.account?.platform === 'antigravity' && props.account?.type === 'apikey')
+  return props.account?.platform === 'gemini' || props.account?.platform === 'antigravity'
 })
 
 const supportsOpenAIImageTest = computed(() => {
@@ -450,6 +485,10 @@ const supportsOpenAIImageTest = computed(() => {
   if (!modelID.startsWith('gpt-image-')) return false
   return props.account?.platform === 'openai'
 })
+
+const supportsImageQuality = computed(
+  () => supportsOpenAIImageTest.value && props.account?.type === 'apikey' && testMode.value === 'default'
+)
 
 const isGrokImageModel = (id: string) => {
   const modelID = id.toLowerCase()
@@ -497,6 +536,7 @@ const modelOptionsForMode = computed(() => {
 })
 
 const supportsPromptInput = computed(() => {
+  if (isVideoAccount.value) return videoTestMode.value === 'video'
   if (!isGrokAccount.value) {
     return supportsImageTest.value
   }
@@ -597,6 +637,7 @@ const clearMediaUploads = () => {
 }
 
 const promptInputLabel = computed(() => {
+  if (isVideoAccount.value) return t('admin.accounts.videoPromptLabel')
   if (supportsGrokVideoTest.value || grokTestMode.value === 'video') {
     return t('admin.accounts.videoPromptLabel')
   }
@@ -613,6 +654,7 @@ const promptInputLabel = computed(() => {
 })
 
 const promptInputPlaceholder = computed(() => {
+  if (isVideoAccount.value) return t('admin.accounts.videoPromptPlaceholder')
   if (grokTestMode.value === 'video') {
     return t('admin.accounts.videoPromptPlaceholder')
   }
@@ -629,6 +671,7 @@ const promptInputPlaceholder = computed(() => {
 })
 
 const promptInputHint = computed(() => {
+  if (isVideoAccount.value) return t('admin.accounts.video.testHint')
   if (grokTestMode.value === 'video') {
     return t('admin.accounts.videoTestHint')
   }
@@ -651,6 +694,7 @@ const promptInputHint = computed(() => {
 })
 
 const testModeSummary = computed(() => {
+  if (isVideoAccount.value) return t(videoTestMode.value === 'video' ? 'admin.accounts.video.testGeneration' : 'admin.accounts.video.testConnectivity')
   if (isGrokAccount.value) {
     switch (grokTestMode.value) {
       case 'video':
@@ -738,7 +782,9 @@ watch(
   async (newVal) => {
     if (newVal && props.account) {
       testPrompt.value = ''
+      imageQuality.value = ''
       testMode.value = 'default'
+      videoTestMode.value = 'default'
       grokTestMode.value = 'text'
       resetState()
       await loadAvailableModels()
@@ -751,6 +797,10 @@ watch(
     }
   }
 )
+
+watch(selectedModelId, () => {
+  imageQuality.value = ''
+})
 
 watch(grokTestMode, () => {
   if (!isGrokAccount.value) return
@@ -848,6 +898,7 @@ const startTest = async () => {
       model_id: string
       prompt: string
       mode?: string
+      image_quality?: string
       image_data_url?: string
       audio_data_url?: string
     } = {
@@ -857,6 +908,10 @@ const startTest = async () => {
     if (isOpenAIAccount.value) {
       requestBody.mode = testMode.value
     }
+    if (supportsImageQuality.value && imageQuality.value) {
+      requestBody.image_quality = imageQuality.value
+    }
+    if (isVideoAccount.value) requestBody.mode = videoTestMode.value
     if (isGrokAccount.value) {
       // Always send explicit Grok mode. search/tts/stt/realtime are standalone
       // endpoints (no free-form model select). text/image/video use optional model.

@@ -25,6 +25,12 @@ export type OrderType = 'balance' | 'subscription'
 
 // ==================== Configuration ====================
 
+/** 充值赠送档位：支付金额 ≥ min_amount 时在到账基数上赠送 bonus_percent% */
+export interface RechargeBonusTier {
+  min_amount: number
+  bonus_percent: number
+}
+
 export interface PaymentConfig {
   payment_enabled: boolean
   min_amount: number
@@ -71,6 +77,12 @@ export interface CheckoutInfoResponse {
   /** Subscription CNY conversion rate (1 USD = X CNY); 0 = disabled, plan price is charged as-is */
   subscription_usd_to_cny_rate: number
   recharge_fee_rate: number
+  /** 充值赠送阶梯（按 min_amount 升序）；缺失/空数组 = 不赠送 */
+  recharge_bonus_tiers?: RechargeBonusTier[]
+  /** 阶梯模式：bonus 赠金 / discount 折扣；缺失按 bonus */
+  recharge_bonus_mode?: string
+  /** 充值页金额区顶部的 Markdown 活动文案；空 = 不展示 */
+  recharge_bonus_notice?: string
   help_text: string
   help_image_url: string
   stripe_publishable_key: string
@@ -82,13 +94,28 @@ export interface CheckoutInfoResponse {
 
 // ==================== Orders ====================
 
-export interface PaymentOrder {
+export interface PaymentOrderDecimalFields {
+  client_order_id?: string
+  requested_amount_decimal?: string
+  pay_amount_decimal?: string
+  credit_amount_decimal?: string
+  fee_amount_decimal?: string
+  payment_currency?: string
+  credit_currency?: string
+}
+
+export interface PaymentOrder extends PaymentOrderDecimalFields {
+  checkout?: { qr_code?: string; pay_url?: string; expires_at: string }
+  confirmation_required?: boolean
+  payment_unknown?: boolean
   id: number
   user_id: number
   amount: number
   pay_amount: number
   currency?: string
   fee_rate: number
+  /** 充值赠送额度（USD），已计入 amount */
+  bonus_amount?: number
   payment_type: string
   out_trade_no: string
   status: OrderStatus
@@ -167,7 +194,10 @@ export interface ProviderInstance {
 // ==================== Request / Response ====================
 
 export interface CreateOrderRequest {
-  amount: number
+  amount?: number
+  amount_decimal?: string
+  client_order_id?: string
+  expected_quote?: PaymentQuote
   payment_type: string
   order_type: string
   plan_id?: number
@@ -198,7 +228,10 @@ export interface WechatJSAPIPayload {
   paySign?: string
 }
 
-export interface CreateOrderResult {
+export interface CreateOrderResult extends PaymentOrderDecimalFields {
+  checkout?: PaymentOrder['checkout']
+  confirmation_required?: boolean
+  payment_unknown?: boolean
   order_id: number
   amount: number
   pay_url?: string
@@ -210,6 +243,7 @@ export interface CreateOrderResult {
   payment_env?: string
   pay_amount: number
   fee_rate: number
+  bonus_amount?: number
   expires_at: string
   result_type?: CreateOrderResultType
   payment_type?: string
@@ -220,6 +254,15 @@ export interface CreateOrderResult {
   oauth?: WechatOAuthInfo
   jsapi?: WechatJSAPIPayload
   jsapi_payload?: WechatJSAPIPayload
+}
+
+export interface PaymentQuote {
+  requested_amount: string
+  pay_amount: string
+  payment_currency: string
+  credit_amount: string
+  credit_currency: string
+  fee_amount: string
 }
 
 export type CurrencyAmounts = Record<string, number>

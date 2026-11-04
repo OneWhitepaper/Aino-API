@@ -108,7 +108,7 @@ describe('HomeView compact mode', () => {
     const wrapper = mountHome(settings)
 
     expect(wrapper.find('[data-testid="compact-home"]').exists()).toBe(false)
-    expect(wrapper.find('.terminal-container').exists()).toBe(true)
+    expect(wrapper.get('h1').exists()).toBe(true)
   })
 
   it('links unauthenticated visitors to login', () => {
@@ -180,5 +180,23 @@ describe('HomeView compact mode', () => {
     })
 
     expect(modelPlazaDestination(wrapper)).toBeUndefined()
+  })
+
+  it('offers registration only while public registration is enabled', () => {
+    const open = mountHome({ registration_enabled: true })
+    expect(open.findAllComponents(RouterLinkStub).some(link => link.props('to') === '/register')).toBe(true)
+    open.unmount()
+
+    const closed = mountHome({ registration_enabled: false })
+    expect(closed.findAllComponents(RouterLinkStub).some(link => link.props('to') === '/register')).toBe(false)
+    expect(closed.get('[data-testid="home-primary-action"]').getComponent(RouterLinkStub).props('to')).toBe('/login')
+  })
+
+  it.each([[false, '/dashboard'], [true, '/admin/dashboard']])('routes signed-in visitors directly to their dashboard (admin=%s)', (isAdmin, path) => {
+    authStore.isAuthenticated = true
+    authStore.isAdmin = isAdmin as boolean
+    const wrapper = mountHome({ registration_enabled: true })
+    expect(wrapper.get('[data-testid="home-primary-action"]').getComponent(RouterLinkStub).props('to')).toBe(path)
+    expect(wrapper.findAllComponents(RouterLinkStub).some(link => link.props('to') === '/register')).toBe(false)
   })
 })

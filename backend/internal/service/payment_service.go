@@ -71,27 +71,36 @@ func generateRandomString(n int) string {
 }
 
 type CreateOrderRequest struct {
-	UserID          int64
-	Amount          float64
-	PaymentType     string
-	OpenID          string
-	ClientIP        string
-	IsMobile        bool
-	IsWeChatBrowser bool
-	SrcHost         string
-	SrcURL          string
-	ReturnURL       string
-	PaymentSource   string
-	OrderType       string
-	PlanID          int64
-	Locale          string
+	ClientOrderID      string
+	ExpectedQuote      *PaymentQuote
+	requestHash        string
+	creationLeaseToken string
+	UserID             int64
+	Amount             float64
+	PaymentType        string
+	OpenID             string
+	ClientIP           string
+	IsMobile           bool
+	IsWeChatBrowser    bool
+	SrcHost            string
+	SrcURL             string
+	ReturnURL          string
+	PaymentSource      string
+	OrderType          string
+	PlanID             int64
+	Locale             string
 }
 
 type CreateOrderResponse struct {
+	PaymentOrderDecimalFields
+	ConfirmationRequired          bool                            `json:"confirmation_required"`
+	PaymentUnknown                bool                            `json:"payment_unknown,omitempty"`
+	Checkout                      *PaymentCheckout                `json:"checkout,omitempty"`
 	OrderID                       int64                           `json:"order_id"`
 	Amount                        float64                         `json:"amount"`
 	PayAmount                     float64                         `json:"pay_amount"`
 	FeeRate                       float64                         `json:"fee_rate"`
+	BonusAmount                   float64                         `json:"bonus_amount"`
 	Status                        string                          `json:"status"`
 	ResultType                    payment.CreatePaymentResultType `json:"result_type,omitempty"`
 	PaymentType                   string                          `json:"payment_type"`
@@ -133,6 +142,8 @@ type RefundPlan struct {
 	BalanceToDeduct float64
 	SubDaysToDeduct int
 	SubscriptionID  int64
+	// deductionHeld 表示扣减已在进入 REFUND_PENDING 前执行并保留，终态收敛时不再重复扣减。
+	deductionHeld bool
 }
 
 type RefundResult struct {

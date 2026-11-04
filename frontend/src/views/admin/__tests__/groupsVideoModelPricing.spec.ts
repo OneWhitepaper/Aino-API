@@ -7,6 +7,14 @@ import {
 } from '../groupsVideoModelPricing'
 
 describe('Grok video model pricing form', () => {
+  it('offers Veo and Omni pricing for video groups and preserves configured prices', () => {
+    const form = createVideoModelPricesForm({ 'veo-3.1': { '1080p': 0.3 } }, 'video')
+    expect(videoModelPriceFamilyRows(form, 'video').map(row => row.key)).toEqual([
+      'veo-3.1', 'veo-3.1-fast', 'veo-3.1-lite', 'omni-flash'
+    ])
+    expect(form['omni-flash']['720p']).toBeNull()
+    expect(serializeVideoModelPrices(form)).toEqual({ 'veo-3.1': { '1080p': 0.3 } })
+  })
   it('provides editable rows for both canonical Grok video families', () => {
     const form = createVideoModelPricesForm()
 

@@ -370,7 +370,23 @@ export async function getMyErrorDetail(id: number): Promise<UserErrorRequestDeta
   return data
 }
 
+export interface SiteCacheRateResponse {
+  visible_to_users: boolean
+  cache_hit_rate?: number | null
+}
+
+export async function getSiteCacheRate(
+  params: { start_date: string; end_date: string },
+  options?: { signal?: AbortSignal },
+): Promise<SiteCacheRateResponse> {
+  const { data } = await apiClient.get<SiteCacheRateResponse>('/usage/site-cache-rate', {
+    params, signal: options?.signal,
+  })
+  return data
+}
+
 export const usageAPI = {
+  getSiteCacheRate,
   list,
   query,
   getStats,

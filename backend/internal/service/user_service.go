@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
@@ -227,6 +226,7 @@ type UserIdentitySummary struct {
 
 type UserIdentitySummarySet struct {
 	Email    UserIdentitySummary `json:"email"`
+	Phone    UserIdentitySummary `json:"phone"`
 	LinuxDo  UserIdentitySummary `json:"linuxdo"`
 	OIDC     UserIdentitySummary `json:"oidc"`
 	WeChat   UserIdentitySummary `json:"wechat"`
@@ -291,6 +291,7 @@ type ChangePasswordRequest struct {
 
 // UserService 用户服务
 type UserService struct {
+	desktopRevoker       DesktopCredentialRevoker
 	userRepo             UserRepository
 	settingRepo          SettingRepository
 	authCacheInvalidator APIKeyAuthCacheInvalidator
@@ -347,6 +348,7 @@ func (s *UserService) GetProfileIdentitySummaries(ctx context.Context, userID in
 
 	summaries := UserIdentitySummarySet{
 		Email:    s.buildEmailIdentitySummary(user, records),
+		Phone:    s.buildProviderIdentitySummary("phone", user, records),
 		LinuxDo:  s.buildProviderIdentitySummary("linuxdo", user, records),
 		OIDC:     s.buildProviderIdentitySummary("oidc", user, records),
 		WeChat:   s.buildProviderIdentitySummary("wechat", user, records),
@@ -761,6 +763,12 @@ func (s *UserService) buildProviderIdentitySummary(provider string, user *User, 
 	filtered := filterUserAuthIdentities(records, provider)
 	if len(filtered) == 0 {
 		summary.CanBind = true
+		if provider == "phone" {
+			// Phone binding is handled by the dedicated verified-SMS flow,
+			// not the OAuth binding endpoint.
+			summary.BindStartPath = "/settings/profile?bind=phone"
+			return summary
+		}
 		bindStartPath, err := buildUserIdentityBindAuthorizeURL(provider, "")
 		if err == nil {
 			summary.BindStartPath = bindStartPath
@@ -771,9 +779,14 @@ func (s *UserService) buildProviderIdentitySummary(provider string, user *User, 
 	primary := selectPrimaryUserAuthIdentity(filtered)
 	summary.Bound = true
 	summary.BoundCount = len(filtered)
-	summary.DisplayName = userAuthIdentityDisplayName(primary)
+	if provider == "phone" {
+		summary.DisplayName = MaskPhone(primary.ProviderSubject)
+		summary.SubjectHint = summary.DisplayName
+	} else {
+		summary.DisplayName = userAuthIdentityDisplayName(primary)
+		summary.SubjectHint = maskOpaqueIdentity(primary.ProviderSubject)
+	}
 	summary.AvatarURL = strings.TrimSpace(firstStringIdentityValue(primary.Metadata, "avatar_url", "suggested_avatar_url", "headimgurl"))
-	summary.SubjectHint = maskOpaqueIdentity(primary.ProviderSubject)
 	summary.ProviderKey = strings.TrimSpace(primary.ProviderKey)
 	summary.VerifiedAt = primary.VerifiedAt
 	summary.CanUnbind = s.canUnbindProvider(provider, user, records)
@@ -796,7 +809,7 @@ func (s *UserService) canUnbindProvider(provider string, user *User, records []U
 		return true
 	}
 
-	for _, candidate := range []string{"linuxdo", "oidc", "wechat", "dingtalk"} {
+	for _, candidate := range []string{"linuxdo", "oidc", "wechat", "dingtalk", "phone"} {
 		if candidate == provider {
 			continue
 		}
@@ -896,6 +909,8 @@ func normalizeUserIdentityProvider(provider string) string {
 		return "dingtalk"
 	case "email":
 		return "email"
+	case "phone":
+		return "phone"
 	default:
 		return ""
 	}
@@ -1042,6 +1057,10 @@ func (s *UserService) ChangePassword(ctx context.Context, userID int64, req Chan
 	// 指纹推导），改密写回 password_hash 即可让旧 token 失效。
 	if err := s.userRepo.Update(ctx, user, UserUpdateFields{PasswordHash: true}); err != nil {
 		return fmt.Errorf("update user: %w", err)
+	}
+
+	if s.desktopRevoker != nil {
+		return s.desktopRevoker.RevokeUser(ctx, userID, "password_changed")
 	}
 
 	return nil
@@ -1318,28 +1337,7 @@ func (s *UserService) VerifyAndAddNotifyEmail(ctx context.Context, userID int64,
 
 // verifyNotifyCode validates the verification code against the cached data.
 func verifyNotifyCode(ctx context.Context, cache EmailCache, email, code string) error {
-	data, err := cache.GetNotifyVerifyCode(ctx, email)
-	if err != nil || data == nil {
-		return ErrInvalidVerifyCode
-	}
-	if data.Attempts >= maxVerifyCodeAttempts {
-		return ErrVerifyCodeMaxAttempts
-	}
-	if subtle.ConstantTimeCompare([]byte(data.Code), []byte(code)) != 1 {
-		data.Attempts++
-		remaining := time.Until(data.ExpiresAt)
-		if remaining <= 0 {
-			return ErrInvalidVerifyCode
-		}
-		if err := cache.SetNotifyVerifyCode(ctx, email, data, remaining); err != nil {
-			slog.Error("failed to update notify verify code attempts", "email", email, "error", err)
-		}
-		if data.Attempts >= maxVerifyCodeAttempts {
-			return ErrVerifyCodeMaxAttempts
-		}
-		return ErrInvalidVerifyCode
-	}
-	return nil
+	return verifyCodeWithAttempts(ctx, email, code, cache.GetNotifyVerifyCode, cache.IncrNotifyVerifyCodeAttempts, nil)
 }
 
 // addOrVerifyNotifyEmail adds the email to user's extra notification emails or marks it as verified.

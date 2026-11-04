@@ -18,6 +18,8 @@ import (
 type UserHandler struct {
 	userService           *service.UserService
 	authService           *service.AuthService
+	totpService           *service.TotpService
+	settingService        *service.SettingService
 	emailService          *service.EmailService
 	emailCache            service.EmailCache
 	affiliateService      *service.AffiliateService
@@ -32,6 +34,8 @@ func NewUserHandler(
 	emailCache service.EmailCache,
 	affiliateService *service.AffiliateService,
 	userPlatformQuotaRepo service.UserPlatformQuotaRepository,
+	totpService *service.TotpService,
+	settingService *service.SettingService,
 ) *UserHandler {
 	return &UserHandler{
 		userService:           userService,
@@ -40,6 +44,8 @@ func NewUserHandler(
 		emailCache:            emailCache,
 		affiliateService:      affiliateService,
 		userPlatformQuotaRepo: userPlatformQuotaRepo,
+		totpService:           totpService,
+		settingService:        settingService,
 	}
 }
 
@@ -95,6 +101,7 @@ type userProfileResponse struct {
 	AuthBindings      map[string]service.UserIdentitySummary `json:"auth_bindings"`
 	IdentityBindings  map[string]service.UserIdentitySummary `json:"identity_bindings"`
 	EmailBound        bool                                   `json:"email_bound"`
+	PhoneBound        bool                                   `json:"phone_bound"`
 	LinuxDoBound      bool                                   `json:"linuxdo_bound"`
 	OIDCBound         bool                                   `json:"oidc_bound"`
 	WeChatBound       bool                                   `json:"wechat_bound"`
@@ -319,6 +326,9 @@ func (h *UserHandler) UnbindIdentity(c *gin.Context) {
 	subject, ok := middleware2.GetAuthSubjectFromContext(c)
 	if !ok {
 		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+	if strings.EqualFold(strings.TrimSpace(c.Param("provider")), "phone") && !h.enforcePhoneBindingSecurity(c, subject) {
 		return
 	}
 
@@ -557,6 +567,7 @@ func userProfileResponseFromService(user *service.User, identities service.UserI
 		AuthBindings:      bindings,
 		IdentityBindings:  bindings,
 		EmailBound:        identities.Email.Bound,
+		PhoneBound:        identities.Phone.Bound,
 		LinuxDoBound:      identities.LinuxDo.Bound,
 		OIDCBound:         identities.OIDC.Bound,
 		WeChatBound:       identities.WeChat.Bound,
@@ -567,6 +578,7 @@ func userProfileResponseFromService(user *service.User, identities service.UserI
 func userProfileBindingMap(identities service.UserIdentitySummarySet) map[string]service.UserIdentitySummary {
 	return map[string]service.UserIdentitySummary{
 		"email":    identities.Email,
+		"phone":    identities.Phone,
 		"linuxdo":  identities.LinuxDo,
 		"oidc":     identities.OIDC,
 		"wechat":   identities.WeChat,

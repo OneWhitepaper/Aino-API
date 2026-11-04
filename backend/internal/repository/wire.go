@@ -4,6 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"strings"
+	"time"
 
 	entsql "entgo.io/ent/dialect/sql"
 	"github.com/Wei-Shaw/sub2api/ent"
@@ -65,7 +68,12 @@ func ProvideSchedulerCache(rdb *redis.Client, cfg *config.Config) service.Schedu
 
 // ProviderSet is the Wire provider set for all repositories
 var ProviderSet = wire.NewSet(
+	ProvideIQRadarSource,
+	NewIQTestRepository,
 	NewUserRepository,
+	NewDesktopWalletRepository,
+	NewDiagnosticsRepository,
+	NewMCPOAuthRepository,
 	NewAPIKeyRepository,
 	NewGroupRepository,
 	NewAdminGroupRepository,
@@ -82,10 +90,12 @@ var ProviderSet = wire.NewSet(
 	NewUsageLogRepository,
 	NewUsageBillingRepository,
 	NewBatchImageRepository,
+	NewGeminiCachedContentRepository,
 	NewIdempotencyRepository,
 	NewUsageCleanupRepository,
 	NewDashboardAggregationRepository,
 	NewSettingRepository,
+	NewScopedAdminKeyRepository,
 	NewOpsRepository,
 	NewAuditLogRepository,
 	NewPasskeyRepository,
@@ -97,6 +107,7 @@ var ProviderSet = wire.NewSet(
 	NewErrorPassthroughRepository,
 	NewTLSFingerprintProfileRepository,
 	NewPluginRepository,
+	NewPluginKVStore,
 	NewChannelRepository,
 	NewChannelMonitorRepository,
 	NewChannelMonitorV2Repository,
@@ -105,6 +116,7 @@ var ProviderSet = wire.NewSet(
 	NewAffiliateRepository,
 	NewUserPlatformQuotaRepository,     // T14: user × platform quota
 	NewUserPlatformQuotaServiceAdapter, // T14: adapter → service.UserPlatformQuotaRepository
+	NewDesktopCredentialRepository,     // B2: desktop model credentials
 
 	// Cache implementations
 	NewGatewayCache,
@@ -134,6 +146,8 @@ var ProviderSet = wire.NewSet(
 	NewAuthCacheInvalidationOutboxRepository,
 	NewProxyLatencyCache,
 	NewTotpCache,
+	ProvideSMSCache,
+	ProvideSMSSender,
 	NewRefreshTokenCache,
 	NewErrorPassthroughCache,
 	NewTLSFingerprintProfileCache,
@@ -161,6 +175,7 @@ var ProviderSet = wire.NewSet(
 	NewClaudeOAuthClient,
 	NewHTTPUpstream,
 	NewOpenAIOAuthClient,
+	NewOpenAIReferralClient,
 	NewGrokOAuthClient,
 	NewGeminiOAuthClient,
 	NewGeminiCliCodeAssistClient,
@@ -170,6 +185,38 @@ var ProviderSet = wire.NewSet(
 	ProvideSQLDB,
 	ProvideRedis,
 )
+
+// ProvideSMSCache creates the namespaced Redis store used by phone
+// verification.  The service interface return type keeps the repository
+// implementation behind the service boundary while retaining the atomic
+// challenge implementation for production.
+func ProvideSMSCache(rdb *redis.Client) service.SMSCache {
+	return NewSMSCache(rdb, "sub2api:")
+}
+
+// ProvideSMSSender selects the configured provider.  Disabled SMS remains a
+// valid startup state, so a no-op sender is returned until an operator enables
+// the feature with complete credentials.
+func ProvideSMSSender(cfg *config.Config) (service.SMSSender, error) {
+	if cfg == nil || strings.TrimSpace(cfg.SMS.AccessKeyID) == "" || strings.TrimSpace(cfg.SMS.AccessKeySecret) == "" {
+		return disabledSMSSender{}, nil
+	}
+	if cfg.SMS.Provider != "aliyun" {
+		return nil, fmt.Errorf("unsupported SMS provider %q", cfg.SMS.Provider)
+	}
+	return service.NewAliyunSMSSenderWithOptions(
+		cfg.SMS.AccessKeyID,
+		cfg.SMS.AccessKeySecret,
+		cfg.SMS.RegionID,
+		time.Duration(cfg.SMS.RequestTimeoutSeconds)*time.Second,
+	)
+}
+
+type disabledSMSSender struct{}
+
+func (disabledSMSSender) Send(context.Context, service.SMSMessage) (service.SMSSendResult, error) {
+	return service.SMSSendResult{}, fmt.Errorf("SMS sender is disabled")
+}
 
 // ProvideEnt 为依赖注入提供 Ent 客户端。
 //

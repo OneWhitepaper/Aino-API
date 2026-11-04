@@ -3,6 +3,30 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --aino-paper: #fff;
+    --aino-canvas: #f5f6f7;
+    --aino-ink: #092e48;
+    --aino-muted: #636f79;
+    --aino-line: #e5e7e9;
+    --aino-mint: #e9f9f3;
+    --aino-action: #092e48;
+    --aino-on-action: #fff;
+    --aino-action-hover: #173d55;
+  }
+
+  .dark {
+    --aino-paper: #142d3d;
+    --aino-canvas: #0c202e;
+    --aino-ink: #e8f0f4;
+    --aino-muted: #a9b9c3;
+    --aino-line: #304959;
+    --aino-mint: #123a3b;
+    --aino-action: #e8f0f4;
+    --aino-on-action: #092e48;
+    --aino-action-hover: #cbdde7;
+  }
+
   * {
     @apply border-gray-200 dark:border-dark-700;
   }
@@ -19,6 +43,22 @@
   body {
     @apply bg-gray-50 text-gray-900 dark:bg-dark-950 dark:text-gray-100;
     @apply min-h-screen;
+  }
+
+  :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+    outline: 2px solid #087d72;
+    outline-offset: 3px;
+  }
+
+  .dark :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+    outline-color: #2dd4bf;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .aino-workspace *, .aino-workspace *::before, .aino-workspace *::after {
+      transition-duration: 0.01ms !important;
+    }
   }
 
   /* 自定义滚动条 - 仅针对 Firefox，避免 Chrome 取消 webkit 的全局定制 */
@@ -72,7 +112,7 @@
   /* ============ 按钮样式 ============ */
   .btn {
     @apply inline-flex items-center justify-center gap-2;
-    @apply rounded-xl px-4 py-2.5 text-sm font-medium;
+    @apply rounded-full px-4 py-2.5 text-sm font-medium;
     @apply transition-all duration-200 ease-out;
     @apply focus:outline-none focus:ring-2 focus:ring-primary-500/50 focus:ring-offset-2;
     @apply disabled:transform-none disabled:cursor-not-allowed disabled:opacity-50;
@@ -80,10 +120,13 @@
   }
 
   .btn-primary {
-    @apply bg-gradient-to-r from-primary-500 to-primary-600;
-    @apply text-white shadow-md shadow-primary-500/25;
-    @apply hover:from-primary-600 hover:to-primary-700 hover:shadow-lg hover:shadow-primary-500/30;
-    @apply dark:shadow-primary-500/20;
+    background: var(--aino-action);
+    color: var(--aino-on-action);
+    box-shadow: none;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background: var(--aino-action-hover);
   }
 
   .btn-secondary {
@@ -100,23 +143,15 @@
   }
 
   .btn-danger {
-    @apply bg-gradient-to-r from-red-500 to-red-600;
-    @apply text-white shadow-md shadow-red-500/25;
-    @apply hover:from-red-600 hover:to-red-700 hover:shadow-lg hover:shadow-red-500/30;
+    @apply bg-red-600 text-white hover:bg-red-700;
   }
 
   .btn-success {
-    @apply bg-gradient-to-r from-emerald-500 to-emerald-600;
-    @apply text-white shadow-md shadow-emerald-500/25;
-    @apply hover:from-emerald-600 hover:to-emerald-700 hover:shadow-lg hover:shadow-emerald-500/30;
-    @apply dark:shadow-emerald-500/20;
+    @apply bg-emerald-700 text-white hover:bg-emerald-800;
   }
 
   .btn-warning {
-    @apply bg-gradient-to-r from-amber-500 to-amber-600;
-    @apply text-white shadow-md shadow-amber-500/25;
-    @apply hover:from-amber-600 hover:to-amber-700 hover:shadow-lg hover:shadow-amber-500/30;
-    @apply dark:shadow-amber-500/20;
+    @apply bg-amber-600 text-white hover:bg-amber-700;
   }
 
   .btn-stripe {
@@ -226,23 +261,22 @@
 
   /* ============ 卡片样式 ============ */
   .card {
-    @apply bg-white dark:bg-dark-800/50;
+    background: var(--aino-paper);
     @apply rounded-2xl;
-    @apply border border-gray-100 dark:border-dark-700/50;
+    border: 1px solid var(--aino-line);
     @apply shadow-card;
     @apply transition-all duration-300;
   }
 
   .card-hover {
-    @apply hover:-translate-y-0.5 hover:shadow-card-hover;
+    @apply hover:shadow-card-hover;
     @apply hover:border-gray-200 dark:hover:border-dark-600;
   }
 
   .card-glass {
-    @apply bg-white/70 dark:bg-dark-800/70;
-    @apply backdrop-blur-xl;
-    @apply border border-white/20 dark:border-dark-700/50;
-    @apply shadow-glass;
+    background: var(--aino-paper);
+    border: 1px solid var(--aino-line);
+    @apply shadow-card;
   }
 
   .card-header {
@@ -397,7 +431,7 @@
   .modal-content {
     @apply w-full;
     @apply max-h-[95vh] sm:max-h-[90vh];
-    @apply bg-white dark:bg-dark-800;
+    background: var(--aino-paper);
     @apply rounded-2xl shadow-2xl;
     @apply border border-gray-200 dark:border-dark-700;
     @apply flex flex-col;
@@ -490,7 +524,9 @@
   .dialog-container {
     @apply flex w-full flex-col;
     @apply max-h-[90vh];
-    @apply rounded-2xl bg-white dark:bg-dark-800;
+    @apply rounded-2xl;
+    background: var(--aino-paper);
+    border: 1px solid var(--aino-line);
     @apply shadow-xl;
   }
 
@@ -512,7 +548,7 @@
   /* ============ Toast 通知 ============ */
   .toast {
     @apply fixed right-4 top-4 z-[100];
-    @apply min-w-[320px] max-w-md;
+    width: min(28rem, calc(100vw - 2rem));
     @apply bg-white dark:bg-dark-800;
     @apply rounded-xl shadow-lg;
     @apply border-l-4;
@@ -547,7 +583,7 @@
   }
 
   .sidebar-header {
-    @apply h-16 px-6;
+    @apply h-20 shrink-0 px-6;
     @apply flex items-center gap-3;
     @apply border-b border-gray-100 dark:border-dark-800;
     transition:
@@ -560,7 +596,7 @@
   }
 
   .sidebar-link {
-    @apply flex items-center gap-3 rounded-xl py-2.5;
+    @apply flex items-center gap-3 rounded-full py-2.5;
     @apply overflow-hidden;
     @apply text-sm font-medium;
     @apply text-gray-600 dark:text-dark-300;
@@ -571,10 +607,16 @@
     padding-right: 0.875rem;
   }
 
-  .sidebar-link-active {
-    @apply bg-primary-50 dark:bg-primary-900/20;
-    @apply text-primary-600 dark:text-primary-400;
-    @apply hover:bg-primary-100 dark:hover:bg-primary-900/30;
+  .sidebar-link-active,
+  .dark .sidebar-link-active {
+    background: var(--aino-action);
+    color: var(--aino-on-action);
+  }
+
+  .sidebar-link-active:hover,
+  .dark .sidebar-link-active:hover {
+    background: var(--aino-action-hover);
+    color: var(--aino-on-action);
   }
 
   .sidebar-section {
@@ -607,8 +649,7 @@
   }
 
   .empty-state-icon {
-    @apply mb-4 h-16 w-16;
-    @apply text-gray-300 dark:text-dark-600;
+    @apply h-10 w-10 text-primary-600 dark:text-primary-400;
   }
 
   .empty-state-title {

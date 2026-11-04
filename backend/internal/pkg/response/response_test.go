@@ -5,8 +5,11 @@ package response
 import (
 	"encoding/json"
 	"errors"
+	"math"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"strings"
 	"testing"
 
 	errors2 "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
@@ -107,11 +110,12 @@ func TestErrorFrom(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	tests := []struct {
-		name         string
-		err          error
-		wantWritten  bool
-		wantHTTPCode int
-		wantBody     Response
+		name           string
+		err            error
+		wantWritten    bool
+		wantHTTPCode   int
+		wantBody       Response
+		wantRetryAfter string
 	}{
 		{
 			name:        "nil_error",
@@ -175,6 +179,19 @@ func TestErrorFrom(t *testing.T) {
 			},
 		},
 		{
+			name:           "rate_limited_error_sets_retry_after_header",
+			err:            errors2.TooManyRequests("RATE_LIMITED", "try later").WithMetadata(map[string]string{"retry_after": "42"}),
+			wantWritten:    true,
+			wantHTTPCode:   http.StatusTooManyRequests,
+			wantRetryAfter: "42",
+			wantBody: Response{
+				Code:     http.StatusTooManyRequests,
+				Message:  "try later",
+				Reason:   "RATE_LIMITED",
+				Metadata: map[string]string{"retry_after": "42"},
+			},
+		},
+		{
 			name:         "unknown_error_defaults_to_500",
 			err:          errors.New("boom"),
 			wantWritten:  true,
@@ -201,6 +218,7 @@ func TestErrorFrom(t *testing.T) {
 			}
 
 			require.Equal(t, tt.wantHTTPCode, w.Code)
+			require.Equal(t, tt.wantRetryAfter, w.Header().Get("Retry-After"))
 			var got Response
 			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
 			require.Equal(t, tt.wantBody, got)
@@ -691,6 +709,60 @@ func TestParsePagination(t *testing.T) {
 			wantPage:     1,
 			wantPageSize: 20,
 		},
+		{
+			name:         "page为MaxInt_钳制到不溢出的上限",
+			query:        "page=" + strconv.Itoa(math.MaxInt),
+			wantPage:     math.MaxInt / 20,
+			wantPageSize: 20,
+		},
+		{
+			name:         "page为MaxInt且page_size为1000_钳制到不溢出的上限",
+			query:        "page=" + strconv.Itoa(math.MaxInt) + "&page_size=1000",
+			wantPage:     math.MaxInt / 1000,
+			wantPageSize: 1000,
+		},
+		{
+			name:         "page恰好在上限_有效",
+			query:        "page=" + strconv.Itoa(math.MaxInt/20),
+			wantPage:     math.MaxInt / 20,
+			wantPageSize: 20,
+		},
+		{
+			name:         "page刚超过上限_钳制",
+			query:        "page=" + strconv.Itoa(math.MaxInt/20+1),
+			wantPage:     math.MaxInt / 20,
+			wantPageSize: 20,
+		},
+		{
+			name:         "page超过MaxInt_使用默认值",
+			query:        "page=" + strconv.FormatUint(uint64(math.MaxInt)+1, 10),
+			wantPage:     1,
+			wantPageSize: 20,
+		},
+		{
+			name:         "page超过uint64范围_不能回绕为2",
+			query:        "page=18446744073709551618",
+			wantPage:     1,
+			wantPageSize: 20,
+		},
+		{
+			name:         "page_size超过uint64范围_不能回绕为21",
+			query:        "page_size=18446744073709551637&limit=50",
+			wantPage:     1,
+			wantPageSize: 20,
+		},
+		{
+			name:         "limit超过uint64范围_不能回绕为21",
+			query:        "limit=18446744073709551637",
+			wantPage:     1,
+			wantPageSize: 20,
+		},
+		{
+			name:         "超长数字_使用默认值",
+			query:        "page=" + strings.Repeat("9", 100),
+			wantPage:     1,
+			wantPageSize: 20,
+		},
 	}
 
 	for _, tt := range tests {
@@ -702,6 +774,38 @@ func TestParsePagination(t *testing.T) {
 			require.Equal(t, tt.wantPage, page, "page 不符合预期")
 			require.Equal(t, tt.wantPageSize, pageSize, "pageSize 不符合预期")
 		})
+	}
+}
+
+func TestParsePaginationBoundariesAndResponse(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, sizeParam := range []string{"page_size", "limit"} {
+		for _, size := range []int{1, 2, 3, 20, 21, 999, 1000} {
+			bound := math.MaxInt / size
+			pages := []int{bound - 1, bound, math.MaxInt}
+			if bound < math.MaxInt {
+				pages = append(pages, bound+1)
+			}
+			for _, requestedPage := range pages {
+				query := "page=" + strconv.Itoa(requestedPage) + "&" + sizeParam + "=" + strconv.Itoa(size)
+				t.Run(query, func(t *testing.T) {
+					w, c := newContextWithQuery(query)
+					page, pageSize := ParsePagination(c)
+					require.Equal(t, min(requestedPage, bound), page)
+					require.Equal(t, size, pageSize)
+					offset := (page - 1) * pageSize
+					require.GreaterOrEqual(t, offset, 0)
+					require.LessOrEqual(t, offset, math.MaxInt-pageSize)
+
+					Paginated(c, []string{}, 0, page, pageSize)
+					require.Equal(t, http.StatusOK, w.Code)
+					_, data := parsePaginatedBody(t, w)
+					require.Equal(t, page, data.Page)
+					require.Equal(t, pageSize, data.PageSize)
+					require.Empty(t, data.Items)
+				})
+			}
+		}
 	}
 }
 
@@ -740,37 +844,58 @@ func Test_parseInt(t *testing.T) {
 			name:    "包含字母_返回0",
 			input:   "abc",
 			wantVal: 0,
-			wantErr: false,
+			wantErr: true,
 		},
 		{
 			name:    "数字开头接字母_返回0",
 			input:   "12a",
 			wantVal: 0,
-			wantErr: false,
+			wantErr: true,
 		},
 		{
 			name:    "包含负号_返回0",
 			input:   "-1",
 			wantVal: 0,
-			wantErr: false,
+			wantErr: true,
 		},
 		{
 			name:    "包含小数点_返回0",
 			input:   "1.5",
 			wantVal: 0,
-			wantErr: false,
+			wantErr: true,
 		},
 		{
 			name:    "包含空格_返回0",
 			input:   "1 2",
 			wantVal: 0,
-			wantErr: false,
+			wantErr: true,
 		},
 		{
 			name:    "空字符串",
 			input:   "",
 			wantVal: 0,
-			wantErr: false,
+			wantErr: true,
+		},
+		{
+			name:    "前导零_有效",
+			input:   "000123",
+			wantVal: 123,
+		},
+		{
+			name:    "正号_无效",
+			input:   "+1",
+			wantErr: true,
+		},
+		{
+			name:    "MaxInt_有效",
+			input:   strconv.Itoa(math.MaxInt),
+			wantVal: math.MaxInt,
+		},
+		{
+			name:    "超过MaxInt_返回范围错误",
+			input:   strconv.FormatUint(uint64(math.MaxInt)+1, 10),
+			wantVal: math.MaxInt,
+			wantErr: true,
 		},
 	}
 

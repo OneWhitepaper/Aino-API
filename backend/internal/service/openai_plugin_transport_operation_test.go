@@ -1,17 +1,15 @@
-package service_test
+package service
 
 import (
 	"context"
 	"io"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"sync/atomic"
 	"testing"
 
-	"github.com/Wei-Shaw/sub2api/internal/repository"
-	"github.com/Wei-Shaw/sub2api/internal/service"
 	pluginv1 "github.com/Wei-Shaw/sub2api/pkg/pluginapi/v1"
+	hcplugin "github.com/hashicorp/go-plugin"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 )
@@ -43,56 +41,69 @@ func (s *operationPluginStream) Recv() (*pluginv1.ForwardResponse, error) {
 	return &pluginv1.ForwardResponse{Frame: &pluginv1.ForwardResponse_Start{Start: &pluginv1.ForwardResponseStart{StatusCode: http.StatusOK}}}, nil
 }
 
-func TestOpenAIPluginTransportOperationUsesHTTPWithoutReplay(t *testing.T) {
-	var providerCalls atomic.Int32
-	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		providerCalls.Add(1)
-		require.Equal(t, "Bearer fixture-oauth-token", r.Header.Get("Authorization"))
-		require.Equal(t, "fixture-chatgpt-account", r.Header.Get("ChatGPT-Account-ID"))
-		body, err := io.ReadAll(r.Body)
-		require.NoError(t, err)
-		require.Equal(t, "oauth payload", string(body))
-		_, _ = io.WriteString(w, "oauth HTTP response")
-	}))
-	t.Cleanup(provider.Close)
-	plugin := &operationPluginClient{}
-	dispatch := service.OpenAIPluginTransportForTest(repository.NewHTTPUpstream(nil), plugin)
-	account := &service.Account{ID: 7, Platform: service.PlatformOpenAI, Type: service.AccountTypeOAuth, Concurrency: 1}
-	ctx := service.WithDesktopInferenceOperation(t.Context(), "operation")
-	request := func() *http.Request {
-		req, err := http.NewRequestWithContext(context.WithoutCancel(ctx), http.MethodPost, provider.URL, strings.NewReader("oauth payload"))
-		require.NoError(t, err)
-		req.Header.Set("Authorization", "Bearer fixture-oauth-token")
-		req.Header.Set("ChatGPT-Account-ID", "fixture-chatgpt-account")
-		return req
-	}
-	response, err := dispatch(request(), "", account)
+type operationRecordingHTTPUpstream struct {
+	HTTPUpstream
+	request     *http.Request
+	proxyURL    string
+	accountID   int64
+	concurrency int
+}
+
+func (u *operationRecordingHTTPUpstream) Do(request *http.Request, proxyURL string, accountID int64, concurrency int) (*http.Response, error) {
+	u.request, u.proxyURL, u.accountID, u.concurrency = request, proxyURL, accountID, concurrency
+	return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader("HTTP response"))}, nil
+}
+
+func operationPluginGateway(upstream HTTPUpstream, api pluginv1.TransportPluginClient) *OpenAIGatewayService {
+	manager := &PluginManager{}
+	manager.route.Store(&pluginRoute{
+		pluginID:       1,
+		rolloutPercent: 100,
+		runtime:        &pluginRuntime{client: &hcplugin.Client{}, api: api},
+	})
+	return &OpenAIGatewayService{pluginManager: manager, httpUpstream: upstream}
+}
+
+func TestOpenAIPluginTransportOperationUsesHTTP(t *testing.T) {
+	plugin, upstream := &operationPluginClient{}, &operationRecordingHTTPUpstream{}
+	gateway := operationPluginGateway(upstream, plugin)
+	account := &Account{ID: 7, Platform: PlatformOpenAI, Type: AccountTypeOAuth, Concurrency: 3}
+	ctx := WithDesktopInferenceOperation(t.Context(), "operation")
+	request, err := http.NewRequestWithContext(context.WithoutCancel(ctx), http.MethodPost, "https://example.com/v1/responses", strings.NewReader("oauth payload"))
+	require.NoError(t, err)
+	request.Header.Set("Authorization", "Bearer fixture-oauth-token")
+	request.Header.Set("ChatGPT-Account-ID", "fixture-chatgpt-account")
+	response, err := gateway.doOpenAIUpstream(request, "http://fixture-proxy:8080", account)
 	require.NoError(t, err)
 	body, err := io.ReadAll(response.Body)
 	require.NoError(t, err)
 	require.NoError(t, response.Body.Close())
-	require.Equal(t, "oauth HTTP response", string(body))
-	response, err = dispatch(request(), "", account)
-	require.ErrorIs(t, err, service.ErrDesktopOperationUnknown)
-	require.Nil(t, response)
-	require.EqualValues(t, 1, providerCalls.Load())
+	require.Equal(t, "HTTP response", string(body))
+	require.Same(t, request, upstream.request)
+	require.Equal(t, "operation", DesktopInferenceOperationID(upstream.request.Context()))
+	require.Equal(t, "Bearer fixture-oauth-token", upstream.request.Header.Get("Authorization"))
+	require.Equal(t, "fixture-chatgpt-account", upstream.request.Header.Get("ChatGPT-Account-ID"))
+	body, err = io.ReadAll(upstream.request.Body)
+	require.NoError(t, err)
+	require.NoError(t, upstream.request.Body.Close())
+	require.Equal(t, "oauth payload", string(body))
+	require.Equal(t, "http://fixture-proxy:8080", upstream.proxyURL)
+	require.Equal(t, account.ID, upstream.accountID)
+	require.Equal(t, account.Concurrency, upstream.concurrency)
 	require.Zero(t, plugin.calls.Load(), "plugin protocol cannot enforce operation replay policy")
 }
 
 func TestOpenAIPluginTransportOrdinaryRequestStillUsesPlugin(t *testing.T) {
-	var providerCalls atomic.Int32
-	provider := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { providerCalls.Add(1) }))
-	t.Cleanup(provider.Close)
-	plugin := &operationPluginClient{}
-	dispatch := service.OpenAIPluginTransportForTest(repository.NewHTTPUpstream(nil), plugin)
-	request, err := http.NewRequestWithContext(t.Context(), http.MethodPost, provider.URL, strings.NewReader("payload"))
+	plugin, upstream := &operationPluginClient{}, &operationRecordingHTTPUpstream{}
+	gateway := operationPluginGateway(upstream, plugin)
+	request, err := http.NewRequestWithContext(t.Context(), http.MethodPost, "https://example.com/v1/responses", strings.NewReader("payload"))
 	require.NoError(t, err)
-	response, err := dispatch(request, "", &service.Account{ID: 7, Platform: service.PlatformOpenAI, Type: service.AccountTypeOAuth, Concurrency: 1})
+	response, err := gateway.doOpenAIUpstream(request, "", &Account{ID: 7, Platform: PlatformOpenAI, Type: AccountTypeOAuth, Concurrency: 1})
 	require.NoError(t, err)
 	_, err = io.ReadAll(response.Body)
 	require.NoError(t, err)
 	require.NoError(t, response.Body.Close())
 	require.Equal(t, http.StatusOK, response.StatusCode)
 	require.EqualValues(t, 1, plugin.calls.Load())
-	require.Zero(t, providerCalls.Load())
+	require.Nil(t, upstream.request)
 }

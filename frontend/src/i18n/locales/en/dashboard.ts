@@ -116,7 +116,10 @@ export default {
       desktop: 'Desktop managed'
     },
     manualKeyHint: 'Keys you create and manage for third-party tools and API access. View automatic Aino desktop authorizations under Desktop managed.',
-    desktopManagedHint: 'Temporary authorizations that Aino desktop creates and renews automatically. Expired authorizations are archived. Delete one to revoke it; no manual setup is needed.',
+    desktopManagedHint: 'Aino manages model access and renews it automatically while in use, with no hourly sign-in. An individual credential expiry does not end your account session. Inactive credentials are archived; delete one to revoke its authorization.',
+    desktopAutoRenewal: 'Automatic renewal',
+    desktopCredentialValidity: 'Authorization validity',
+    desktopCredentialExpiresAt: 'The current temporary credential is valid until {time}. Aino renews it automatically while in use.',
     desktopEmptyTitle: 'No desktop authorizations',
     copied: 'Copied!',
     importToCcSwitch: 'Import to CCS',

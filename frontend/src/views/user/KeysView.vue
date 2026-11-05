@@ -376,8 +376,21 @@
             <span v-else class="text-sm text-gray-400 dark:text-dark-500">-</span>
           </template>
 
-          <template #cell-expires_at="{ value }">
-            <span v-if="value" :class="[
+          <template #cell-expires_at="{ value, row }">
+            <details
+              v-if="row.desktop_managed && value && keyDisplayStatus(row) === 'active'"
+              class="group text-sm text-gray-500 dark:text-dark-400"
+            >
+              <summary class="inline-flex cursor-pointer list-none items-center gap-1.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 [&::-webkit-details-marker]:hidden">
+                <Icon name="refresh" size="xs" />
+                {{ t('keys.desktopAutoRenewal') }}
+                <Icon name="chevronDown" size="xs" class="transition-transform group-open:rotate-180" />
+              </summary>
+              <p class="mt-2 max-w-64 whitespace-normal text-xs leading-relaxed">
+                {{ t('keys.desktopCredentialExpiresAt', { time: formatDateTime(value) }) }}
+              </p>
+            </details>
+            <span v-else-if="value" :class="[
               'text-sm',
               new Date(value) < new Date() ? 'text-red-500 dark:text-red-400' : 'text-gray-500 dark:text-dark-400'
             ]">
@@ -1309,7 +1322,7 @@ const allColumns = computed<Column[]>(() => [
   { key: 'current_concurrency', label: t('keys.currentConcurrency'), sortable: true },
   { key: 'usage', label: t('keys.usage'), sortable: false },
   { key: 'rate_limit', label: t('keys.rateLimitColumn'), sortable: false },
-  { key: 'expires_at', label: t('keys.expiresAt'), sortable: true },
+  { key: 'expires_at', label: t(filterDesktopManaged.value ? 'keys.desktopCredentialValidity' : 'keys.expiresAt'), sortable: true },
   { key: 'status', label: t('common.status'), sortable: true },
   { key: 'last_used_at', label: t('keys.lastUsedAt'), sortable: true },
   { key: 'last_used_ip', label: t('keys.lastUsedIP'), sortable: false },

@@ -28,17 +28,21 @@ func IsWindowExpired(windowStart *time.Time, duration time.Duration) bool {
 }
 
 type APIKey struct {
-	DesktopPurpose string        `json:"-"`
-	DesktopUsage   *DesktopUsage `json:"-"`
-	DesktopManaged bool
-	ID             int64
-	UserID         int64
-	Key            string
-	Name           string
-	GroupID        *int64
-	Status         string
-	IPWhitelist    []string
-	IPBlacklist    []string
+	DesktopCredentialType string
+	DesktopDeviceID       string
+	DesktopKeyVersion     int
+	KeyHashType           string
+	DesktopPurpose        string        `json:"-"`
+	DesktopUsage          *DesktopUsage `json:"-"`
+	DesktopManaged        bool
+	ID                    int64
+	UserID                int64
+	Key                   string
+	Name                  string
+	GroupID               *int64
+	Status                string
+	IPWhitelist           []string
+	IPBlacklist           []string
 	// 预编译的 IP 规则，用于认证热路径避免重复 ParseIP/ParseCIDR。
 	CompiledIPWhitelist *ip.CompiledIPRules `json:"-"`
 	CompiledIPBlacklist *ip.CompiledIPRules `json:"-"`
@@ -46,6 +50,7 @@ type APIKey struct {
 	LastUsedIP          *string
 	CreatedAt           time.Time
 	UpdatedAt           time.Time
+	DeletedAt           *time.Time
 	User                *User
 	Group               *Group
 	CurrentConcurrency  int

@@ -14,7 +14,7 @@ import (
 	"github.com/dgraph-io/ristretto"
 )
 
-const apiKeyAuthSnapshotVersion = 26 // v26: managed credentials and group image_count_billing
+const apiKeyAuthSnapshotVersion = 27 // v27: image-count groups and hash-only device identities
 
 type apiKeyAuthCacheConfig struct {
 	l1Size        int
@@ -267,6 +267,7 @@ func (s *APIKeyService) deleteAuthCache(ctx context.Context, cacheKey string) {
 }
 
 func (s *APIKeyService) loadAuthCacheEntry(ctx context.Context, key, cacheKey string) (*APIKeyAuthCacheEntry, error) {
+	verifiedAt := time.Now().UTC()
 	apiKey, err := s.lookupAPIKeyForAuth(ctx, key)
 	if err != nil {
 		if errors.Is(err, ErrAPIKeyNotFound) {
@@ -285,6 +286,9 @@ func (s *APIKeyService) loadAuthCacheEntry(ctx context.Context, key, cacheKey st
 	snapshot := s.snapshotFromAPIKey(ctx, apiKey)
 	if snapshot == nil {
 		return nil, fmt.Errorf("get api key: %w", ErrAPIKeyNotFound)
+	}
+	if apiKey.DesktopCredentialType == DesktopCredentialTypeDevice {
+		snapshot.AuthorityVerifiedAt = verifiedAt
 	}
 	entry := &APIKeyAuthCacheEntry{Snapshot: snapshot}
 	s.setAuthCacheEntry(ctx, cacheKey, entry, s.authCfg.l2TTL)
@@ -328,6 +332,12 @@ func (s *APIKeyService) applyAuthCacheEntry(key string, entry *APIKeyAuthCacheEn
 	if entry.Snapshot.Version != apiKeyAuthSnapshotVersion {
 		return nil, false, nil
 	}
+	if entry.Snapshot.DesktopCredentialType == DesktopCredentialTypeDevice {
+		verified := entry.Snapshot.AuthorityVerifiedAt
+		if verified.IsZero() || verified.After(time.Now()) || time.Since(verified) >= 55*time.Second {
+			return nil, false, nil
+		}
+	}
 	return s.snapshotToAPIKey(key, entry.Snapshot), true, nil
 }
 
@@ -336,21 +346,25 @@ func (s *APIKeyService) snapshotFromAPIKey(ctx context.Context, apiKey *APIKey) 
 		return nil
 	}
 	snapshot := &APIKeyAuthSnapshot{
-		DesktopManaged: apiKey.DesktopManaged,
-		Version:        apiKeyAuthSnapshotVersion,
-		APIKeyID:       apiKey.ID,
-		UserID:         apiKey.UserID,
-		GroupID:        apiKey.GroupID,
-		Name:           apiKey.Name,
-		Status:         apiKey.Status,
-		IPWhitelist:    apiKey.IPWhitelist,
-		IPBlacklist:    apiKey.IPBlacklist,
-		Quota:          apiKey.Quota,
-		QuotaUsed:      apiKey.QuotaUsed,
-		ExpiresAt:      apiKey.ExpiresAt,
-		RateLimit5h:    apiKey.RateLimit5h,
-		RateLimit1d:    apiKey.RateLimit1d,
-		RateLimit7d:    apiKey.RateLimit7d,
+		DesktopCredentialType: apiKey.DesktopCredentialType,
+		DesktopDeviceID:       apiKey.DesktopDeviceID,
+		DesktopKeyVersion:     apiKey.DesktopKeyVersion,
+		KeyHashType:           apiKey.KeyHashType,
+		DesktopManaged:        apiKey.DesktopManaged,
+		Version:               apiKeyAuthSnapshotVersion,
+		APIKeyID:              apiKey.ID,
+		UserID:                apiKey.UserID,
+		GroupID:               apiKey.GroupID,
+		Name:                  apiKey.Name,
+		Status:                apiKey.Status,
+		IPWhitelist:           apiKey.IPWhitelist,
+		IPBlacklist:           apiKey.IPBlacklist,
+		Quota:                 apiKey.Quota,
+		QuotaUsed:             apiKey.QuotaUsed,
+		ExpiresAt:             apiKey.ExpiresAt,
+		RateLimit5h:           apiKey.RateLimit5h,
+		RateLimit1d:           apiKey.RateLimit1d,
+		RateLimit7d:           apiKey.RateLimit7d,
 		User: APIKeyAuthUserSnapshot{
 			ID:                         apiKey.User.ID,
 			Status:                     apiKey.User.Status,
@@ -368,6 +382,9 @@ func (s *APIKeyService) snapshotFromAPIKey(ctx context.Context, apiKey *APIKey) 
 			TotalRecharged:             apiKey.User.TotalRecharged,
 			RPMLimit:                   apiKey.User.RPMLimit,
 		},
+	}
+	if apiKey.DesktopCredentialType == DesktopCredentialTypeDevice {
+		snapshot.AuthorityVerifiedAt = time.Now().UTC()
 	}
 
 	// 填充 (user, group) RPM override —— snapshot 构建时查一次 DB，后续请求零 DB 往返。
@@ -447,21 +464,25 @@ func (s *APIKeyService) snapshotToAPIKey(key string, snapshot *APIKeyAuthSnapsho
 		return nil
 	}
 	apiKey := &APIKey{
-		DesktopManaged: snapshot.DesktopManaged,
-		ID:             snapshot.APIKeyID,
-		UserID:         snapshot.UserID,
-		GroupID:        snapshot.GroupID,
-		Key:            key,
-		Name:           snapshot.Name,
-		Status:         snapshot.Status,
-		IPWhitelist:    snapshot.IPWhitelist,
-		IPBlacklist:    snapshot.IPBlacklist,
-		Quota:          snapshot.Quota,
-		QuotaUsed:      snapshot.QuotaUsed,
-		ExpiresAt:      snapshot.ExpiresAt,
-		RateLimit5h:    snapshot.RateLimit5h,
-		RateLimit1d:    snapshot.RateLimit1d,
-		RateLimit7d:    snapshot.RateLimit7d,
+		DesktopCredentialType: snapshot.DesktopCredentialType,
+		DesktopDeviceID:       snapshot.DesktopDeviceID,
+		DesktopKeyVersion:     snapshot.DesktopKeyVersion,
+		KeyHashType:           snapshot.KeyHashType,
+		DesktopManaged:        snapshot.DesktopManaged,
+		ID:                    snapshot.APIKeyID,
+		UserID:                snapshot.UserID,
+		GroupID:               snapshot.GroupID,
+		Key:                   key,
+		Name:                  snapshot.Name,
+		Status:                snapshot.Status,
+		IPWhitelist:           snapshot.IPWhitelist,
+		IPBlacklist:           snapshot.IPBlacklist,
+		Quota:                 snapshot.Quota,
+		QuotaUsed:             snapshot.QuotaUsed,
+		ExpiresAt:             snapshot.ExpiresAt,
+		RateLimit5h:           snapshot.RateLimit5h,
+		RateLimit1d:           snapshot.RateLimit1d,
+		RateLimit7d:           snapshot.RateLimit7d,
 		User: &User{
 			ID:                         snapshot.User.ID,
 			Status:                     snapshot.User.Status,

@@ -38,6 +38,7 @@ var (
 	integrationDB        *sql.DB
 	integrationEntClient *dbent.Client
 	integrationRedis     *redisclient.Client
+	integrationDSN       string
 
 	redisNamespaceSeq uint64
 )
@@ -90,6 +91,7 @@ func TestMain(m *testing.M) {
 		log.Printf("failed to get postgres dsn: %v", err)
 		os.Exit(1)
 	}
+	integrationDSN = dsn
 
 	integrationDB, err = openSQLWithRetry(ctx, dsn, 30*time.Second)
 	if err != nil {
@@ -151,6 +153,9 @@ func GetIntegrationEntClient() *dbent.Client {
 func GetIntegrationDB() *sql.DB {
 	return integrationDB
 }
+
+// GetIntegrationDSN is only compiled in integration tests and identifies the disposable container.
+func GetIntegrationDSN() string { return integrationDSN }
 
 func dockerIsAvailable(ctx context.Context) bool {
 	cmd := exec.CommandContext(ctx, "docker", "info")

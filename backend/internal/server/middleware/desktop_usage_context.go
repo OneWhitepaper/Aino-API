@@ -9,6 +9,9 @@ import (
 )
 
 func bindDesktopUsage(c *gin.Context, key *service.APIKey) (*service.APIKey, bool) {
+	if !bindDesktopOperation(c, key) {
+		return nil, false
+	}
 	headers := c.Request.Header
 	names := []string{"X-Aino-Session-Id", "X-Aino-Turn-Id", "X-Aino-Call-Id", "X-Aino-Purpose"}
 	values := make([]string, len(names))

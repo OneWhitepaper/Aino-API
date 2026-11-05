@@ -35,6 +35,8 @@ func RegisterDesktopRoutes(
 		desktop.GET("/models", h.Desktop.ListModels)
 		desktop.GET("/billing-summary", h.Desktop.BillingSummary)
 		desktop.POST("/credentials", h.Desktop.ProvisionCredential)
+		desktop.POST("/device-keys", h.Desktop.ProvisionDeviceKey)
+		desktop.GET("/device-keys/:device_id", h.Desktop.GetDeviceKey)
 		desktop.GET("/devices", h.Desktop.ListDevices)
 		desktop.DELETE("/devices/:device_id", h.Desktop.RevokeDevice)
 		desktop.POST("/diagnostics", h.Desktop.UploadDiagnostics)

@@ -34,6 +34,10 @@ func (APIKey) Mixin() []ent.Mixin {
 func (APIKey) Fields() []ent.Field {
 	return []ent.Field{
 		field.Bool("desktop_managed").Default(false).Immutable(),
+		field.String("desktop_credential_type").Default("").Immutable(),
+		field.String("desktop_device_id").Default("").Immutable(),
+		field.Int("desktop_key_version").Default(0),
+		field.String("key_hash_type").Default("").Immutable(),
 		field.Int64("user_id"),
 		field.String("key").
 			MaxLen(128).

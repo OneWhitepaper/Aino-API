@@ -82,6 +82,62 @@ func (_c *APIKeyCreate) SetNillableDesktopManaged(v *bool) *APIKeyCreate {
 	return _c
 }
 
+// SetDesktopCredentialType sets the "desktop_credential_type" field.
+func (_c *APIKeyCreate) SetDesktopCredentialType(v string) *APIKeyCreate {
+	_c.mutation.SetDesktopCredentialType(v)
+	return _c
+}
+
+// SetNillableDesktopCredentialType sets the "desktop_credential_type" field if the given value is not nil.
+func (_c *APIKeyCreate) SetNillableDesktopCredentialType(v *string) *APIKeyCreate {
+	if v != nil {
+		_c.SetDesktopCredentialType(*v)
+	}
+	return _c
+}
+
+// SetDesktopDeviceID sets the "desktop_device_id" field.
+func (_c *APIKeyCreate) SetDesktopDeviceID(v string) *APIKeyCreate {
+	_c.mutation.SetDesktopDeviceID(v)
+	return _c
+}
+
+// SetNillableDesktopDeviceID sets the "desktop_device_id" field if the given value is not nil.
+func (_c *APIKeyCreate) SetNillableDesktopDeviceID(v *string) *APIKeyCreate {
+	if v != nil {
+		_c.SetDesktopDeviceID(*v)
+	}
+	return _c
+}
+
+// SetDesktopKeyVersion sets the "desktop_key_version" field.
+func (_c *APIKeyCreate) SetDesktopKeyVersion(v int) *APIKeyCreate {
+	_c.mutation.SetDesktopKeyVersion(v)
+	return _c
+}
+
+// SetNillableDesktopKeyVersion sets the "desktop_key_version" field if the given value is not nil.
+func (_c *APIKeyCreate) SetNillableDesktopKeyVersion(v *int) *APIKeyCreate {
+	if v != nil {
+		_c.SetDesktopKeyVersion(*v)
+	}
+	return _c
+}
+
+// SetKeyHashType sets the "key_hash_type" field.
+func (_c *APIKeyCreate) SetKeyHashType(v string) *APIKeyCreate {
+	_c.mutation.SetKeyHashType(v)
+	return _c
+}
+
+// SetNillableKeyHashType sets the "key_hash_type" field if the given value is not nil.
+func (_c *APIKeyCreate) SetNillableKeyHashType(v *string) *APIKeyCreate {
+	if v != nil {
+		_c.SetKeyHashType(*v)
+	}
+	return _c
+}
+
 // SetUserID sets the "user_id" field.
 func (_c *APIKeyCreate) SetUserID(v int64) *APIKeyCreate {
 	_c.mutation.SetUserID(v)
@@ -417,6 +473,22 @@ func (_c *APIKeyCreate) defaults() error {
 		v := apikey.DefaultDesktopManaged
 		_c.mutation.SetDesktopManaged(v)
 	}
+	if _, ok := _c.mutation.DesktopCredentialType(); !ok {
+		v := apikey.DefaultDesktopCredentialType
+		_c.mutation.SetDesktopCredentialType(v)
+	}
+	if _, ok := _c.mutation.DesktopDeviceID(); !ok {
+		v := apikey.DefaultDesktopDeviceID
+		_c.mutation.SetDesktopDeviceID(v)
+	}
+	if _, ok := _c.mutation.DesktopKeyVersion(); !ok {
+		v := apikey.DefaultDesktopKeyVersion
+		_c.mutation.SetDesktopKeyVersion(v)
+	}
+	if _, ok := _c.mutation.KeyHashType(); !ok {
+		v := apikey.DefaultKeyHashType
+		_c.mutation.SetKeyHashType(v)
+	}
 	if _, ok := _c.mutation.Status(); !ok {
 		v := apikey.DefaultStatus
 		_c.mutation.SetStatus(v)
@@ -466,6 +538,18 @@ func (_c *APIKeyCreate) check() error {
 	}
 	if _, ok := _c.mutation.DesktopManaged(); !ok {
 		return &ValidationError{Name: "desktop_managed", err: errors.New(`ent: missing required field "APIKey.desktop_managed"`)}
+	}
+	if _, ok := _c.mutation.DesktopCredentialType(); !ok {
+		return &ValidationError{Name: "desktop_credential_type", err: errors.New(`ent: missing required field "APIKey.desktop_credential_type"`)}
+	}
+	if _, ok := _c.mutation.DesktopDeviceID(); !ok {
+		return &ValidationError{Name: "desktop_device_id", err: errors.New(`ent: missing required field "APIKey.desktop_device_id"`)}
+	}
+	if _, ok := _c.mutation.DesktopKeyVersion(); !ok {
+		return &ValidationError{Name: "desktop_key_version", err: errors.New(`ent: missing required field "APIKey.desktop_key_version"`)}
+	}
+	if _, ok := _c.mutation.KeyHashType(); !ok {
+		return &ValidationError{Name: "key_hash_type", err: errors.New(`ent: missing required field "APIKey.key_hash_type"`)}
 	}
 	if _, ok := _c.mutation.UserID(); !ok {
 		return &ValidationError{Name: "user_id", err: errors.New(`ent: missing required field "APIKey.user_id"`)}
@@ -563,6 +647,22 @@ func (_c *APIKeyCreate) createSpec() (*APIKey, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.DesktopManaged(); ok {
 		_spec.SetField(apikey.FieldDesktopManaged, field.TypeBool, value)
 		_node.DesktopManaged = value
+	}
+	if value, ok := _c.mutation.DesktopCredentialType(); ok {
+		_spec.SetField(apikey.FieldDesktopCredentialType, field.TypeString, value)
+		_node.DesktopCredentialType = value
+	}
+	if value, ok := _c.mutation.DesktopDeviceID(); ok {
+		_spec.SetField(apikey.FieldDesktopDeviceID, field.TypeString, value)
+		_node.DesktopDeviceID = value
+	}
+	if value, ok := _c.mutation.DesktopKeyVersion(); ok {
+		_spec.SetField(apikey.FieldDesktopKeyVersion, field.TypeInt, value)
+		_node.DesktopKeyVersion = value
+	}
+	if value, ok := _c.mutation.KeyHashType(); ok {
+		_spec.SetField(apikey.FieldKeyHashType, field.TypeString, value)
+		_node.KeyHashType = value
 	}
 	if value, ok := _c.mutation.Key(); ok {
 		_spec.SetField(apikey.FieldKey, field.TypeString, value)
@@ -781,6 +881,24 @@ func (u *APIKeyUpsert) UpdateDeletedAt() *APIKeyUpsert {
 // ClearDeletedAt clears the value of the "deleted_at" field.
 func (u *APIKeyUpsert) ClearDeletedAt() *APIKeyUpsert {
 	u.SetNull(apikey.FieldDeletedAt)
+	return u
+}
+
+// SetDesktopKeyVersion sets the "desktop_key_version" field.
+func (u *APIKeyUpsert) SetDesktopKeyVersion(v int) *APIKeyUpsert {
+	u.Set(apikey.FieldDesktopKeyVersion, v)
+	return u
+}
+
+// UpdateDesktopKeyVersion sets the "desktop_key_version" field to the value that was provided on create.
+func (u *APIKeyUpsert) UpdateDesktopKeyVersion() *APIKeyUpsert {
+	u.SetExcluded(apikey.FieldDesktopKeyVersion)
+	return u
+}
+
+// AddDesktopKeyVersion adds v to the "desktop_key_version" field.
+func (u *APIKeyUpsert) AddDesktopKeyVersion(v int) *APIKeyUpsert {
+	u.Add(apikey.FieldDesktopKeyVersion, v)
 	return u
 }
 
@@ -1137,6 +1255,15 @@ func (u *APIKeyUpsertOne) UpdateNewValues() *APIKeyUpsertOne {
 		if _, exists := u.create.mutation.DesktopManaged(); exists {
 			s.SetIgnore(apikey.FieldDesktopManaged)
 		}
+		if _, exists := u.create.mutation.DesktopCredentialType(); exists {
+			s.SetIgnore(apikey.FieldDesktopCredentialType)
+		}
+		if _, exists := u.create.mutation.DesktopDeviceID(); exists {
+			s.SetIgnore(apikey.FieldDesktopDeviceID)
+		}
+		if _, exists := u.create.mutation.KeyHashType(); exists {
+			s.SetIgnore(apikey.FieldKeyHashType)
+		}
 	}))
 	return u
 }
@@ -1200,6 +1327,27 @@ func (u *APIKeyUpsertOne) UpdateDeletedAt() *APIKeyUpsertOne {
 func (u *APIKeyUpsertOne) ClearDeletedAt() *APIKeyUpsertOne {
 	return u.Update(func(s *APIKeyUpsert) {
 		s.ClearDeletedAt()
+	})
+}
+
+// SetDesktopKeyVersion sets the "desktop_key_version" field.
+func (u *APIKeyUpsertOne) SetDesktopKeyVersion(v int) *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetDesktopKeyVersion(v)
+	})
+}
+
+// AddDesktopKeyVersion adds v to the "desktop_key_version" field.
+func (u *APIKeyUpsertOne) AddDesktopKeyVersion(v int) *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.AddDesktopKeyVersion(v)
+	})
+}
+
+// UpdateDesktopKeyVersion sets the "desktop_key_version" field to the value that was provided on create.
+func (u *APIKeyUpsertOne) UpdateDesktopKeyVersion() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateDesktopKeyVersion()
 	})
 }
 
@@ -1777,6 +1925,15 @@ func (u *APIKeyUpsertBulk) UpdateNewValues() *APIKeyUpsertBulk {
 			if _, exists := b.mutation.DesktopManaged(); exists {
 				s.SetIgnore(apikey.FieldDesktopManaged)
 			}
+			if _, exists := b.mutation.DesktopCredentialType(); exists {
+				s.SetIgnore(apikey.FieldDesktopCredentialType)
+			}
+			if _, exists := b.mutation.DesktopDeviceID(); exists {
+				s.SetIgnore(apikey.FieldDesktopDeviceID)
+			}
+			if _, exists := b.mutation.KeyHashType(); exists {
+				s.SetIgnore(apikey.FieldKeyHashType)
+			}
 		}
 	}))
 	return u
@@ -1841,6 +1998,27 @@ func (u *APIKeyUpsertBulk) UpdateDeletedAt() *APIKeyUpsertBulk {
 func (u *APIKeyUpsertBulk) ClearDeletedAt() *APIKeyUpsertBulk {
 	return u.Update(func(s *APIKeyUpsert) {
 		s.ClearDeletedAt()
+	})
+}
+
+// SetDesktopKeyVersion sets the "desktop_key_version" field.
+func (u *APIKeyUpsertBulk) SetDesktopKeyVersion(v int) *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetDesktopKeyVersion(v)
+	})
+}
+
+// AddDesktopKeyVersion adds v to the "desktop_key_version" field.
+func (u *APIKeyUpsertBulk) AddDesktopKeyVersion(v int) *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.AddDesktopKeyVersion(v)
+	})
+}
+
+// UpdateDesktopKeyVersion sets the "desktop_key_version" field to the value that was provided on create.
+func (u *APIKeyUpsertBulk) UpdateDesktopKeyVersion() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateDesktopKeyVersion()
 	})
 }
 

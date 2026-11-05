@@ -1,20 +1,24 @@
 package handler
 
 import (
+	"time"
+
+	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
-	"time"
 )
 
 type DesktopHandler struct {
-	users       *service.UserService
-	totp        *service.TotpService
-	models      *service.DesktopModelService
-	credentials *service.DesktopCredentialService
-	billing     *service.DesktopBillingService
-	diagnostics *service.DiagnosticsService
+	users           *service.UserService
+	totp            *service.TotpService
+	models          *service.DesktopModelService
+	credentials     *service.DesktopCredentialService
+	deviceKeys      *service.DesktopDeviceKeyService
+	deviceKeyPolicy config.DesktopDeviceKeysConfig
+	billing         *service.DesktopBillingService
+	diagnostics     *service.DiagnosticsService
 }
 
 func NewDesktopHandler(models *service.DesktopModelService) *DesktopHandler {
@@ -25,12 +29,14 @@ func (h *DesktopHandler) SetCredentialService(credentials *service.DesktopCreden
 	h.credentials = credentials
 }
 
-func ProvideDesktopHandler(models *service.DesktopModelService, credentials *service.DesktopCredentialService, users *service.UserService, totp *service.TotpService, billing *service.DesktopBillingService, diagnostics *service.DiagnosticsService) *DesktopHandler {
+func ProvideDesktopHandler(models *service.DesktopModelService, credentials *service.DesktopCredentialService, users *service.UserService, totp *service.TotpService, billing *service.DesktopBillingService, diagnostics *service.DiagnosticsService, deviceKeys *service.DesktopDeviceKeyService, cfg *config.Config) *DesktopHandler {
 	h := NewDesktopHandler(models)
 	h.SetCredentialService(credentials)
 	h.SetCredentialSecurity(users, totp)
 	h.SetBillingService(billing)
 	h.SetDiagnosticsService(diagnostics)
+	h.SetDeviceKeyService(deviceKeys)
+	h.SetDeviceKeyPolicy(cfg.DesktopDeviceKeys)
 	return h
 }
 
@@ -51,7 +57,10 @@ func (h *DesktopHandler) GetBootstrap(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
-	response.Success(c, bootstrap)
+	response.Success(c, struct {
+		*service.DesktopBootstrap
+		Capabilities map[string]int `json:"capabilities"`
+	}{bootstrap, map[string]int{"managed_device_key": 1}})
 }
 
 // ListModels keeps the legacy chat catalog unless the client opts into images.
@@ -139,6 +148,13 @@ func (h *DesktopHandler) ListDevices(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
+	if h.deviceKeys != nil {
+		devices, err = h.deviceKeys.MergeDevices(c.Request.Context(), subject.UserID, devices)
+		if err != nil {
+			response.ErrorFrom(c, err)
+			return
+		}
+	}
 	response.Success(c, devices)
 }
 
@@ -170,7 +186,7 @@ func (h *DesktopHandler) RevokeDevice(c *gin.Context) {
 		response.ErrorFrom(c, service.ErrRecentAuthenticationRequired)
 		return
 	}
-	if err := h.credentials.RevokeDevice(c.Request.Context(), subject.UserID, c.Param("device_id")); err != nil {
+	if err := h.revokeDesktopDevice(c.Request.Context(), subject.UserID, c.Param("device_id")); err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}

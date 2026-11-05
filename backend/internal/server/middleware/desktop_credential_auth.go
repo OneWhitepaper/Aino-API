@@ -10,6 +10,9 @@ import (
 )
 
 func enforceDesktopCredential(c *gin.Context, keys *service.APIKeyService, key *service.APIKey) bool {
+	if key.DesktopCredentialType == service.DesktopCredentialTypeDevice {
+		return enforceDesktopDeviceScope(c)
+	}
 	if !key.DesktopManaged {
 		return true
 	}

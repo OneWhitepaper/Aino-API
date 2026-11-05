@@ -101,6 +101,7 @@ type Config struct {
 	Concurrency             ConcurrencyConfig             `mapstructure:"concurrency"`
 	TokenRefresh            TokenRefreshConfig            `mapstructure:"token_refresh"`
 	SMS                     SMSConfig                     `mapstructure:"sms"`
+	DesktopDeviceKeys       DesktopDeviceKeysConfig       `mapstructure:"desktop_device_keys"`
 	SimpleMode              SimpleModeConfig              `mapstructure:"simple_mode" yaml:"simple_mode"`
 	RunMode                 string                        `mapstructure:"run_mode" yaml:"run_mode"`
 	Timezone                string                        `mapstructure:"timezone"` // e.g. "Asia/Shanghai", "UTC"
@@ -2053,6 +2054,11 @@ func load(allowMissingJWTSecret bool) (*Config, error) {
 	if err := viper.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("unmarshal config error: %w", err)
 	}
+	deviceKeyPolicy, err := loadDesktopDeviceKeysConfig(viper.Get("desktop_device_keys"))
+	if err != nil {
+		return nil, err
+	}
+	cfg.DesktopDeviceKeys = deviceKeyPolicy
 	if trustedProxiesEnvConfigured {
 		cfg.Server.TrustedProxies = normalizeStringSlice(strings.Split(trustedProxiesEnv, ","))
 	}
@@ -2527,6 +2533,10 @@ func setDefaults() {
 	// TOTP
 	viper.SetDefault("totp.encryption_key", "")
 
+	// Permanent device-Key issuance requires an explicit deployment opt-in.
+	viper.SetDefault("desktop_device_keys.enabled", false)
+	viper.SetDefault("desktop_device_keys.rollout_allowlist", []any{})
+
 	// SMS 默认配置
 	viper.SetDefault("sms.enabled", false)
 	viper.SetDefault("sms.rollout_phone_allowlist", []string{})
@@ -2930,6 +2940,9 @@ func setEnvReachableDefaults() {
 }
 
 func (c *Config) Validate() error {
+	if err := c.DesktopDeviceKeys.Validate(); err != nil {
+		return err
+	}
 	if err := validateSMSConfig(c.SMS, c.Server.Mode); err != nil {
 		return err
 	}

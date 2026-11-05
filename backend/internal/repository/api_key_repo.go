@@ -45,6 +45,10 @@ func (r *apiKeyRepository) activeQuery() *dbent.APIKeyQuery {
 func (r *apiKeyRepository) Create(ctx context.Context, key *service.APIKey) error {
 	builder := r.client.APIKey.Create().
 		SetDesktopManaged(key.DesktopManaged).
+		SetDesktopCredentialType(key.DesktopCredentialType).
+		SetDesktopDeviceID(key.DesktopDeviceID).
+		SetDesktopKeyVersion(key.DesktopKeyVersion).
+		SetKeyHashType(key.KeyHashType).
 		SetUserID(key.UserID).
 		SetKey(key.Key).
 		SetName(key.Name).
@@ -111,7 +115,7 @@ func (r *apiKeyRepository) GetKeyAndOwnerID(ctx context.Context, id int64) (stri
 
 func (r *apiKeyRepository) GetByKey(ctx context.Context, key string) (*service.APIKey, error) {
 	m, err := r.activeQuery().
-		Where(apikey.KeyEQ(key)).
+		Where(apiKeyCredentialPredicate(key)).
 		WithUser(func(q *dbent.UserQuery) {
 			q.WithAllowedGroups(func(gq *dbent.GroupQuery) {
 				gq.Select(group.FieldID)
@@ -130,9 +134,13 @@ func (r *apiKeyRepository) GetByKey(ctx context.Context, key string) (*service.A
 
 func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*service.APIKey, error) {
 	m, err := r.activeQuery().
-		Where(apikey.KeyEQ(key)).
+		Where(apiKeyCredentialPredicate(key)).
 		Select(
 			apikey.FieldDesktopManaged,
+			apikey.FieldDesktopCredentialType,
+			apikey.FieldDesktopDeviceID,
+			apikey.FieldDesktopKeyVersion,
+			apikey.FieldKeyHashType,
 			apikey.FieldID,
 			apikey.FieldUserID,
 			apikey.FieldGroupID,
@@ -814,11 +822,11 @@ func (r *apiKeyRepository) IncrementQuotaUsedAndGetState(ctx context.Context, id
 			END,
 			updated_at = NOW()
 		WHERE id = $3 AND deleted_at IS NULL
-		RETURNING quota_used, quota, key, status
+		RETURNING quota_used, quota, key, status, key_hash_type
 	`
 
 	state := &service.APIKeyQuotaUsageState{}
-	if err := scanSingleRow(ctx, r.sql, query, []any{amount, service.StatusAPIKeyQuotaExhausted, id}, &state.QuotaUsed, &state.Quota, &state.Key, &state.Status); err != nil {
+	if err := scanSingleRow(ctx, r.sql, query, []any{amount, service.StatusAPIKeyQuotaExhausted, id}, &state.QuotaUsed, &state.Quota, &state.Key, &state.Status, &state.KeyHashType); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, service.ErrAPIKeyNotFound
 		}
@@ -905,30 +913,35 @@ func apiKeyEntityToService(m *dbent.APIKey) *service.APIKey {
 		return nil
 	}
 	out := &service.APIKey{
-		DesktopManaged: m.DesktopManaged,
-		ID:             m.ID,
-		UserID:         m.UserID,
-		Key:            m.Key,
-		Name:           m.Name,
-		Status:         m.Status,
-		IPWhitelist:    m.IPWhitelist,
-		IPBlacklist:    m.IPBlacklist,
-		LastUsedAt:     m.LastUsedAt,
-		CreatedAt:      m.CreatedAt,
-		UpdatedAt:      m.UpdatedAt,
-		GroupID:        m.GroupID,
-		Quota:          m.Quota,
-		QuotaUsed:      m.QuotaUsed,
-		ExpiresAt:      m.ExpiresAt,
-		RateLimit5h:    m.RateLimit5h,
-		RateLimit1d:    m.RateLimit1d,
-		RateLimit7d:    m.RateLimit7d,
-		Usage5h:        m.Usage5h,
-		Usage1d:        m.Usage1d,
-		Usage7d:        m.Usage7d,
-		Window5hStart:  m.Window5hStart,
-		Window1dStart:  m.Window1dStart,
-		Window7dStart:  m.Window7dStart,
+		DesktopCredentialType: m.DesktopCredentialType,
+		DesktopDeviceID:       m.DesktopDeviceID,
+		DesktopKeyVersion:     m.DesktopKeyVersion,
+		KeyHashType:           m.KeyHashType,
+		DeletedAt:             m.DeletedAt,
+		DesktopManaged:        m.DesktopManaged,
+		ID:                    m.ID,
+		UserID:                m.UserID,
+		Key:                   m.Key,
+		Name:                  m.Name,
+		Status:                m.Status,
+		IPWhitelist:           m.IPWhitelist,
+		IPBlacklist:           m.IPBlacklist,
+		LastUsedAt:            m.LastUsedAt,
+		CreatedAt:             m.CreatedAt,
+		UpdatedAt:             m.UpdatedAt,
+		GroupID:               m.GroupID,
+		Quota:                 m.Quota,
+		QuotaUsed:             m.QuotaUsed,
+		ExpiresAt:             m.ExpiresAt,
+		RateLimit5h:           m.RateLimit5h,
+		RateLimit1d:           m.RateLimit1d,
+		RateLimit7d:           m.RateLimit7d,
+		Usage5h:               m.Usage5h,
+		Usage1d:               m.Usage1d,
+		Usage7d:               m.Usage7d,
+		Window5hStart:         m.Window5hStart,
+		Window1dStart:         m.Window1dStart,
+		Window7dStart:         m.Window7dStart,
 	}
 	if m.Edges.User != nil {
 		out.User = userEntityToService(m.Edges.User)

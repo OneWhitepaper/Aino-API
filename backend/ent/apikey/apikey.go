@@ -23,6 +23,14 @@ const (
 	FieldDeletedAt = "deleted_at"
 	// FieldDesktopManaged holds the string denoting the desktop_managed field in the database.
 	FieldDesktopManaged = "desktop_managed"
+	// FieldDesktopCredentialType holds the string denoting the desktop_credential_type field in the database.
+	FieldDesktopCredentialType = "desktop_credential_type"
+	// FieldDesktopDeviceID holds the string denoting the desktop_device_id field in the database.
+	FieldDesktopDeviceID = "desktop_device_id"
+	// FieldDesktopKeyVersion holds the string denoting the desktop_key_version field in the database.
+	FieldDesktopKeyVersion = "desktop_key_version"
+	// FieldKeyHashType holds the string denoting the key_hash_type field in the database.
+	FieldKeyHashType = "key_hash_type"
 	// FieldUserID holds the string denoting the user_id field in the database.
 	FieldUserID = "user_id"
 	// FieldKey holds the string denoting the key field in the database.
@@ -110,6 +118,10 @@ var Columns = []string{
 	FieldUpdatedAt,
 	FieldDeletedAt,
 	FieldDesktopManaged,
+	FieldDesktopCredentialType,
+	FieldDesktopDeviceID,
+	FieldDesktopKeyVersion,
+	FieldKeyHashType,
 	FieldUserID,
 	FieldKey,
 	FieldName,
@@ -158,6 +170,14 @@ var (
 	UpdateDefaultUpdatedAt func() time.Time
 	// DefaultDesktopManaged holds the default value on creation for the "desktop_managed" field.
 	DefaultDesktopManaged bool
+	// DefaultDesktopCredentialType holds the default value on creation for the "desktop_credential_type" field.
+	DefaultDesktopCredentialType string
+	// DefaultDesktopDeviceID holds the default value on creation for the "desktop_device_id" field.
+	DefaultDesktopDeviceID string
+	// DefaultDesktopKeyVersion holds the default value on creation for the "desktop_key_version" field.
+	DefaultDesktopKeyVersion int
+	// DefaultKeyHashType holds the default value on creation for the "key_hash_type" field.
+	DefaultKeyHashType string
 	// KeyValidator is a validator for the "key" field. It is called by the builders before save.
 	KeyValidator func(string) error
 	// NameValidator is a validator for the "name" field. It is called by the builders before save.
@@ -210,6 +230,26 @@ func ByDeletedAt(opts ...sql.OrderTermOption) OrderOption {
 // ByDesktopManaged orders the results by the desktop_managed field.
 func ByDesktopManaged(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDesktopManaged, opts...).ToFunc()
+}
+
+// ByDesktopCredentialType orders the results by the desktop_credential_type field.
+func ByDesktopCredentialType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDesktopCredentialType, opts...).ToFunc()
+}
+
+// ByDesktopDeviceID orders the results by the desktop_device_id field.
+func ByDesktopDeviceID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDesktopDeviceID, opts...).ToFunc()
+}
+
+// ByDesktopKeyVersion orders the results by the desktop_key_version field.
+func ByDesktopKeyVersion(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDesktopKeyVersion, opts...).ToFunc()
+}
+
+// ByKeyHashType orders the results by the key_hash_type field.
+func ByKeyHashType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldKeyHashType, opts...).ToFunc()
 }
 
 // ByUserID orders the results by the user_id field.

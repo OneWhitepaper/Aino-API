@@ -28,6 +28,14 @@ type APIKey struct {
 	DeletedAt *time.Time `json:"deleted_at,omitempty"`
 	// DesktopManaged holds the value of the "desktop_managed" field.
 	DesktopManaged bool `json:"desktop_managed,omitempty"`
+	// DesktopCredentialType holds the value of the "desktop_credential_type" field.
+	DesktopCredentialType string `json:"desktop_credential_type,omitempty"`
+	// DesktopDeviceID holds the value of the "desktop_device_id" field.
+	DesktopDeviceID string `json:"desktop_device_id,omitempty"`
+	// DesktopKeyVersion holds the value of the "desktop_key_version" field.
+	DesktopKeyVersion int `json:"desktop_key_version,omitempty"`
+	// KeyHashType holds the value of the "key_hash_type" field.
+	KeyHashType string `json:"key_hash_type,omitempty"`
 	// UserID holds the value of the "user_id" field.
 	UserID int64 `json:"user_id,omitempty"`
 	// Key holds the value of the "key" field.
@@ -140,9 +148,9 @@ func (*APIKey) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case apikey.FieldQuota, apikey.FieldQuotaUsed, apikey.FieldRateLimit5h, apikey.FieldRateLimit1d, apikey.FieldRateLimit7d, apikey.FieldUsage5h, apikey.FieldUsage1d, apikey.FieldUsage7d:
 			values[i] = new(sql.NullFloat64)
-		case apikey.FieldID, apikey.FieldUserID, apikey.FieldGroupID:
+		case apikey.FieldID, apikey.FieldDesktopKeyVersion, apikey.FieldUserID, apikey.FieldGroupID:
 			values[i] = new(sql.NullInt64)
-		case apikey.FieldKey, apikey.FieldName, apikey.FieldStatus:
+		case apikey.FieldDesktopCredentialType, apikey.FieldDesktopDeviceID, apikey.FieldKeyHashType, apikey.FieldKey, apikey.FieldName, apikey.FieldStatus:
 			values[i] = new(sql.NullString)
 		case apikey.FieldCreatedAt, apikey.FieldUpdatedAt, apikey.FieldDeletedAt, apikey.FieldLastUsedAt, apikey.FieldExpiresAt, apikey.FieldWindow5hStart, apikey.FieldWindow1dStart, apikey.FieldWindow7dStart:
 			values[i] = new(sql.NullTime)
@@ -191,6 +199,30 @@ func (_m *APIKey) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field desktop_managed", values[i])
 			} else if value.Valid {
 				_m.DesktopManaged = value.Bool
+			}
+		case apikey.FieldDesktopCredentialType:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field desktop_credential_type", values[i])
+			} else if value.Valid {
+				_m.DesktopCredentialType = value.String
+			}
+		case apikey.FieldDesktopDeviceID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field desktop_device_id", values[i])
+			} else if value.Valid {
+				_m.DesktopDeviceID = value.String
+			}
+		case apikey.FieldDesktopKeyVersion:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field desktop_key_version", values[i])
+			} else if value.Valid {
+				_m.DesktopKeyVersion = int(value.Int64)
+			}
+		case apikey.FieldKeyHashType:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field key_hash_type", values[i])
+			} else if value.Valid {
+				_m.KeyHashType = value.String
 			}
 		case apikey.FieldUserID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -391,6 +423,18 @@ func (_m *APIKey) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("desktop_managed=")
 	builder.WriteString(fmt.Sprintf("%v", _m.DesktopManaged))
+	builder.WriteString(", ")
+	builder.WriteString("desktop_credential_type=")
+	builder.WriteString(_m.DesktopCredentialType)
+	builder.WriteString(", ")
+	builder.WriteString("desktop_device_id=")
+	builder.WriteString(_m.DesktopDeviceID)
+	builder.WriteString(", ")
+	builder.WriteString("desktop_key_version=")
+	builder.WriteString(fmt.Sprintf("%v", _m.DesktopKeyVersion))
+	builder.WriteString(", ")
+	builder.WriteString("key_hash_type=")
+	builder.WriteString(_m.KeyHashType)
 	builder.WriteString(", ")
 	builder.WriteString("user_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.UserID))

@@ -11,9 +11,37 @@ func (s *APIKeyService) InvalidateAuthCacheByKey(ctx context.Context, key string
 	s.deleteAuthCache(ctx, cacheKey)
 }
 
+func (s *APIKeyService) InvalidateAuthCacheByStoredKey(ctx context.Context, key, hashType string) {
+	if key != "" {
+		s.deleteAuthCache(ctx, APIKeyAuthCacheIndex(key, hashType))
+	}
+}
+
+func invalidateStoredAPIKey(ctx context.Context, invalidator interface{ InvalidateAuthCacheByKey(context.Context, string) }, key *APIKey) {
+	if typed, ok := invalidator.(interface {
+		InvalidateAuthCacheByStoredKey(context.Context, string, string)
+	}); ok {
+		typed.InvalidateAuthCacheByStoredKey(ctx, key.Key, key.KeyHashType)
+		return
+	}
+	invalidator.InvalidateAuthCacheByKey(ctx, key.Key)
+}
+
 // InvalidateAuthCacheByUserID 清除用户相关的 API Key 认证缓存
 func (s *APIKeyService) InvalidateAuthCacheByUserID(ctx context.Context, userID int64) {
+	s.InvalidateDesktopCatalogProjection(userID)
 	if userID <= 0 {
+		return
+	}
+	if repo, ok := s.apiKeyRepo.(interface {
+		ListAuthCacheIndexesByUserID(context.Context, int64) ([]string, error)
+	}); ok {
+		indexes, err := repo.ListAuthCacheIndexesByUserID(ctx, userID)
+		if err == nil {
+			for _, index := range indexes {
+				s.deleteAuthCache(ctx, index)
+			}
+		}
 		return
 	}
 	keys, err := s.apiKeyRepo.ListKeysByUserID(ctx, userID)
@@ -26,6 +54,17 @@ func (s *APIKeyService) InvalidateAuthCacheByUserID(ctx context.Context, userID 
 // InvalidateAuthCacheByGroupID 清除分组相关的 API Key 认证缓存
 func (s *APIKeyService) InvalidateAuthCacheByGroupID(ctx context.Context, groupID int64) {
 	if groupID <= 0 {
+		return
+	}
+	if repo, ok := s.apiKeyRepo.(interface {
+		ListAuthCacheIndexesByGroupID(context.Context, int64) ([]string, error)
+	}); ok {
+		indexes, err := repo.ListAuthCacheIndexesByGroupID(ctx, groupID)
+		if err == nil {
+			for _, index := range indexes {
+				s.deleteAuthCache(ctx, index)
+			}
+		}
 		return
 	}
 	keys, err := s.apiKeyRepo.ListKeysByGroupID(ctx, groupID)

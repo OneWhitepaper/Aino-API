@@ -141,7 +141,7 @@
           <template #cell-key="{ value, row }">
             <div class="flex items-center gap-2">
               <code class="code text-xs">
-                {{ row.desktop_managed ? t('keys.desktopManaged') : maskApiKey(value) }}
+                {{ row.desktop_managed ? t(isDeviceKey(row) ? 'keys.desktopDeviceKey' : 'keys.desktopTemporaryKey') : maskApiKey(value) }}
               </code>
               <button
                 v-if="!row.desktop_managed"
@@ -176,6 +176,9 @@
                 :title="t('keys.ipRestrictionEnabled')"
               />
             </div>
+            <span v-if="isDeviceKey(row) && row.desktop_device_id" class="mt-1 block font-mono text-xs text-gray-500 dark:text-dark-400" :title="row.desktop_device_id">
+              {{ t('keys.desktopDevice') }} · {{ row.desktop_device_id.slice(0, 8) }}
+            </span>
           </template>
 
           <template #cell-group="{ row }">
@@ -200,7 +203,7 @@
                   :peak-rate-multiplier="row.group.peak_rate_multiplier"
                 />
                 <span v-else class="text-sm text-gray-400 dark:text-dark-500">{{
-                  t('keys.noGroup')
+                  t(isDeviceKey(row) ? 'keys.desktopRequestBilling' : 'keys.noGroup')
                 }}</span>
                 <span v-if="!row.desktop_managed" class="text-xs text-gray-500 dark:text-gray-400">{{ t('keys.selectGroup') }}</span>
                 <svg
@@ -376,14 +379,14 @@
             <span v-else class="text-sm text-gray-400 dark:text-dark-500">-</span>
           </template>
 
-          <template #cell-expires_at="{ value }">
+          <template #cell-expires_at="{ value, row }">
             <span v-if="value" :class="[
               'text-sm',
               new Date(value) < new Date() ? 'text-red-500 dark:text-red-400' : 'text-gray-500 dark:text-dark-400'
             ]">
               {{ formatDateTime(value) }}
             </span>
-            <span v-else class="text-sm text-gray-400 dark:text-dark-500">{{ t('keys.noExpiration') }}</span>
+            <span v-else class="text-sm text-gray-400 dark:text-dark-500">{{ t(isDeviceKey(row) ? 'keys.desktopLongLived' : 'keys.noExpiration') }}</span>
           </template>
 
           <template #cell-status="{ row }">
@@ -466,7 +469,7 @@
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
               >
                 <Icon name="trash" size="sm" />
-                <span class="text-xs">{{ t('common.delete') }}</span>
+                <span class="text-xs">{{ t(isDeviceKey(row) ? 'keys.revokeDevice' : 'common.delete') }}</span>
               </button>
             </div>
           </template>
@@ -1072,9 +1075,9 @@
     <!-- Delete Confirmation Dialog -->
     <ConfirmDialog
       :show="showDeleteDialog"
-      :title="t('keys.deleteKey')"
-      :message="t('keys.deleteConfirmMessage', { name: selectedKey?.name })"
-      :confirm-text="t('common.delete')"
+      :title="t(selectedKey && isDeviceKey(selectedKey) ? 'keys.revokeDevice' : 'keys.deleteKey')"
+      :message="t(selectedKey && isDeviceKey(selectedKey) ? 'keys.revokeDeviceConfirm' : 'keys.deleteConfirmMessage', { name: selectedKey?.name })"
+      :confirm-text="t(selectedKey && isDeviceKey(selectedKey) ? 'keys.revokeDevice' : 'common.delete')"
       :cancel-text="t('common.cancel')"
       :danger="true"
       @confirm="handleDelete"
@@ -1396,6 +1399,7 @@ const columns = computed<Column[]>(() =>
 )
 
 const apiKeys = ref<ApiKey[]>([])
+const isDeviceKey = (key: ApiKey) => key.desktop_managed === true && key.desktop_credential_type === 'device'
 const selectedIds = ref<number[]>([])
 const showBulkEditModal = ref(false)
 const isKeySelectable = (key: ApiKey) => !key.desktop_managed
@@ -1418,8 +1422,10 @@ const groups = ref<Group[]>([])
 const loading = ref(false)
 const submitting = ref(false)
 const now = ref(new Date())
-const keyDisplayStatus = (key: ApiKey): ApiKey['status'] =>
-  key.status === 'active' && key.expires_at && new Date(key.expires_at) <= now.value
+const keyDisplayStatus = (key: ApiKey): ApiKey['status'] | 'revoked' =>
+  isDeviceKey(key) && (key.status === 'disabled' || key.status === 'inactive')
+    ? 'revoked'
+    : key.status === 'active' && key.expires_at && new Date(key.expires_at) <= now.value
     ? 'expired'
     : key.status
 let resetTimer: ReturnType<typeof setInterval> | null = null
@@ -1771,7 +1777,7 @@ const editKey = (key: ApiKey) => {
   formData.value = {
     name: key.name,
     group_id: key.group_id,
-    status: key.status === 'quota_exhausted' || key.status === 'expired' ? 'inactive' : key.status,
+    status: key.status === 'active' ? 'active' : 'inactive',
     use_custom_key: false,
     custom_key: '',
     enable_ip_restriction: hasIPRestriction,

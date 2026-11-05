@@ -299,8 +299,21 @@ func (s *httpUpstreamService) DoWithTLS(req *http.Request, proxyURL string, acco
 // doUpstreamRequest owns cancellation for one attempt, without cancelling the
 // caller's context (which may be detached for billing or reused for retries).
 func doUpstreamRequest(client *http.Client, req *http.Request) (*http.Response, error) {
+	if req.Method != http.MethodGet && req.Method != http.MethodHead {
+		if err := service.BeginDesktopInferenceDispatch(req.Context()); err != nil {
+			return nil, err
+		}
+	}
 	ctx, cancel := context.WithCancel(req.Context())
-	resp, err := servertiming.Do(client, req.WithContext(ctx))
+	attempt := req.WithContext(ctx)
+	if service.DesktopInferenceOperationID(ctx) != "" && req.Method != http.MethodGet && req.Method != http.MethodHead {
+		// Redirects and transparent body replay must not create a second paid call.
+		copy := *client
+		copy.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+		client = &copy
+		attempt.GetBody = nil
+	}
+	resp, err := servertiming.Do(client, attempt)
 	if err != nil {
 		cancel()
 		return resp, err

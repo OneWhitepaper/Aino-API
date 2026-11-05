@@ -89,6 +89,20 @@ webauthn:
   rp_origins: []
 
 # =============================================================================
+# Permanent Desktop Device Keys
+# =============================================================================
+# Permanent desktop device-Key issuance is deployment-owned and off by default.
+# Closing this gate preserves existing Key use, metadata lookup and revocation.
+# To canary, enable and list exact account/device pairs. enabled: true plus an
+# empty allowlist opens issuance to all authenticated users; it is not a pause.
+desktop_device_keys:
+  enabled: false
+  rollout_allowlist: []
+  # - user_id: 123
+  #   device_id: "00000000-0000-4000-8000-000000000001"
+
+
+# =============================================================================
 # SMS Verification Configuration
 # 短信验证配置
 # =============================================================================

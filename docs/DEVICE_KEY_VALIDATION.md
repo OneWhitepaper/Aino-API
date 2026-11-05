@@ -20,7 +20,7 @@ CI=1 go test -tags=integration,nativeconsumer ./internal/repository \
   -aino-preflight-server=/tmp/aino-device-validation-server
 ```
 
-The root verification completed in 102.273 seconds with five parent tests passing
+The root verification completed in 103.318 seconds with seven parent tests passing
 and no skips. The reliability and subscription-lifecycle fixtures use disposable
 PostgreSQL and Redis containers, two real API processes, synthetic users/packages,
 and loopback simulated providers. The additional billing/catalog tests use
@@ -35,6 +35,8 @@ real model providers.
 | Debit order | Subscription options debit their own package; wallet options debit balance. Zero balance does not block an eligible subscription. |
 | Exhaustion | Exhausted text allowance does not consume the image package. Exhausted packages reject even with wallet funds and a configured fallback group; a wallet option must be selected explicitly. |
 | Counters | Daily, weekly and monthly usage are attributed to the correct subscription. Daily-limit exhaustion is covered. |
+| Weekly/monthly exhaustion | Independent text/image caps reject on both instances with funded wallet and configured fallback, retaining exact package counters and settled row ownership. |
+| Window reset | Synthetic stale daily/weekly/monthly anchors reset only the elapsed counter; other counters and the other package are retained. A second instance adds rather than erases the first charge. Daily uses UTC midnight in this fixture; weekly/monthly use rolling 7-day/30-day anchors. |
 | Expiry | Two warmed API instances reject packages after a synthetic 20-second expiry, while explicit wallet options remain usable with the same key. Startup precedes expiry assignment and warm-up margin is checked. |
 | Concurrent HTTP | Existing 48-request batch has zero errors; added 16-request matrix covers two processes, four routes and two calls per route/process, with exact settled row counts and monetary ownership. |
 | Revocation | Both warmed instances deny the revoked key. Explicit reauthorization changes the secret and restores access on both instances. |
@@ -42,8 +44,14 @@ real model providers.
 | Settlement replay | For wallet and subscription, 24 simultaneous `Apply` callers apply once; after archival, 24 further callers apply zero times. Fingerprint conflicts are rejected without changing money or counters. |
 | Logical HTTP replay | **Fails the desired no-double-charge condition:** identical payload and logical/correlation headers sent to two instances execute upstream twice and settle twice, for all four wallet/subscription text/image routes. |
 
-In the last combined run, the 48-request batch had p95 121.512 ms and the added
-16-request matrix had p95 55.266 ms. These small loopback batches are correctness
+The additional window tests passed independently in 8.347 seconds, with five
+scenarios, 18 accepted requests and 20 rejected requests. They seed timestamps
+after both processes start and gate setup on the existing test deadline to avoid
+an unintended UTC midnight crossing. These are synthetic timestamp checks, not
+real elapsed-day/week/month observation.
+
+In the last combined run, the 48-request batch had p95 102.679 ms and the added
+16-request matrix had p95 55.326 ms. These small loopback batches are correctness
 checks, not production capacity measurements.
 
 ## Retry boundary
@@ -72,9 +80,9 @@ two-instance fault test where upstream acceptance precedes response loss.
 
 ## Limits and separate operational evidence
 
-These tests do not cover weekly/monthly limit exhaustion, real calendar rollover,
-real 365-day retention, archive cleanup racing the first settlement, database or
-Redis outages, crash recovery during settlement, sustained load, or a real
+These tests do not cover live-cache real midnight/time-zone/DST rollover,
+concurrent reset races, real 365-day retention, archive cleanup racing the first
+settlement, database or Redis outages, crash recovery during settlement, sustained load, or a real
 24-hour usage cycle. Synthetic expiry and archived timestamps are not elapsed-time
 evidence. Production observation receipts belong in private deployment records;
 this test report contains only synthetic-account results.

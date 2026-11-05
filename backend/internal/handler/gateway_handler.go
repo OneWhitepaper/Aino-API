@@ -368,7 +368,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 					)
 					message := cls.Message
 					if !cls.ModelNotFound {
-						message = "No available accounts: " + err.Error()
+						message = service.UpstreamServiceUnavailableMessage
 					}
 					h.handleStreamingAwareError(c, cls.Status, cls.ErrType, message, streamStarted)
 					return
@@ -420,7 +420,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 						zap.String("model", reqModel),
 						zap.String("platform", platform),
 					)
-					h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "No available accounts", streamStarted)
+					h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", service.UpstreamServiceUnavailableMessage, streamStarted)
 					return
 				}
 				accountWaitCounted := false
@@ -700,7 +700,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 					)
 					message := cls.Message
 					if !cls.ModelNotFound {
-						message = "No available accounts: " + err.Error()
+						message = service.UpstreamServiceUnavailableMessage
 					}
 					h.handleStreamingAwareError(c, cls.Status, cls.ErrType, message, streamStarted)
 					return
@@ -762,7 +762,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 						zap.String("model", reqModel),
 						zap.String("platform", platform),
 					)
-					h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "No available accounts", streamStarted)
+					h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", service.UpstreamServiceUnavailableMessage, streamStarted)
 					return
 				}
 				accountWaitCounted := false
@@ -1923,6 +1923,10 @@ func (h *GatewayHandler) handleConcurrencyError(c *gin.Context, err error, slotT
 }
 
 func (h *GatewayHandler) handleFailoverExhausted(c *gin.Context, failoverErr *service.UpstreamFailoverError, platform string, streamStarted bool) {
+	if recordUpstreamBalanceFailure(c, failoverErr) {
+		h.handleStreamingAwareErrorWithCode(c, http.StatusServiceUnavailable, "upstream_error", service.UpstreamServiceUnavailableCode, service.UpstreamServiceUnavailableMessage, streamStarted)
+		return
+	}
 	statusCode := failoverErr.StatusCode
 	responseBody := failoverErr.ResponseBody
 	if service.IsOpenAISilentRefusalErrorBody(responseBody) {

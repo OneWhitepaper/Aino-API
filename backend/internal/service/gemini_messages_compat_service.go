@@ -1820,6 +1820,13 @@ func (s *GeminiMessagesCompatService) writeGeminiNativeUpstreamError(c *gin.Cont
 	respBody = unwrapIfNeeded(isOAuth, respBody)
 	upstreamMsg := s.recordGeminiNativeUpstreamError(c, account, resp.StatusCode, respBody, requestID)
 
+	if IsUpstreamBalanceError(resp.StatusCode, respBody) {
+		RecordUpstreamBalanceError(c, resp.StatusCode, respBody)
+		MarkResponseCommitted(c)
+		_ = s.writeGoogleError(c, http.StatusServiceUnavailable, UpstreamServiceUnavailableMessage)
+		return fmt.Errorf("gemini upstream error: %d message=%s", resp.StatusCode, upstreamMsg)
+	}
+
 	contentType := resp.Header.Get("Content-Type")
 	if contentType == "" {
 		contentType = "application/json"
@@ -1923,6 +1930,12 @@ func (s *GeminiMessagesCompatService) writeGeminiMappedError(c *gin.Context, acc
 
 	if s.cfg != nil && s.cfg.Gateway.LogUpstreamErrorBody {
 		logger.LegacyPrintf("service.gemini_messages_compat", "[Gemini] upstream error %d: %s", upstreamStatus, truncateForLog(body, s.cfg.Gateway.LogUpstreamErrorBodyMaxBytes))
+	}
+
+	if IsUpstreamBalanceError(upstreamStatus, body) {
+		RecordUpstreamBalanceError(c, upstreamStatus, body)
+		_ = s.writeClaudeError(c, http.StatusServiceUnavailable, "upstream_error", UpstreamServiceUnavailableMessage)
+		return fmt.Errorf("gemini upstream error: %d message=%s", upstreamStatus, upstreamMsg)
 	}
 
 	if status, errType, errMsg, matched := applyErrorPassthroughRule(

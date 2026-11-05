@@ -3250,7 +3250,7 @@ func (s *AccountTestService) testOpenAIImageOAuth(c *gin.Context, ctx context.Co
 		results, err = parseCodexDirectImagesResponse(body)
 	} else {
 		if upstreamErr := extractOpenAIImagesUpstreamError(body); upstreamErr != nil {
-			return s.sendErrorAndEnd(c, upstreamErr.clientMessage())
+			return s.sendErrorAndEnd(c, upstreamErr.upstreamMessage())
 		}
 		results, _, _, _, _, err = collectOpenAIImagesFromResponsesBody(body)
 	}
@@ -3259,7 +3259,7 @@ func (s *AccountTestService) testOpenAIImageOAuth(c *gin.Context, ctx context.Co
 	}
 	if len(results) == 0 {
 		if textErr := openAIImagesTextFallbackError(body); textErr != nil {
-			return s.sendErrorAndEnd(c, textErr.clientMessage())
+			return s.sendErrorAndEnd(c, textErr.upstreamMessage())
 		}
 		if direct {
 			return s.sendErrorAndEnd(c, "No images returned from Codex Images API")

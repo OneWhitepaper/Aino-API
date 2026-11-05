@@ -166,7 +166,7 @@ func (h *GatewayHandler) SystemOne(c *gin.Context) {
 		if !selection.Acquired {
 			if selection.WaitPlan == nil {
 				markOpsRoutingCapacityLimited(c)
-				h.errorResponse(c, http.StatusServiceUnavailable, "api_error", "No available accounts")
+				h.errorResponse(c, http.StatusServiceUnavailable, "api_error", service.UpstreamServiceUnavailableMessage)
 				return
 			}
 			accountRelease, err = h.concurrencyHelper.AcquireAccountSlotWithWaitTimeout(c, account.ID, selection.WaitPlan.MaxConcurrency, selection.WaitPlan.Timeout, false, &streamStarted)

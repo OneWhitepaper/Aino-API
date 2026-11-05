@@ -42,6 +42,14 @@ jobs:
       - name: Integration tests
         working-directory: backend
         run: make test-integration
+      - name: Device-key subscription and reliability contracts
+        working-directory: backend
+        run: |
+          CGO_ENABLED=0 go build -trimpath -o "$RUNNER_TEMP/aino-device-validation-server" ./cmd/server
+          CI=1 go test -tags=integration,nativeconsumer ./internal/repository \
+            -run '^Test(DeviceSubscriptionLifecycle|DeviceBillingHTTPToOriginalGroupLedger|DesktopCatalogRealPermissionsAndSubscription|DeviceReliabilityValidationAPI)' \
+            -count=1 -timeout=5m -v -args \
+            -aino-preflight-server="$RUNNER_TEMP/aino-device-validation-server"
 
   frontend:
     runs-on: ubuntu-latest

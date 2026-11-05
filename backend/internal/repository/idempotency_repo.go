@@ -118,6 +118,7 @@ func (r *idempotencyRepository) TryReclaim(
 		WHERE id = $1
 			AND status = $5
 			AND (locked_until IS NULL OR locked_until <= $6)
+			AND status <> $7
 	`
 	res, err := r.sql.ExecContext(ctx, query,
 		id,
@@ -126,6 +127,7 @@ func (r *idempotencyRepository) TryReclaim(
 		newExpiresAt,
 		fromStatus,
 		now,
+		service.IdempotencyStatusInferenceUnknown,
 	)
 	if err != nil {
 		return false, err
@@ -183,6 +185,7 @@ func (r *idempotencyRepository) MarkSucceeded(ctx context.Context, id int64, res
 			expires_at = $5,
 			updated_at = NOW()
 		WHERE id = $1
+			AND status <> $6
 	`
 	_, err := r.sql.ExecContext(ctx, query,
 		id,
@@ -190,6 +193,7 @@ func (r *idempotencyRepository) MarkSucceeded(ctx context.Context, id int64, res
 		responseStatus,
 		responseBody,
 		expiresAt,
+		service.IdempotencyStatusInferenceUnknown,
 	)
 	return err
 }
@@ -203,6 +207,7 @@ func (r *idempotencyRepository) MarkFailedRetryable(ctx context.Context, id int6
 			expires_at = $5,
 			updated_at = NOW()
 		WHERE id = $1
+			AND status <> $6
 	`
 	_, err := r.sql.ExecContext(ctx, query,
 		id,
@@ -210,6 +215,7 @@ func (r *idempotencyRepository) MarkFailedRetryable(ctx context.Context, id int6
 		errorReason,
 		lockedUntil,
 		expiresAt,
+		service.IdempotencyStatusInferenceUnknown,
 	)
 	return err
 }
@@ -223,13 +229,14 @@ func (r *idempotencyRepository) DeleteExpired(ctx context.Context, now time.Time
 			SELECT id
 			FROM idempotency_records
 			WHERE expires_at <= $1
+				AND status <> $3
 			ORDER BY expires_at ASC
 			LIMIT $2
 		)
 		DELETE FROM idempotency_records
 		WHERE id IN (SELECT id FROM victims)
 	`
-	res, err := r.sql.ExecContext(ctx, query, now, limit)
+	res, err := r.sql.ExecContext(ctx, query, now, limit, service.IdempotencyStatusInferenceUnknown)
 	if err != nil {
 		return 0, err
 	}

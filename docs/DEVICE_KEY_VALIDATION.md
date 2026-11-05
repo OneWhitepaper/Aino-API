@@ -127,8 +127,10 @@ deployment records.
    allowlist intact; an empty allowlist with the gate enabled opens issuance to
    everyone.
 6. Retain all operation records and original usage/billing data during rollback.
-   Restore the prior recorded artifact only after the managed canary is stopped;
-   an older API lacks this duplicate-dispatch guarantee. Do not resume an
+   Restore the prior recorded artifact only after the managed canary is stopped
+   and no `inference_unknown` claims exist, or after its cleanup code has been
+   updated to preserve them. The unpatched older API can delete these claims
+   during startup cleanup and lacks this duplicate-dispatch guarantee. Do not resume an
    operation-aware canary against it. Use the established backup/restore procedure
    for any database recovery; binary rollback does not reverse migrations or
    justify deleting immutable claims. Resume only after the reviewed fix and

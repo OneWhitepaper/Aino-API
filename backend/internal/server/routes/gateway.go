@@ -197,6 +197,7 @@ func RegisterGatewayRoutes(
 	gateway.Use(gin.HandlerFunc(apiKeyAuth))
 	gateway.GET("/sub2api/billing", h.Gateway.KeyBillingInfo)
 	gateway.Use(groupModelAllowlist)
+	gateway.Use(middleware.DesktopInferenceOperation())
 	gateway.Use(compositeTarget)
 	gateway.Use(requireGroupAnthropic)
 	{

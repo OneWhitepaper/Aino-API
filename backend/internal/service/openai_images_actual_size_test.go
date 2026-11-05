@@ -65,6 +65,92 @@ func TestOpenAIGatewayServiceForwardImages_OAuthStreamingUsesDecodedOutputDimens
 	require.Equal(t, []string{"1672x941"}, run.result.ImageOutputSizes)
 }
 
+func TestOpenAIGatewayServiceForwardImages_APIKeyRecordsOutputDimensions(t *testing.T) {
+	encoded := encodeOpenAIImageTestPNG(t, 1672, 941)
+	for _, tt := range []struct {
+		name       string
+		response   string
+		stream     bool
+		wantSize   string
+		wantTier   string
+		wantSource string
+	}{
+		{
+			name:     "base64 without size metadata",
+			response: fmt.Sprintf(`{"data":[{"b64_json":%q}]}`, encoded),
+			wantSize: "1672x941", wantTier: "2K", wantSource: "output",
+		},
+		{
+			name:     "image bytes override inaccurate size metadata",
+			response: fmt.Sprintf(`{"size":"3840x2160","data":[{"b64_json":%q,"size":"3840x2160"}]}`, encoded),
+			wantSize: "1672x941", wantTier: "2K", wantSource: "output",
+		},
+		{
+			name:     "inline data URL without size metadata",
+			response: fmt.Sprintf(`{"data":[{"url":%q}]}`, "data:image/png;base64,"+encoded),
+			wantSize: "1672x941", wantTier: "2K", wantSource: "output",
+		},
+		{
+			name:     "remote URL with response level size metadata",
+			response: `{"size":"1024x1024","data":[{"url":"https://image-upstream.example/image.png"}]}`,
+			wantSize: "1024x1024", wantTier: "1K", wantSource: "output",
+		},
+		{
+			name:     "remote URL without metadata keeps requested size separate",
+			response: `{"data":[{"url":"https://image-upstream.example/image.png"}]}`,
+			wantTier: "4K", wantSource: "input",
+		},
+		{
+			name:     "unreadable image retains explicit output metadata",
+			response: `{"data":[{"b64_json":"not-image-data","size":"1024x1024"}]}`,
+			wantSize: "1024x1024", wantTier: "1K", wantSource: "output",
+		},
+		{
+			name:     "stream completion without size metadata",
+			response: fmt.Sprintf("data: {\"type\":\"image_generation.completed\",\"b64_json\":%q}\n\ndata: [DONE]\n\n", encoded),
+			stream:   true, wantSize: "1672x941", wantTier: "2K", wantSource: "output",
+		},
+		{
+			name:     "stream data array without size metadata",
+			response: fmt.Sprintf("data: {\"data\":[{\"b64_json\":%q}]}\n\ndata: [DONE]\n\n", encoded),
+			stream:   true, wantSize: "1672x941", wantTier: "2K", wantSource: "output",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			body := []byte(fmt.Sprintf(`{"model":"gpt-image-2.5-sunburst","prompt":"draw a test chart","size":"3840x2160","stream":%t}`, tt.stream))
+			c, rec := newOpenAIImagesTestContext(t, body)
+			contentType := "application/json"
+			if tt.stream {
+				contentType = "text/event-stream"
+			}
+			svc := newOpenAIImagesTestService(&httpUpstreamRecorder{resp: &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{contentType}},
+				Body:       io.NopCloser(strings.NewReader(tt.response)),
+			}})
+			parsed, err := svc.ParseOpenAIImagesRequest(c, body)
+			require.NoError(t, err)
+			result, err := svc.ForwardImages(context.Background(), c, newOpenAIImagesAPIKeyAccount(), body, parsed, "")
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			require.Equal(t, 1, result.ImageCount)
+			if tt.wantSize == "" {
+				require.Empty(t, result.ImageOutputSizes)
+			} else {
+				require.Equal(t, []string{tt.wantSize}, result.ImageOutputSizes)
+			}
+			ApplyOpenAIImageBillingResolution(result)
+			require.Equal(t, "3840x2160", result.ImageInputSize)
+			require.Equal(t, tt.wantSize, result.ImageOutputSize)
+			require.Equal(t, tt.wantTier, result.ImageSize)
+			require.Equal(t, tt.wantSource, result.ImageSizeSource)
+			if !tt.stream {
+				require.JSONEq(t, tt.response, rec.Body.String(), "dimension recording must preserve the upstream response")
+			}
+		})
+	}
+}
+
 type openAIOAuthImageActualSizeTestRun struct {
 	result   *OpenAIForwardResult
 	recorder *httptest.ResponseRecorder

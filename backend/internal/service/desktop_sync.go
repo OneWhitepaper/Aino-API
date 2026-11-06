@@ -129,7 +129,7 @@ func (s *DesktopSyncService) Exchange(ctx context.Context, userID int64, in Desk
 			return nil, ErrDesktopSyncInvalid
 		}
 		canonical, err := EncodeDesktopSyncJSON(value)
-		if err != nil || len(canonical) > DesktopSyncDocumentBytes {
+		if err != nil || len(canonical) > DesktopSyncDocumentBytes || !boundedSyncNumbers(value, int64(len(canonical))) {
 			return nil, ErrDesktopSyncInvalid
 		}
 		op.Payload = canonical
@@ -170,4 +170,69 @@ func (s *DesktopSyncService) GetBlob(ctx context.Context, userID int64, hash str
 		return nil, ErrDesktopSyncDigest
 	}
 	return data, nil
+}
+
+// JSONB renders exponent-form numbers as decimals. Bound that expansion before
+// asking PostgreSQL to materialize it; the repository checks the actual result.
+func boundedSyncNumbers(value any, size int64) bool {
+	pending := []any{value}
+	for len(pending) > 0 {
+		item := pending[len(pending)-1]
+		pending = pending[:len(pending)-1]
+		switch v := item.(type) {
+		case map[string]any:
+			for _, child := range v {
+				pending = append(pending, child)
+			}
+		case []any:
+			pending = append(pending, v...)
+		case json.Number:
+			raw := string(v)
+			mantissa := strings.TrimPrefix(raw, "-")
+			sign := int64(len(raw) - len(mantissa))
+			var exponent int64
+			if at := strings.IndexAny(mantissa, "eE"); at >= 0 {
+				var err error
+				exponent, err = strconv.ParseInt(mantissa[at+1:], 10, 32)
+				if err != nil {
+					return false
+				}
+				mantissa = mantissa[:at]
+			}
+			digits := int64(len(mantissa))
+			point := digits
+			if dot := strings.IndexByte(mantissa, '.'); dot >= 0 {
+				point = int64(dot)
+				digits--
+			}
+			leadingZeros := int64(0)
+			for _, digit := range mantissa {
+				if digit == '.' {
+					continue
+				}
+				if digit != '0' {
+					break
+				}
+				leadingZeros++
+			}
+			integral := point + exponent - leadingZeros
+			if integral < 1 {
+				integral = 1
+			}
+			if leadingZeros == digits {
+				integral = 1
+			}
+			expanded := integral + sign
+			if scale := digits - point - exponent; scale > 0 {
+				expanded += 1 + scale
+			}
+			if extra := expanded - int64(len(raw)); extra > 0 {
+				size += extra
+			}
+			if size > DesktopSyncDocumentBytes {
+				return false
+			}
+		}
+	}
+	return true
 }

@@ -275,3 +275,51 @@ func TestDesktopSyncConcurrentDistinctWritesCommitContiguousCursors(t *testing.T
 		require.Equal(t, fmt.Sprint(i+1), record.Revision)
 	}
 }
+
+func TestDesktopSyncJSONBExpansionIsBoundedChargedAndDoesNotStall(t *testing.T) {
+	r := newDesktopModelRig(t)
+	owner := r.user(t, service.StatusActive, false)
+	svc := service.NewDesktopSyncService(repository.NewDesktopSyncRepository(repository.GetIntegrationDB()))
+	_, err := svc.Exchange(r.ctx, owner.ID, syncInput("existing", "0", `{"ok":true}`))
+	require.NoError(t, err)
+	var before int64
+	db := repository.GetIntegrationDB()
+	require.NoError(t, db.QueryRow("SELECT used_bytes FROM desktop_sync_accounts WHERE user_id=$1", owner.ID).Scan(&before))
+	for _, count := range []int{129, 65} {
+		input := syncInput("rollback", "0", `{"ok":true}`)
+		payload := `{"numbers":[` + strings.TrimSuffix(strings.Repeat("1e131071,", count), ",") + `]}`
+		input.Operations = append(input.Operations, syncInput("expanded", "0", payload).Operations[0])
+		_, err = svc.Exchange(r.ctx, owner.ID, input)
+		require.ErrorIs(t, err, service.ErrDesktopSyncInvalid)
+		var used, revision, receipts int64
+		require.NoError(t, db.QueryRow("SELECT used_bytes,revision,(SELECT count(*) FROM desktop_sync_operations WHERE user_id=$1) FROM desktop_sync_accounts WHERE user_id=$1", owner.ID).Scan(&used, &revision, &receipts))
+		require.Equal(t, before, used)
+		require.Equal(t, int64(1), revision)
+		require.Equal(t, int64(1), receipts)
+	}
+	// A compact, valid value under the document limit must pay for its expanded representation.
+	_, err = db.Exec("UPDATE desktop_sync_accounts SET quota_bytes=$2 WHERE user_id=$1", owner.ID, before+2000)
+	require.NoError(t, err)
+	_, err = svc.Exchange(r.ctx, owner.ID, syncInput("quota", "0", `{"n":1e10000}`))
+	require.ErrorIs(t, err, service.ErrDesktopSyncQuota)
+	_, err = svc.Exchange(r.ctx, owner.ID, syncInput("fits", "0", `{"n":1e1000}`))
+	require.NoError(t, err)
+	var used, storedSize int64
+	require.NoError(t, db.QueryRow("SELECT used_bytes FROM desktop_sync_accounts WHERE user_id=$1", owner.ID).Scan(&used))
+	require.NoError(t, db.QueryRow("SELECT size_bytes FROM desktop_sync_documents WHERE user_id=$1 AND key='fits'", owner.ID).Scan(&storedSize))
+	require.Greater(t, storedSize, int64(1000))
+	require.Greater(t, used-before, int64(1000))
+	_, err = db.Exec("UPDATE desktop_sync_accounts SET quota_bytes=268435456 WHERE user_id=$1", owner.ID)
+	require.NoError(t, err)
+	_, err = svc.Exchange(r.ctx, owner.ID, syncInput("tail", "0", `{"ok":true}`))
+	require.NoError(t, err)
+	out, err := svc.Exchange(r.ctx, owner.ID, service.DesktopSyncRequest{Version: 1, DeviceID: "reader", After: "1", Limit: 50})
+	require.NoError(t, err)
+	require.Len(t, out.Changes, 2)
+	require.False(t, out.HasMore)
+	require.Equal(t, "3", out.Cursor)
+	// A large exponent on zero does not expand and remains a valid small document.
+	zeros := `{"numbers":[` + strings.TrimSuffix(strings.Repeat("0e131071,", 129), ",") + `]}`
+	_, err = svc.Exchange(r.ctx, owner.ID, syncInput("zeros", "0", zeros))
+	require.NoError(t, err)
+}

@@ -21,7 +21,9 @@ The client must create a new key for recovered or divergent work. Identical
 operation retries return their original result, even after subsequent writes;
 changed content for a used operation ID returns HTTP 409. Input object key order
 and whitespace do not affect the operation fingerprint. Integer precision is
-preserved. JSONB-incompatible values return HTTP 400 and roll back the exchange.
+preserved. Exponent-form numeric expansion is bounded before database conversion;
+inside the transaction, document validation and quota charges use PostgreSQL's
+actual normalized representation. JSONB-incompatible values return HTTP 400 and roll back the exchange.
 
 Migration `254_desktop_cloud_sync.sql` creates the four private tables. Each
 exchange and blob write locks its account row for the entire transaction. Revision

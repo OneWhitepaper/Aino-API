@@ -164,7 +164,18 @@ func applySyncOperation(ctx context.Context, tx *sql.Tx, userID int64, device st
 		if !op.Deleted {
 			result.Record.Payload = op.Payload
 		}
-		encoded, err := service.EncodeDesktopSyncJSON(result.Record)
+		storedRecord := result.Record
+		if !op.Deleted {
+			var normalized []byte
+			if err := tx.QueryRowContext(ctx, `SELECT $1::jsonb::text`, string(op.Payload)).Scan(&normalized); err != nil {
+				return nil, err
+			}
+			storedRecord.Payload = compactSyncPayload(normalized)
+			if len(storedRecord.Payload) > service.DesktopSyncDocumentBytes {
+				return nil, service.ErrDesktopSyncInvalid
+			}
+		}
+		encoded, err := service.EncodeDesktopSyncJSON(storedRecord)
 		if err != nil {
 			return nil, err
 		}
@@ -174,7 +185,7 @@ func applySyncOperation(ctx context.Context, tx *sql.Tx, userID int64, device st
 		}
 		var payload any
 		if !op.Deleted {
-			payload = string(op.Payload)
+			payload = string(storedRecord.Payload)
 		}
 		_, err = tx.ExecContext(ctx, `INSERT INTO desktop_sync_documents (user_id,key,revision,deleted,payload,device_id,size_bytes) VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (user_id,key) DO UPDATE SET revision=EXCLUDED.revision,deleted=EXCLUDED.deleted,payload=EXCLUDED.payload,device_id=EXCLUDED.device_id,size_bytes=EXCLUDED.size_bytes`, userID, op.Key, a.revision, op.Deleted, payload, device, size)
 		if err != nil {

@@ -205,7 +205,7 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 				}
 				message := cls.Message
 				if !cls.ModelNotFound {
-					message = "No available accounts: " + err.Error()
+					message = service.UpstreamServiceUnavailableMessage
 				}
 				h.responsesErrorResponse(c, cls.Status, cls.ErrType, message)
 				return
@@ -221,7 +221,7 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 				if fs.LastFailoverErr != nil {
 					h.handleResponsesFailoverExhausted(c, fs.LastFailoverErr, streamStarted)
 				} else {
-					h.responsesErrorResponse(c, http.StatusBadGateway, "server_error", "All available accounts exhausted")
+					h.responsesErrorResponse(c, http.StatusBadGateway, "server_error", service.UpstreamServiceUnavailableMessage)
 				}
 				return
 			}
@@ -234,7 +234,7 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 		if !selection.Acquired {
 			if selection.WaitPlan == nil {
 				markOpsRoutingCapacityLimited(c)
-				h.responsesErrorResponse(c, http.StatusServiceUnavailable, "api_error", "No available accounts")
+				h.responsesErrorResponse(c, http.StatusServiceUnavailable, "api_error", service.UpstreamServiceUnavailableMessage)
 				return
 			}
 			accountReleaseFunc, err = h.concurrencyHelper.AcquireAccountSlotWithWaitTimeout(
@@ -403,8 +403,10 @@ func (h *GatewayHandler) handleResponsesFailoverExhausted(c *gin.Context, lastEr
 	if lastErr != nil && lastErr.StatusCode > 0 {
 		statusCode = lastErr.StatusCode
 	}
-	status, code, message := statusCode, "server_error", "All available accounts exhausted"
-	if lastErr != nil && lastErr.IsCredentialFailure() {
+	status, code, message := statusCode, "server_error", service.UpstreamServiceUnavailableMessage
+	if recordUpstreamBalanceFailure(c, lastErr) {
+		status, code, message = http.StatusServiceUnavailable, service.UpstreamServiceUnavailableCode, service.UpstreamServiceUnavailableMessage
+	} else if lastErr != nil && lastErr.IsCredentialFailure() {
 		status, message = credentialFailoverClientResponse(lastErr)
 	} else if lastErr != nil && lastErr.IsOpenAICapacityShed() && strings.TrimSpace(lastErr.ClientMessage) != "" {
 		status = lastErr.ClientStatusCode

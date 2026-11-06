@@ -32,6 +32,7 @@ type openAIResponsesImageResult struct {
 }
 
 type OpenAIImagesUpstreamError struct {
+	upstreamBalance   bool
 	StatusCode        int
 	ErrorType         string
 	Code              string
@@ -69,10 +70,14 @@ func (e *OpenAIImagesUpstreamError) Error() string {
 }
 
 func (e *OpenAIImagesUpstreamError) clientStatusCode() int {
-	if e == nil {
-		return http.StatusBadGateway
+	if e.isBalanceError() {
+		return http.StatusServiceUnavailable
 	}
-	if e.StatusCode > 0 {
+	return e.upstreamStatusCode()
+}
+
+func (e *OpenAIImagesUpstreamError) upstreamStatusCode() int {
+	if e != nil && e.StatusCode > 0 {
 		return e.StatusCode
 	}
 	return http.StatusBadGateway
@@ -82,6 +87,9 @@ func (e *OpenAIImagesUpstreamError) clientErrorType() string {
 	if e == nil {
 		return "upstream_error"
 	}
+	if e.isBalanceError() {
+		return "upstream_error"
+	}
 	if trimmed := strings.TrimSpace(e.ErrorType); trimmed != "" {
 		return trimmed
 	}
@@ -89,6 +97,13 @@ func (e *OpenAIImagesUpstreamError) clientErrorType() string {
 }
 
 func (e *OpenAIImagesUpstreamError) clientMessage() string {
+	if e.isBalanceError() {
+		return UpstreamServiceUnavailableMessage
+	}
+	return e.upstreamMessage()
+}
+
+func (e *OpenAIImagesUpstreamError) upstreamMessage() string {
 	if e == nil {
 		return "Upstream request failed"
 	}
@@ -99,6 +114,19 @@ func (e *OpenAIImagesUpstreamError) clientMessage() string {
 		return trimmed
 	}
 	return "Upstream request failed"
+}
+
+func (e *OpenAIImagesUpstreamError) isBalanceError() bool {
+	return e != nil && !e.SynthesizedFromModelText &&
+		(e.upstreamBalance || e.StatusCode == http.StatusPaymentRequired || isUpstreamBalanceCode(e.Code) ||
+			isUpstreamBalanceCode(e.ErrorType) || isUpstreamBalanceMessage(e.Message))
+}
+
+func (e *OpenAIImagesUpstreamError) clientCode() string {
+	if e.isBalanceError() {
+		return UpstreamServiceUnavailableCode
+	}
+	return strings.TrimSpace(e.Code)
 }
 
 // IsOpenAIImagesRetryableUpstreamError reports whether an Images error is an
@@ -132,13 +160,19 @@ func openAIImagesSSEErrorStatus(errType, code string) int {
 	}
 }
 
+// Rebuild the provider error for internal classification and account handling;
+// client responses use the separate client* methods below.
 func openAIImagesUpstreamErrorResponseBody(err *OpenAIImagesUpstreamError) []byte {
 	if err == nil {
 		return nil
 	}
 	body := []byte(`{"error":{"type":"","message":""}}`)
-	body, _ = sjson.SetBytes(body, "error.type", err.clientErrorType())
-	body, _ = sjson.SetBytes(body, "error.message", err.clientMessage())
+	errType := strings.TrimSpace(err.ErrorType)
+	if errType == "" {
+		errType = "upstream_error"
+	}
+	body, _ = sjson.SetBytes(body, "error.type", errType)
+	body, _ = sjson.SetBytes(body, "error.message", err.upstreamMessage())
 	if code := strings.TrimSpace(err.Code); code != "" {
 		body, _ = sjson.SetBytes(body, "error.code", code)
 	}
@@ -922,6 +956,14 @@ func (s *OpenAIGatewayService) handleOpenAIImagesErrorResponse(
 	}
 	setOpsUpstreamError(c, resp.StatusCode, upstreamMsg, upstreamDetail)
 
+	writeError := func(err *OpenAIImagesUpstreamError) {
+		err.upstreamBalance = IsUpstreamBalanceError(resp.StatusCode, body)
+		if err.upstreamBalance {
+			RecordUpstreamBalanceError(c, resp.StatusCode, body)
+		}
+		writeOpenAIImagesUpstreamErrorResponse(c, err)
+	}
+
 	if s.cfg != nil && s.cfg.Gateway.LogUpstreamErrorBody {
 		logger.LegacyPrintf("service.openai_gateway",
 			"OpenAI images upstream error %d (account=%d platform=%s type=%s): %s",
@@ -949,7 +991,7 @@ func (s *OpenAIGatewayService) handleOpenAIImagesErrorResponse(
 			Message:           errMsg,
 			UpstreamRequestID: strings.TrimSpace(resp.Header.Get("x-request-id")),
 		}
-		writeOpenAIImagesUpstreamErrorResponse(c, upErr)
+		writeError(upErr)
 		return nil, upErr
 	}
 
@@ -975,14 +1017,14 @@ func (s *OpenAIGatewayService) handleOpenAIImagesErrorResponse(
 			Message:           "Upstream gateway error",
 			UpstreamRequestID: strings.TrimSpace(resp.Header.Get("x-request-id")),
 		}
-		writeOpenAIImagesUpstreamErrorResponse(c, upErr)
+		writeError(upErr)
 		return nil, upErr
 	}
 
 	// 主控不可用不代表图片模型配额耗尽，直接透传，避免误冷却整个图片账号池。
 	if account.IsOpenAIOAuthLike() && isOpenAIImagesMainModelError(resp.StatusCode, body) {
 		upErr := openAIImagesUpstreamErrorFromHTTP(resp.StatusCode, resp.Header, body)
-		writeOpenAIImagesUpstreamErrorResponse(c, upErr)
+		writeError(upErr)
 		return nil, upErr
 	}
 	// Track rate limits / decide whether to disable the account (secondary failover).
@@ -1023,7 +1065,7 @@ func (s *OpenAIGatewayService) handleOpenAIImagesErrorResponse(
 
 	// Surface the real upstream error to the client.
 	upErr := openAIImagesUpstreamErrorFromHTTP(resp.StatusCode, resp.Header, body)
-	writeOpenAIImagesUpstreamErrorResponse(c, upErr)
+	writeError(upErr)
 	return nil, upErr
 }
 
@@ -1099,7 +1141,7 @@ func buildOpenAIImagesStreamErrorBodyFromUpstream(err *OpenAIImagesUpstreamError
 	}
 	body := buildOpenAIImagesStreamErrorBody(err.clientMessage())
 	body, _ = sjson.SetBytes(body, "error.type", err.clientErrorType())
-	if code := strings.TrimSpace(err.Code); code != "" {
+	if code := err.clientCode(); code != "" {
 		body, _ = sjson.SetBytes(body, "error.code", code)
 	}
 	if param := strings.TrimSpace(err.Param); param != "" {
@@ -1120,7 +1162,7 @@ func writeOpenAIImagesUpstreamErrorResponse(c *gin.Context, err *OpenAIImagesUps
 		"type":    err.clientErrorType(),
 		"message": err.clientMessage(),
 	}
-	if code := strings.TrimSpace(err.Code); code != "" {
+	if code := err.clientCode(); code != "" {
 		errorObj["code"] = code
 	}
 	if param := strings.TrimSpace(err.Param); param != "" {
@@ -1354,14 +1396,14 @@ func (s *OpenAIGatewayService) handleOpenAIImagesOAuthNonStreamingResponse(
 	}
 	if len(results) == 0 {
 		if upstreamErr := extractOpenAIImagesUpstreamError(body); upstreamErr != nil {
-			setOpsUpstreamError(c, upstreamErr.clientStatusCode(), upstreamErr.clientMessage(), "")
+			setOpsUpstreamError(c, upstreamErr.upstreamStatusCode(), upstreamErr.upstreamMessage(), "")
 			if !IsOpenAIImagesRetryableUpstreamError(upstreamErr) {
 				writeOpenAIImagesUpstreamErrorResponse(c, upstreamErr)
 			}
 			return OpenAIUsage{}, 0, nil, upstreamErr
 		}
 		if textFallbackErr := openAIImagesTextFallbackError(body); textFallbackErr != nil {
-			setOpsUpstreamError(c, textFallbackErr.clientStatusCode(), textFallbackErr.clientMessage(), summarizeOpenAIImagesNoOutputBody(body))
+			setOpsUpstreamError(c, textFallbackErr.upstreamStatusCode(), textFallbackErr.upstreamMessage(), summarizeOpenAIImagesNoOutputBody(body))
 			if !IsOpenAIImagesRetryableUpstreamError(textFallbackErr) {
 				writeOpenAIImagesUpstreamErrorResponse(c, textFallbackErr)
 			}
@@ -1535,7 +1577,7 @@ func (s *OpenAIGatewayService) handleOpenAIImagesOAuthStreamingResponse(
 				}
 				if textFallbackErr != nil {
 					retryable := IsOpenAIImagesRetryableUpstreamError(textFallbackErr)
-					setOpsUpstreamError(c, textFallbackErr.clientStatusCode(), textFallbackErr.clientMessage(), summarizeOpenAIImagesNoOutputBody(dataBytes))
+					setOpsUpstreamError(c, textFallbackErr.upstreamStatusCode(), textFallbackErr.upstreamMessage(), summarizeOpenAIImagesNoOutputBody(dataBytes))
 					if !retryable && !clientDisconnected {
 						s.tryWriteOpenAIImagesStreamEvent(c, flusher, &clientDisconnected, &lastDownstreamWriteAt, "error", buildOpenAIImagesStreamErrorBodyFromUpstream(textFallbackErr))
 					}
@@ -1569,7 +1611,7 @@ func (s *OpenAIGatewayService) handleOpenAIImagesOAuthStreamingResponse(
 				if !clientDisconnected && (!retryable || c.Writer.Size() != writerSizeBeforeResponse) {
 					s.tryWriteOpenAIImagesStreamEvent(c, flusher, &clientDisconnected, &lastDownstreamWriteAt, "error", buildOpenAIImagesStreamErrorBodyFromUpstream(upstreamErr))
 				}
-				setOpsUpstreamError(c, upstreamErr.clientStatusCode(), upstreamErr.clientMessage(), "")
+				setOpsUpstreamError(c, upstreamErr.upstreamStatusCode(), upstreamErr.upstreamMessage(), "")
 				processDataErr = upstreamErr
 				processDataDone = true
 				return
@@ -2153,7 +2195,7 @@ func (s *OpenAIGatewayService) handleOpenAIImagesOAuthResponseError(
 		UpstreamRequestID:  requestID,
 		UpstreamURL:        upstreamURL,
 		Kind:               kind,
-		Message:            upstreamErr.clientMessage(),
+		Message:            upstreamErr.upstreamMessage(),
 	})
 
 	responseBody := openAIImagesUpstreamErrorResponseBody(upstreamErr)
@@ -2169,7 +2211,7 @@ func (s *OpenAIGatewayService) handleOpenAIImagesOAuthResponseError(
 			upstreamErr.StatusCode,
 			headers,
 			responseBody,
-			upstreamErr.clientMessage(),
+			upstreamErr.upstreamMessage(),
 			false,
 			false,
 		)
@@ -2183,7 +2225,7 @@ func (s *OpenAIGatewayService) handleOpenAIImagesOAuthResponseError(
 		upstreamErr.StatusCode,
 		headers,
 		responseBody,
-		upstreamErr.clientMessage(),
+		upstreamErr.upstreamMessage(),
 		shouldDisable,
 		!shouldDisable && account.IsPoolMode() && account.IsPoolModeRetryableStatus(upstreamErr.StatusCode),
 	)

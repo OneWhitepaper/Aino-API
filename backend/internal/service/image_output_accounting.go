@@ -57,9 +57,10 @@ func (c *openAIImageOutputCounter) AddJSONResponse(body []byte) {
 	if c == nil || len(body) == 0 || !gjson.ValidBytes(body) {
 		return
 	}
-	c.addDataArray(gjson.GetBytes(body, "data"))
-	c.addOutputArray(gjson.GetBytes(body, "output"))
-	c.addOutputArray(gjson.GetBytes(body, "response.output"))
+	root := gjson.ParseBytes(body)
+	c.addDataArray(root.Get("data"), root.Get("size").String())
+	c.addOutputArray(root.Get("output"))
+	c.addOutputArray(root.Get("response.output"))
 }
 
 func (c *openAIImageOutputCounter) AddSSEData(data []byte) {
@@ -67,7 +68,7 @@ func (c *openAIImageOutputCounter) AddSSEData(data []byte) {
 		return
 	}
 	root := gjson.ParseBytes(data)
-	c.addDataArray(root.Get("data"))
+	c.addDataArray(root.Get("data"), root.Get("size").String())
 	eventType := strings.TrimSpace(root.Get("type").String())
 	switch eventType {
 	case "response.output_item.done":
@@ -94,7 +95,7 @@ func (c *openAIImageOutputCounter) AddSSEBody(body string) {
 	forEachOpenAISSEDataPayload(body, c.AddSSEData)
 }
 
-func (c *openAIImageOutputCounter) addDataArray(data gjson.Result) {
+func (c *openAIImageOutputCounter) addDataArray(data gjson.Result, fallbackSize string) {
 	if !data.IsArray() {
 		return
 	}
@@ -111,7 +112,11 @@ func (c *openAIImageOutputCounter) addDataArray(data gjson.Result) {
 			continue
 		}
 		imageCount++
-		if size := strings.TrimSpace(item.Get("size").String()); size != "" {
+		size := openAIImageOutputItemSize(item)
+		if size == "" {
+			size = strings.TrimSpace(fallbackSize)
+		}
+		if size != "" {
 			sizes = append(sizes, size)
 		}
 	}
@@ -164,7 +169,7 @@ func (c *openAIImageOutputCounter) addImageOutputItem(item gjson.Result) {
 	if key == "" {
 		return
 	}
-	size := strings.TrimSpace(item.Get("size").String())
+	size := openAIImageOutputItemSize(item)
 	if _, exists := c.seen[key]; exists {
 		if size != "" && strings.TrimSpace(c.seenSizes[key]) == "" {
 			c.seenSizes[key] = size
@@ -177,6 +182,21 @@ func (c *openAIImageOutputCounter) addImageOutputItem(item gjson.Result) {
 		c.seenSizes[key] = size
 	}
 	c.count++
+}
+
+func openAIImageOutputItemSize(item gjson.Result) string {
+	// API key upstreams can omit size, or echo the requested size. Probe the
+	// returned image header as on the OAuth path before trusting metadata.
+	for _, field := range []string{"b64_json", "result", "url"} {
+		encoded := strings.TrimSpace(item.Get(field).String())
+		if field == "url" && !strings.HasPrefix(strings.ToLower(encoded), "data:") {
+			continue
+		}
+		if size := detectOpenAIImageResultSize(encoded); size != "" {
+			return size
+		}
+	}
+	return strings.TrimSpace(item.Get("size").String())
 }
 
 func hashOpenAIImageOutputResult(result string) string {

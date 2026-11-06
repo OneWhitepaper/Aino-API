@@ -887,6 +887,10 @@ func parseGeminiModelAction(rest string) (model string, action string, err error
 }
 
 func (h *GatewayHandler) handleGeminiFailoverExhausted(c *gin.Context, failoverErr *service.UpstreamFailoverError) {
+	if recordUpstreamBalanceFailure(c, failoverErr) {
+		googleError(c, http.StatusServiceUnavailable, service.UpstreamServiceUnavailableMessage)
+		return
+	}
 	if failoverErr == nil {
 		googleError(c, http.StatusBadGateway, "Upstream request failed")
 		return

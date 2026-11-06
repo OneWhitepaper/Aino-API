@@ -19,6 +19,7 @@ type DesktopHandler struct {
 	deviceKeyPolicy config.DesktopDeviceKeysConfig
 	billing         *service.DesktopBillingService
 	diagnostics     *service.DiagnosticsService
+	sync            *service.DesktopSyncService
 }
 
 func NewDesktopHandler(models *service.DesktopModelService) *DesktopHandler {
@@ -29,13 +30,14 @@ func (h *DesktopHandler) SetCredentialService(credentials *service.DesktopCreden
 	h.credentials = credentials
 }
 
-func ProvideDesktopHandler(models *service.DesktopModelService, credentials *service.DesktopCredentialService, users *service.UserService, totp *service.TotpService, billing *service.DesktopBillingService, diagnostics *service.DiagnosticsService, deviceKeys *service.DesktopDeviceKeyService, cfg *config.Config) *DesktopHandler {
+func ProvideDesktopHandler(models *service.DesktopModelService, credentials *service.DesktopCredentialService, users *service.UserService, totp *service.TotpService, billing *service.DesktopBillingService, diagnostics *service.DiagnosticsService, deviceKeys *service.DesktopDeviceKeyService, sync *service.DesktopSyncService, cfg *config.Config) *DesktopHandler {
 	h := NewDesktopHandler(models)
 	h.SetCredentialService(credentials)
 	h.SetCredentialSecurity(users, totp)
 	h.SetBillingService(billing)
 	h.SetDiagnosticsService(diagnostics)
 	h.SetDeviceKeyService(deviceKeys)
+	h.SetSyncService(sync)
 	h.SetDeviceKeyPolicy(cfg.DesktopDeviceKeys)
 	return h
 }

@@ -31,6 +31,9 @@ func RegisterDesktopRoutes(
 	desktop.Use(middleware.BackendModeUserGuard(settingService))
 	desktop.Use(panelRateLimiter.Global())
 	{
+		desktop.POST("/sync/exchange", h.Desktop.SyncExchange)
+		desktop.PUT("/sync/blobs/:sha256", h.Desktop.PutSyncBlob)
+		desktop.GET("/sync/blobs/:sha256", h.Desktop.GetSyncBlob)
 		desktop.GET("/bootstrap", h.Desktop.GetBootstrap)
 		desktop.GET("/models", h.Desktop.ListModels)
 		desktop.GET("/billing-summary", h.Desktop.BillingSummary)

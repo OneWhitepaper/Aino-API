@@ -882,6 +882,12 @@ func (s *GeminiMessagesCompatService) writeGeminiChatCompletionsMappedError(
 		})
 	}
 
+	if IsUpstreamBalanceError(upstreamStatus, body) {
+		RecordUpstreamBalanceError(c, upstreamStatus, body)
+		_ = s.writeChatCompletionsError(c, http.StatusServiceUnavailable, "upstream_error", UpstreamServiceUnavailableMessage)
+		return fmt.Errorf("gemini upstream error: %d message=%s", upstreamStatus, upstreamMsg)
+	}
+
 	if status, errType, errMsg, matched := applyErrorPassthroughRule(
 		c,
 		PlatformGemini,

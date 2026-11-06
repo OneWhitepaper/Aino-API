@@ -443,6 +443,15 @@ func (s *GatewayService) handleErrorResponse(ctx context.Context, resp *http.Res
 		)
 	}
 
+	if IsUpstreamBalanceError(resp.StatusCode, body) {
+		RecordUpstreamBalanceError(c, resp.StatusCode, body)
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"type":  "error",
+			"error": gin.H{"type": "upstream_error", "code": UpstreamServiceUnavailableCode, "message": UpstreamServiceUnavailableMessage},
+		})
+		return nil, fmt.Errorf("upstream error: %d message=%s", resp.StatusCode, upstreamMsg)
+	}
+
 	// 非 failover 错误也支持错误透传规则匹配。
 	if status, errType, errMsg, matched := applyErrorPassthroughRule(
 		c,

@@ -195,7 +195,7 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 				}
 				message := cls.Message
 				if !cls.ModelNotFound {
-					message = "No available compatible accounts"
+					message = service.UpstreamServiceUnavailableMessage
 				}
 				h.handleStreamingAwareError(c, cls.Status, cls.ErrType, message, streamStarted)
 				return
@@ -214,7 +214,7 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 			}
 			message := cls.Message
 			if !cls.ModelNotFound {
-				message = "No available compatible accounts"
+				message = service.UpstreamServiceUnavailableMessage
 			}
 			h.handleStreamingAwareError(c, cls.Status, cls.ErrType, message, streamStarted)
 			return

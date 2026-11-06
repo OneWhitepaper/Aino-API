@@ -156,9 +156,10 @@ func (h *GatewayHandler) WebSearch(c *gin.Context) {
 		)
 		if selectErr != nil {
 			if attempt == 0 {
+				logger.FromContext(c.Request.Context()).Warn("gateway.web_search.account_select_failed", zap.Error(selectErr))
 				c.JSON(http.StatusServiceUnavailable, gin.H{"error": gin.H{
 					"type":    "scheduling_error",
-					"message": selectErr.Error(),
+					"message": service.UpstreamServiceUnavailableMessage,
 				}})
 				return
 			}
@@ -168,7 +169,7 @@ func (h *GatewayHandler) WebSearch(c *gin.Context) {
 			if attempt == 0 {
 				c.JSON(http.StatusServiceUnavailable, gin.H{"error": gin.H{
 					"type":    "scheduling_error",
-					"message": "No available accounts",
+					"message": service.UpstreamServiceUnavailableMessage,
 				}})
 				return
 			}
@@ -208,6 +209,13 @@ func (h *GatewayHandler) WebSearch(c *gin.Context) {
 		account = nil
 	}
 	if err != nil || nativeResp == nil {
+		var upstreamErr *service.UpstreamFailoverError
+		if errors.As(err, &upstreamErr) && recordUpstreamBalanceFailure(c, upstreamErr) {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": gin.H{
+				"type": "upstream_error", "code": service.UpstreamServiceUnavailableCode, "message": service.UpstreamServiceUnavailableMessage,
+			}})
+			return
+		}
 		msg := "web search failed"
 		if err != nil {
 			msg = err.Error()
@@ -218,7 +226,7 @@ func (h *GatewayHandler) WebSearch(c *gin.Context) {
 	if account == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": gin.H{
 			"type":    "scheduling_error",
-			"message": "No available accounts",
+			"message": service.UpstreamServiceUnavailableMessage,
 		}})
 		return
 	}

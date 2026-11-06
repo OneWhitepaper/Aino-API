@@ -671,6 +671,14 @@ func (s *OpenAIGatewayService) handleErrorResponse(
 		)
 	}
 
+	writeError := func(status int, errType, message string) {
+		if IsUpstreamBalanceError(resp.StatusCode, body) {
+			RecordUpstreamBalanceError(c, resp.StatusCode, body)
+			status, errType, message = http.StatusServiceUnavailable, "upstream_error", UpstreamServiceUnavailableMessage
+		}
+		c.JSON(status, gin.H{"error": gin.H{"type": errType, "message": message}})
+	}
+
 	if status, errType, errMsg, matched := applyErrorPassthroughRule(
 		c,
 		PlatformOpenAI,
@@ -681,12 +689,7 @@ func (s *OpenAIGatewayService) handleErrorResponse(
 		"Upstream request failed",
 	); matched {
 		MarkResponseCommitted(c)
-		c.JSON(status, gin.H{
-			"error": gin.H{
-				"type":    errType,
-				"message": errMsg,
-			},
-		})
+		writeError(status, errType, errMsg)
 		if upstreamMsg == "" {
 			upstreamMsg = errMsg
 		}
@@ -711,12 +714,7 @@ func (s *OpenAIGatewayService) handleErrorResponse(
 			Detail:             upstreamDetail,
 		})
 		MarkResponseCommitted(c)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": gin.H{
-				"type":    "upstream_error",
-				"message": "Upstream gateway error",
-			},
-		})
+		writeError(http.StatusInternalServerError, "upstream_error", "Upstream gateway error")
 		if upstreamMsg == "" {
 			return nil, fmt.Errorf("upstream error: %d (not in custom error codes)", resp.StatusCode)
 		}
@@ -769,6 +767,11 @@ func (s *OpenAIGatewayService) handleErrorResponse(
 	// 兄弟路径早已这么做：handleCompatErrorResponse（ChatCompletions / Anthropic）
 	// 回真实状态码 + invalid_request_error + 真实 message；/v1/images 还额外透传
 	// code/param。原生 Responses 是唯一漏掉的一条。
+	if IsUpstreamBalanceError(resp.StatusCode, body) {
+		writeError(http.StatusServiceUnavailable, "upstream_error", UpstreamServiceUnavailableMessage)
+		return nil, fmt.Errorf("upstream error: %d message=%s", resp.StatusCode, upstreamMsg)
+	}
+
 	if isOpenAIDeterministicClientError(resp.StatusCode) {
 		writeOpenAIUpstreamClientError(c, resp.StatusCode, body, upstreamMsg)
 		if upstreamMsg == "" {
@@ -807,12 +810,7 @@ func (s *OpenAIGatewayService) handleErrorResponse(
 		errMsg = upstreamMsg
 	}
 
-	c.JSON(statusCode, gin.H{
-		"error": gin.H{
-			"type":    errType,
-			"message": errMsg,
-		},
-	})
+	writeError(statusCode, errType, errMsg)
 
 	if upstreamMsg == "" {
 		return nil, fmt.Errorf("upstream error: %d", resp.StatusCode)
@@ -884,6 +882,14 @@ func (s *OpenAIGatewayService) handleCompatErrorResponse(
 		upstreamDetail = truncateString(string(body), maxBytes)
 	}
 	setOpsUpstreamError(c, resp.StatusCode, upstreamMsg, upstreamDetail)
+
+	if IsUpstreamBalanceError(resp.StatusCode, body) {
+		RecordUpstreamBalanceError(c, resp.StatusCode, body)
+		originalWriteError := writeError
+		writeError = func(c *gin.Context, _ int, _, _ string) {
+			originalWriteError(c, http.StatusServiceUnavailable, "upstream_error", UpstreamServiceUnavailableMessage)
+		}
+	}
 
 	// Apply error passthrough rules
 	if status, errType, errMsg, matched := applyErrorPassthroughRule(

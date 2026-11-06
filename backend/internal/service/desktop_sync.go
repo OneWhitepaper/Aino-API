@@ -23,6 +23,7 @@ const (
 )
 
 var (
+	ErrDesktopSyncRebatch        = infraerrors.New(413, "DESKTOP_SYNC_REBATCH", "Operation results exceed response budget; retry operations individually")
 	ErrDesktopSyncInvalid        = infraerrors.BadRequest("DESKTOP_SYNC_INVALID", "Invalid or oversized synchronization request")
 	ErrDesktopSyncOperationReuse = infraerrors.Conflict("DESKTOP_SYNC_OPERATION_REUSED", "Operation ID was already used with different content")
 	ErrDesktopSyncQuota          = infraerrors.New(413, "DESKTOP_SYNC_QUOTA", "Account synchronization storage quota exceeded")

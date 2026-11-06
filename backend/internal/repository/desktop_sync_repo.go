@@ -74,7 +74,7 @@ func (r *desktopSyncRepository) Exchange(ctx context.Context, userID int64, in s
 		}
 		used += len(encoded) + 1
 		if used > service.DesktopSyncResponseBytes {
-			return nil, service.ErrDesktopSyncInvalid
+			return nil, service.ErrDesktopSyncRebatch
 		}
 		out.Results = append(out.Results, *result)
 	}

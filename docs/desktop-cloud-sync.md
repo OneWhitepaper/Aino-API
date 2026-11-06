@@ -33,7 +33,13 @@ through emitted records when `has_more` is true, and otherwise to the committed
 account revision. `after` ahead of the committed revision is rejected. Results
 consume response space first; a page can contain zero changes with `has_more`
 when retries/results fill the byte budget. Continue with the returned cursor and
-without the already-acknowledged operations.
+without the already-acknowledged operations. If the operation receipts alone exceed
+16 MiB, HTTP 413 `DESKTOP_SYNC_REBATCH` rolls back the entire exchange, including
+new receipts and quota changes. Retry each original operation individually,
+retaining its operation ID, device ID, base revision and exact content. A single
+bounded document always leaves room for its receipt; feed rows use the remaining
+budget. Existing committed receipts still replay their original results. Generic
+413 quota and 400 input failures do not mean a batch may be discarded.
 
 The initial quota is 256 MiB per account, persisted as `quota_bytes`. `used_bytes`
 counts current document JSON/metadata, durable operation receipts/metadata, and

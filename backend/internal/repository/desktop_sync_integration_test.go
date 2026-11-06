@@ -323,3 +323,42 @@ func TestDesktopSyncJSONBExpansionIsBoundedChargedAndDoesNotStall(t *testing.T) 
 	_, err = svc.Exchange(r.ctx, owner.ID, syncInput("zeros", "0", zeros))
 	require.NoError(t, err)
 }
+
+func TestDesktopSyncOversizedConflictReceiptsCanBeRebatched(t *testing.T) {
+	r := newDesktopModelRig(t)
+	owner := r.user(t, service.StatusActive, false)
+	db := repository.GetIntegrationDB()
+	svc := service.NewDesktopSyncService(repository.NewDesktopSyncRepository(db))
+	batch := service.DesktopSyncRequest{Version: 1, DeviceID: "offline", After: "0", Limit: 50}
+	for i := 0; i < 3; i++ {
+		key := fmt.Sprintf("conversation/default/large-%d", i)
+		_, err := svc.Exchange(r.ctx, owner.ID, syncInput(key, "0", `{"text":"`+strings.Repeat("x", 6*1024*1024)+`"}`))
+		require.NoError(t, err)
+		batch.Operations = append(batch.Operations, syncInput(key, "0", `{"text":"offline edit"}`).Operations[0])
+	}
+	var usedBefore, usedAfter, revision int64
+	require.NoError(t, db.QueryRow(`SELECT used_bytes FROM desktop_sync_accounts WHERE user_id=$1`, owner.ID).Scan(&usedBefore))
+	_, err := svc.Exchange(r.ctx, owner.ID, batch)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "DESKTOP_SYNC_REBATCH")
+	require.NoError(t, db.QueryRow(`SELECT used_bytes,revision FROM desktop_sync_accounts WHERE user_id=$1`, owner.ID).Scan(&usedAfter, &revision))
+	require.Equal(t, usedBefore, usedAfter, "size rejection rolls back receipts and quota")
+	require.EqualValues(t, 3, revision)
+	for _, op := range batch.Operations {
+		var count int
+		require.NoError(t, db.QueryRow(`SELECT count(*) FROM desktop_sync_operations WHERE user_id=$1 AND operation_id=$2`, owner.ID, op.OperationID).Scan(&count))
+		require.Zero(t, count)
+		single := batch
+		single.Operations = []service.DesktopSyncOperation{op}
+		out, err := svc.Exchange(r.ctx, owner.ID, single)
+		require.NoError(t, err)
+		require.Equal(t, "conflict", out.Results[0].Status)
+		encoded, err := service.EncodeDesktopSyncJSON(out)
+		require.NoError(t, err)
+		require.LessOrEqual(t, len(encoded), service.DesktopSyncResponseBytes)
+		svc = service.NewDesktopSyncService(repository.NewDesktopSyncRepository(db))
+		retry, err := svc.Exchange(r.ctx, owner.ID, single)
+		require.NoError(t, err)
+		require.Equal(t, out.Results, retry.Results, "split operations keep exact durable receipts")
+	}
+}

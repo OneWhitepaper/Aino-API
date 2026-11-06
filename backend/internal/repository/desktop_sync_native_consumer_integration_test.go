@@ -61,15 +61,17 @@ func TestDesktopSyncNativeConsumer(t *testing.T) {
 	output, err := cmd.Output()
 	require.NoError(t, err, "native sync consumer failed: %s; stdout: %s", stderr.String(), string(output))
 	var result struct {
-		ContinuedMessages int  `json:"continued_messages"`
-		ConflictCopies    int  `json:"conflict_copies"`
-		AttachmentBytes   int  `json:"attachment_bytes"`
-		AccountIsolation  bool `json:"account_isolation"`
+		RecoveredOperations int  `json:"recovered_operations"`
+		ContinuedMessages   int  `json:"continued_messages"`
+		ConflictCopies      int  `json:"conflict_copies"`
+		AttachmentBytes     int  `json:"attachment_bytes"`
+		AccountIsolation    bool `json:"account_isolation"`
 	}
 	require.NoError(t, json.Unmarshal(output, &result), "consumer must return JSON evidence")
+	require.Equal(t, 3, result.RecoveredOperations, "all legacy-batch offline edits survive oversized conflicts and recovery restarts")
 	require.Positive(t, result.ContinuedMessages, "the second home must continue the imported conversation")
 	require.Positive(t, result.ConflictCopies, "divergent edits must remain as a conflict copy")
 	require.Positive(t, result.AttachmentBytes, "the private attachment must round trip")
 	require.True(t, result.AccountIsolation, "the second account must not obtain the first account's history")
-	t.Logf("native sync evidence: continued_messages=%d conflict_copies=%d attachment_bytes=%d account_isolation=%t", result.ContinuedMessages, result.ConflictCopies, result.AttachmentBytes, result.AccountIsolation)
+	t.Logf("native sync evidence: continued_messages=%d conflict_copies=%d attachment_bytes=%d account_isolation=%t recovered_operations=%d", result.ContinuedMessages, result.ConflictCopies, result.AttachmentBytes, result.AccountIsolation, result.RecoveredOperations)
 }

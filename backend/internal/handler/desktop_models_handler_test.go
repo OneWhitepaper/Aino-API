@@ -58,7 +58,7 @@ func TestDesktopBootstrapScopesPermanentKeyCapabilityToTheAccountAndDevice(t *te
 	gin.SetMode(gin.TestMode)
 	const deviceID = "00000000-0000-4000-8000-000000000001"
 	policy := config.DesktopDeviceKeysConfig{
-		Enabled: true,
+		Enabled:          true,
 		RolloutAllowlist: []config.DesktopDeviceKeyRolloutEntry{{UserID: 17, DeviceID: deviceID}},
 	}
 

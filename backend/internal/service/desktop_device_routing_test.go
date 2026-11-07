@@ -55,13 +55,16 @@ func TestImageTaskKeepsPrivateOriginalBillingRoute(t *testing.T) {
 	require.ErrorIs(t, err, ErrImageTaskNotFound)
 }
 
-func TestDesktopProjectionHasHardAgeAndCannotFreezeBalance(t *testing.T) {
+func TestDesktopRequestUsesCurrentModelEntitlementDespiteCatalogCache(t *testing.T) {
 	models, keys := desktopImageFixture(t)
 	cache, err := ristretto.NewCache(&ristretto.Config{NumCounters: 1000, MaxCost: 1000, BufferItems: 64})
 	require.NoError(t, err)
 	defer cache.Close()
 	keys.authCacheL1 = cache
 	key := &APIKey{ID: 2, UserID: 17, User: &User{ID: 17}}
+	_, err = models.catalogProjection(context.Background(), 17)
+	require.NoError(t, err)
+	cache.Wait()
 	first, err := models.ResolveRequest(context.Background(), key, "image", "images_generations", []string{"fixture-image"}, "", true)
 	require.NoError(t, err)
 	require.Equal(t, int64(11), *first.Key.GroupID)
@@ -71,18 +74,13 @@ func TestDesktopProjectionHasHardAgeAndCannotFreezeBalance(t *testing.T) {
 	projection, ok := cached.(desktopCatalogProjection)
 	require.True(t, ok)
 	require.NotContains(t, string(projection.Data), `"Balance"`)
-	// Model entitlement is reusable briefly; quota/balance is never reused as a
-	// permission. Permission revocation must be authoritative at the hard age.
+	// The catalog cache remains available for display, but inference must not
+	// trust it for current model entitlement.
 	groups, ok := keys.groupRepo.(*desktopGroupRepo)
 	require.True(t, ok)
 	groups.groups[0].AllowImageGeneration = false
 	_, err = models.ResolveRequest(context.Background(), key, "image", "images_generations", []string{"fixture-image"}, "", true)
-	require.NoError(t, err)
-	projection.CheckedAt = time.Now().Add(-16 * time.Second)
-	cache.SetWithTTL("desktop:catalog:17", projection, 1, time.Minute)
-	cache.Wait()
-	_, err = models.ResolveRequest(context.Background(), key, "image", "images_generations", []string{"fixture-image"}, "", true)
-	require.Error(t, err, "a stale projection cannot extend withdrawn image permissions")
+	require.Error(t, err, "a catalog cache must not extend withdrawn model permissions for a new request")
 }
 
 func TestDesktopCatalogBalanceChangesWithoutProjectionRefresh(t *testing.T) {

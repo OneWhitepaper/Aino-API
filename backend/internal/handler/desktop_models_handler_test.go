@@ -54,6 +54,47 @@ func TestDesktopCatalogBootstrapDefaultsDisabledWithoutCreatingCredentials(t *te
 	require.NotContains(t, recorder.Body.String(), "credential")
 }
 
+func TestDesktopBootstrapScopesPermanentKeyCapabilityToTheAccountAndDevice(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	const deviceID = "00000000-0000-4000-8000-000000000001"
+	policy := config.DesktopDeviceKeysConfig{
+		Enabled:          true,
+		RolloutAllowlist: []config.DesktopDeviceKeyRolloutEntry{{UserID: 17, DeviceID: deviceID}},
+	}
+
+	for _, test := range []struct {
+		name       string
+		userID     int64
+		deviceID   string
+		wantEnable int
+	}{{"allowlisted installation", 17, deviceID, 1}, {"other account", 18, deviceID, 0}, {"other installation", 17, "00000000-0000-4000-8000-000000000002", 0}, {"missing device", 17, "", 0}} {
+		t.Run(test.name, func(t *testing.T) {
+			settings := service.NewSettingService(desktopHandlerSettingRepo{values: map[string]string{}}, &config.Config{})
+			handler := NewDesktopHandler(service.NewDesktopModelService(settings, nil, nil, nil, nil, nil))
+			handler.SetDeviceKeyPolicy(policy)
+			recorder := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(recorder)
+			url := "/api/v1/desktop/bootstrap"
+			if test.deviceID != "" {
+				url += "?device_id=" + test.deviceID
+			}
+			c.Request = httptest.NewRequest(http.MethodGet, url, nil)
+			c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{UserID: test.userID})
+
+			handler.GetBootstrap(c)
+
+			require.Equal(t, http.StatusOK, recorder.Code)
+			var envelope struct {
+				Data struct {
+					Capabilities map[string]int `json:"capabilities"`
+				} `json:"data"`
+			}
+			require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &envelope))
+			require.Equal(t, test.wantEnable, envelope.Data.Capabilities["managed_device_key"])
+		})
+	}
+}
+
 func TestDesktopCatalogHandlerRequiresAuthenticatedSubject(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	settings := service.NewSettingService(desktopHandlerSettingRepo{values: map[string]string{}}, &config.Config{})

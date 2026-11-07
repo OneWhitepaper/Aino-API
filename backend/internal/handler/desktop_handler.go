@@ -59,10 +59,15 @@ func (h *DesktopHandler) GetBootstrap(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
+	deviceKeyEnabled := h.deviceKeyPolicy.AllowsMutation(subject.UserID, c.Query("device_id"))
+	deviceKeyCapability := 0
+	if deviceKeyEnabled {
+		deviceKeyCapability = 1
+	}
 	response.Success(c, struct {
 		*service.DesktopBootstrap
 		Capabilities map[string]int `json:"capabilities"`
-	}{bootstrap, map[string]int{"managed_device_key": 1}})
+	}{bootstrap, map[string]int{"managed_device_key": deviceKeyCapability}})
 }
 
 // ListModels keeps the legacy chat catalog unless the client opts into images.

@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"net/textproto"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -102,6 +103,41 @@ type OpenAIImagesRequest struct {
 	MaskUpload         *OpenAIImagesUpload
 	Body               []byte
 	bodyHash           string
+	desktopImageGrant  *desktopImagesModelGrant
+}
+
+// Only the authenticated desktop catalog may declare an otherwise unknown
+// model name image-capable. Bind that decision to this request and billing
+// group; headers and upstream mappings alone are not an image authorization.
+type desktopImagesModelGrant struct {
+	catalogModel string
+	parsedModel  string
+	apiKeyID     int64
+	groupID      int64
+}
+
+func authorizedDesktopImageModel(c *gin.Context, model string) bool {
+	if c == nil || c.Request == nil || strings.TrimSpace(model) == "" {
+		return false
+	}
+	key := getAPIKeyFromContext(c)
+	if key == nil || !key.DesktopManaged || key.DesktopPurpose != DesktopPurposeImage ||
+		key.GroupID == nil || key.Group == nil || key.Group.ID != *key.GroupID ||
+		!GroupAllowsImageGeneration(key.Group) || !key.Group.ModelAllowlist.Enabled {
+		return false
+	}
+	ctx := c.Request.Context()
+	return desktopCredentialHasFixedGroup(ctx) && checkDesktopCredentialGroup(ctx, *key.GroupID) == nil &&
+		slices.Contains(key.Group.ModelAllowlist.Models, model)
+}
+
+func (r *OpenAIImagesRequest) desktopImageGrantValid(c *gin.Context) bool {
+	grant := r.desktopImageGrant
+	if grant == nil || grant.parsedModel != r.Model || !authorizedDesktopImageModel(c, grant.catalogModel) {
+		return false
+	}
+	key := getAPIKeyFromContext(c)
+	return key.ID == grant.apiKeyID && *key.GroupID == grant.groupID
 }
 
 func (r *OpenAIImagesRequest) ModerationBody() []byte {
@@ -229,14 +265,24 @@ func (s *OpenAIGatewayService) ParseOpenAIImagesRequest(c *gin.Context, body []b
 	}
 
 	applyOpenAIImagesDefaults(req)
+	catalogModel := req.Model
 	// Composite middleware preserves multipart bodies, including their public
 	// alias. Validate and forward the resolved model without altering uploads.
 	if platform, _ := ResolvedTargetPlatformFromContext(c.Request.Context()); platform == PlatformOpenAI {
 		if model, ok := ResolvedUpstreamModelFromContext(c.Request.Context()); ok {
+			// JSON may already have been rewritten by composite middleware;
+			// multipart still carries the public name. Both share its grant.
+			if publicModel, publicOK := RequestedPublicModelFromContext(c.Request.Context()); publicOK && (req.Model == publicModel || req.Model == model) {
+				catalogModel = publicModel
+			}
 			req.Model = model
 		}
 	}
-	if err := validateCompatibleImagesModel(req.Model); err != nil {
+	if authorizedDesktopImageModel(c, catalogModel) {
+		key := getAPIKeyFromContext(c)
+		req.desktopImageGrant = &desktopImagesModelGrant{catalogModel: catalogModel, parsedModel: req.Model, apiKeyID: key.ID, groupID: *key.GroupID}
+	}
+	if err := validateCompatibleImagesModel(req.Model); err != nil && req.desktopImageGrant == nil {
 		return nil, err
 	}
 	req.SizeTier = normalizeOpenAIImageSizeTier(req.Size)
@@ -526,7 +572,7 @@ func validateCompatibleImagesModel(model string) error {
 // RequiredCapabilityForModel also applies the API-key-only fence when channel
 // mapping introduces a compatible provider model after request parsing.
 func (req *OpenAIImagesRequest) RequiredCapabilityForModel(model string) OpenAIImagesCapability {
-	if isGeminiCompatibleImageModel(model) {
+	if isGeminiCompatibleImageModel(model) || (req.desktopImageGrant != nil && strings.TrimSpace(model) != "" && validateOpenAIImagesModel(model) != nil) {
 		return OpenAIImagesCapabilityAPIKey
 	}
 	return req.RequiredCapability
@@ -548,7 +594,7 @@ func classifyOpenAIImagesCapability(req *OpenAIImagesRequest) OpenAIImagesCapabi
 	if req == nil {
 		return OpenAIImagesCapabilityNative
 	}
-	if isGeminiCompatibleImageModel(req.Model) {
+	if isGeminiCompatibleImageModel(req.Model) || (req.desktopImageGrant != nil && validateOpenAIImagesModel(req.Model) != nil) {
 		return OpenAIImagesCapabilityAPIKey
 	}
 	if req.ExplicitModel || req.ExplicitSize {
@@ -612,6 +658,12 @@ func (s *OpenAIGatewayService) ForwardImages(
 	if parsed == nil {
 		return nil, fmt.Errorf("parsed images request is required")
 	}
+	if parsed.desktopImageGrant != nil && !parsed.desktopImageGrantValid(c) {
+		return nil, fmt.Errorf("desktop image model authorization changed")
+	}
+	if parsed.RequiredCapabilityForModel(channelMappedModel) == OpenAIImagesCapabilityAPIKey && account.Type != AccountTypeAPIKey {
+		return nil, fmt.Errorf("images endpoint requires an image model supported by an API-key account")
+	}
 	switch account.Type {
 	case AccountTypeAPIKey:
 		return s.forwardOpenAIImagesAPIKey(ctx, c, account, body, parsed, channelMappedModel)
@@ -635,11 +687,11 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesAPIKey(
 	if mapped := strings.TrimSpace(channelMappedModel); mapped != "" {
 		requestModel = mapped
 	}
-	if err := validateCompatibleImagesModel(requestModel); err != nil {
+	if err := validateCompatibleImagesModel(requestModel); err != nil && (parsed.desktopImageGrant == nil || requestModel == "") {
 		return nil, err
 	}
 	upstreamModel := account.GetMappedModel(requestModel)
-	if err := validateCompatibleImagesModel(upstreamModel); err != nil {
+	if err := validateCompatibleImagesModel(upstreamModel); err != nil && (parsed.desktopImageGrant == nil || strings.TrimSpace(upstreamModel) == "") {
 		return nil, err
 	}
 	SetOpsUpstreamModel(c, upstreamModel)

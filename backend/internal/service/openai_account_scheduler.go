@@ -1820,7 +1820,7 @@ func (s *defaultOpenAIAccountScheduler) isAccountRequestCompatibleReason(ctx con
 		s.service.isUpstreamModelRestrictedByChannel(ctx, *req.GroupID, account, req.RequestedModel, req.RequireCompact) {
 		return false, "channel_upstream_restricted"
 	}
-	if !accountSupportsOpenAICapabilities(account, req.RequiredCapability, req.RequiredImageCapability) {
+	if !accountSupportsOpenAICapabilities(ctx, account, req.RequestedModel, req.RequiredCapability, req.RequiredImageCapability) {
 		return false, "capability_mismatch"
 	}
 	// 分组利润控制：不合格账号在候选过滤与抢槽后终检阶段即被排除，
@@ -2134,6 +2134,8 @@ func (s *OpenAIGatewayService) SelectAccountWithSchedulerForCapability(
 	return s.selectAccountWithScheduler(ctx, groupID, previousResponseID, sessionHash, requestedModel, excludedIDs, requiredTransport, requiredCapability, "", requireCompact, platform, previousResponseCanMove, useUpstreamTokenCost)
 }
 
+type openAIImagesChannelModelKey struct{}
+
 func (s *OpenAIGatewayService) SelectAccountWithSchedulerForImages(
 	ctx context.Context,
 	groupID *int64,
@@ -2141,7 +2143,12 @@ func (s *OpenAIGatewayService) SelectAccountWithSchedulerForImages(
 	requestedModel string,
 	excludedIDs map[int64]struct{},
 	requiredCapability OpenAIImagesCapability,
+	channelMappedModel string,
 ) (*AccountSelectionResult, OpenAIAccountScheduleDecision, error) {
+	// The handler has already resolved the channel mapping. Keep the public
+	// name for allowlists/billing and check native support against the same
+	// channel-then-account model chain that ForwardImages will send upstream.
+	ctx = context.WithValue(ctx, openAIImagesChannelModelKey{}, strings.TrimSpace(channelMappedModel))
 	selection, decision, err := s.selectAccountWithScheduler(ctx, groupID, "", sessionHash, requestedModel, excludedIDs, OpenAIUpstreamTransportHTTPSSE, "", requiredCapability, false, PlatformOpenAI, false, false)
 	if err == nil && selection != nil && selection.Account != nil {
 		return selection, decision, nil
@@ -2384,7 +2391,7 @@ func (s *OpenAIGatewayService) selectAccountWithSchedulerOnce(
 				if selection == nil || selection.Account == nil {
 					return selection, decision, nil
 				}
-				if accountSupportsOpenAICapabilities(selection.Account, requiredCapability, requiredImageCapability) {
+				if accountSupportsOpenAICapabilities(ctx, selection.Account, requestedModel, requiredCapability, requiredImageCapability) {
 					applyLegacySelectionDecision(&decision, selection)
 					return selection, decision, nil
 				}
@@ -2411,7 +2418,7 @@ func (s *OpenAIGatewayService) selectAccountWithSchedulerOnce(
 				return selection, decision, nil
 			}
 			if s.isOpenAIAccountTransportCompatible(selection.Account, requiredTransport) &&
-				accountSupportsOpenAICapabilities(selection.Account, requiredCapability, requiredImageCapability) {
+				accountSupportsOpenAICapabilities(ctx, selection.Account, requestedModel, requiredCapability, requiredImageCapability) {
 				applyLegacySelectionDecision(&decision, selection)
 				return selection, decision, nil
 			}
@@ -2471,9 +2478,19 @@ func (s *OpenAIGatewayService) selectAccountWithSchedulerOnce(
 	})
 }
 
-func accountSupportsOpenAICapabilities(account *Account, requiredCapability OpenAIEndpointCapability, requiredImageCapability OpenAIImagesCapability) bool {
+func accountSupportsOpenAICapabilities(ctx context.Context, account *Account, requestedModel string, requiredCapability OpenAIEndpointCapability, requiredImageCapability OpenAIImagesCapability) bool {
 	if account == nil {
 		return false
+	}
+	if requiredImageCapability != "" && strings.TrimSpace(requestedModel) != "" {
+		if channelModel, _ := ctx.Value(openAIImagesChannelModelKey{}).(string); channelModel != "" {
+			requestedModel = channelModel
+		}
+		if mapped := account.GetMappedModel(requestedModel); validateOpenAIImagesModel(mapped) != nil {
+			// Account-level mappings to compatible provider names use the
+			// API-key passthrough path even when the catalog ID is native.
+			requiredImageCapability = OpenAIImagesCapabilityAPIKey
+		}
 	}
 	return account.SupportsOpenAIEndpointCapability(requiredCapability) &&
 		account.SupportsOpenAIImageCapability(requiredImageCapability)

@@ -162,6 +162,24 @@ func (s *DesktopModelService) buildCatalogProjection(ctx context.Context, userID
 	if err != nil {
 		return nil, err
 	}
+	return s.buildConfiguredModelsProjection(ctx, userID, *settings)
+}
+
+func (s *DesktopModelService) buildRequestProjection(ctx context.Context, userID int64, modelID string) ([]ResolvedPlatformModel, error) {
+	settings, err := s.settings.GetDesktopSettings(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, entry := range settings.Models {
+		if entry.ID == modelID {
+			settings.Models = []DesktopModelEntry{entry}
+			return s.buildConfiguredModelsProjection(ctx, userID, *settings)
+		}
+	}
+	return nil, nil
+}
+
+func (s *DesktopModelService) buildConfiguredModelsProjection(ctx context.Context, userID int64, settings DesktopSettings) ([]ResolvedPlatformModel, error) {
 	result := []ResolvedPlatformModel{}
 	if !settings.Enabled {
 		return result, nil

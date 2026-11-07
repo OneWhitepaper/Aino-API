@@ -97,7 +97,10 @@ func (s *DesktopModelService) ResolveRequest(ctx context.Context, key *APIKey, m
 	if s == nil || key == nil || key.User == nil {
 		return nil, ErrServiceUnavailable
 	}
-	entries, err := s.catalogProjection(ctx, key.UserID)
+	// Authorization and routing must reflect the account's current group access
+	// for every inference request. The short-lived catalog projection is only a
+	// display optimization and must not keep a revoked model callable.
+	entries, err := s.buildRequestProjection(ctx, key.UserID, modelID)
 	if err != nil {
 		return nil, err
 	}

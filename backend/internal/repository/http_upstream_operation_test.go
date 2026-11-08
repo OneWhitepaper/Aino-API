@@ -1,16 +1,56 @@
 package repository
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
+	pkghttputil "github.com/Wei-Shaw/sub2api/internal/pkg/httputil"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/stretchr/testify/require"
 )
+
+func TestDesktopOperationRetainsSingleDispatchDuringBoundedDrain(t *testing.T) {
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		calls.Add(1)
+		w.Header().Set("Content-Type", "text/event-stream")
+		_ = http.NewResponseController(w).Flush()
+		ticker := time.NewTicker(5 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-req.Context().Done():
+				return
+			case <-ticker.C:
+				_, _ = io.WriteString(w, ": ping\n\n")
+				_ = http.NewResponseController(w).Flush()
+			}
+		}
+	}))
+	t.Cleanup(server.Close)
+	clientCtx, disconnect := context.WithCancel(t.Context())
+	t.Cleanup(disconnect)
+	ctx := service.WithDesktopInferenceOperation(pkghttputil.DetachUpstreamContext(clientCtx), "operation")
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, server.URL, strings.NewReader("request"))
+	require.NoError(t, err)
+	resp, err := doUpstreamRequest(server.Client(), req, 40*time.Millisecond)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = resp.Body.Close() })
+	disconnect()
+	started := time.Now()
+	_, err = io.ReadAll(resp.Body)
+	require.Error(t, err)
+	require.Less(t, time.Since(started), time.Second, "pings must not prolong the drain")
+	_, err = doUpstreamRequest(server.Client(), req, 40*time.Millisecond)
+	require.ErrorIs(t, err, service.ErrDesktopOperationUnknown)
+	require.EqualValues(t, 1, calls.Load(), "client disconnect must not permit another paid dispatch")
+}
 
 func TestDesktopOperationTransportAllowsArtifactReadsWithoutInferenceReplay(t *testing.T) {
 	var calls atomic.Int32

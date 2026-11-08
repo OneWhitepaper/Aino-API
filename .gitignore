@@ -133,6 +133,8 @@ deploy/docker-compose.override.yml
 .gocache/
 vite.config.js
 docs/*
+!docs/agent-resource-safety.md
+!docs/moego-json-batching.md
 !docs/admin-api-keys.md
 !docs/mcp.md
 !docs/PAYMENT.md
@@ -142,6 +144,7 @@ docs/*
 !docs/BATCH_IMAGE_MVP.md
 !docs/COMPOSITE_GROUPS.md
 !docs/DEVICE_KEY_VALIDATION.md
+!docs/UPSTREAM_V0220_COMPATIBILITY.md
 !docs/VIDEO_API.md
 !docs/PLUGIN_DEVELOPMENT.md
 !docs/channel-monitor-v2-safe-defaults.md

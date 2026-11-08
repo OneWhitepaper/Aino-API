@@ -27,6 +27,7 @@ import (
 	"github.com/imroc/req/v3"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
+	"go.uber.org/zap"
 )
 
 const (
@@ -703,9 +704,22 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesAPIKey(
 		parsed.Endpoint,
 		account.Type,
 	)
-	forwardBody, forwardContentType, err := rewriteOpenAIImagesModel(body, parsed.ContentType, upstreamModel)
+	effectiveQuality, mappedQuality, err := imageQualityForUpstream(account, upstreamModel, parsed.Quality)
 	if err != nil {
 		return nil, err
+	}
+	fields := map[string]string{"model": upstreamModel}
+	if mappedQuality {
+		fields["quality"] = effectiveQuality
+	}
+	forwardBody, forwardContentType, err := rewriteOpenAIImagesFields(body, parsed.ContentType, fields)
+	if err != nil {
+		return nil, err
+	}
+	if mappedQuality {
+		logger.FromContext(ctx).Info("openai_images.quality_mapped",
+			zap.Int64("account_id", account.ID), zap.String("upstream_model", upstreamModel),
+			zap.String("requested_quality", parsed.Quality), zap.String("effective_quality", effectiveQuality))
 	}
 	// 生图是长耗时、上游侧已产生实际成本的操作：客户端中途断开不应连带取消上游请求。
 	// detachStreamUpstreamContext 在非流式时原样返回请求 context，于是客户端一断开
@@ -929,24 +943,21 @@ func buildOpenAIImagesURL(base string, endpoint string) string {
 	return buildOpenAIEndpointURL(base, endpoint)
 }
 
-func rewriteOpenAIImagesModel(body []byte, contentType string, model string) ([]byte, string, error) {
-	model = strings.TrimSpace(model)
-	if model == "" {
-		return body, contentType, nil
-	}
+func rewriteOpenAIImagesFields(body []byte, contentType string, fields map[string]string) ([]byte, string, error) {
 	mediaType, _, err := mime.ParseMediaType(contentType)
 	if err == nil && strings.EqualFold(mediaType, "multipart/form-data") {
-		rewrittenBody, rewrittenType, rewriteErr := rewriteOpenAIImagesMultipartModel(body, contentType, model)
-		return rewrittenBody, rewrittenType, rewriteErr
+		return rewriteOpenAIImagesMultipartFields(body, contentType, fields)
 	}
-	rewritten, err := sjson.SetBytes(body, "model", model)
-	if err != nil {
-		return nil, "", fmt.Errorf("rewrite image request model: %w", err)
+	for field, value := range fields {
+		body, err = sjson.SetBytes(body, field, value)
+		if err != nil {
+			return nil, "", fmt.Errorf("rewrite image request %s: %w", field, err)
+		}
 	}
-	return rewritten, contentType, nil
+	return body, contentType, nil
 }
 
-func rewriteOpenAIImagesMultipartModel(body []byte, contentType string, model string) ([]byte, string, error) {
+func rewriteOpenAIImagesMultipartFields(body []byte, contentType string, fields map[string]string) ([]byte, string, error) {
 	_, params, err := mime.ParseMediaType(contentType)
 	if err != nil {
 		return nil, "", fmt.Errorf("parse multipart content-type: %w", err)
@@ -959,7 +970,7 @@ func rewriteOpenAIImagesMultipartModel(body []byte, contentType string, model st
 	reader := multipart.NewReader(bytes.NewReader(body), boundary)
 	var buffer bytes.Buffer
 	writer := multipart.NewWriter(&buffer)
-	modelWritten := false
+	written := make(map[string]bool, len(fields))
 
 	for {
 		part, err := reader.NextPart()
@@ -978,12 +989,12 @@ func rewriteOpenAIImagesMultipartModel(body []byte, contentType string, model st
 			return nil, "", fmt.Errorf("create multipart part: %w", err)
 		}
 
-		if formName == "model" && part.FileName() == "" {
-			if _, err := target.Write([]byte(model)); err != nil {
+		if value, exists := fields[formName]; exists && part.FileName() == "" {
+			if _, err := target.Write([]byte(value)); err != nil {
 				_ = part.Close()
-				return nil, "", fmt.Errorf("rewrite multipart model: %w", err)
+				return nil, "", fmt.Errorf("rewrite multipart %s: %w", formName, err)
 			}
-			modelWritten = true
+			written[formName] = true
 			_ = part.Close()
 			continue
 		}
@@ -994,9 +1005,11 @@ func rewriteOpenAIImagesMultipartModel(body []byte, contentType string, model st
 		_ = part.Close()
 	}
 
-	if !modelWritten {
-		if err := writer.WriteField("model", model); err != nil {
-			return nil, "", fmt.Errorf("append multipart model field: %w", err)
+	for field, value := range fields {
+		if !written[field] {
+			if err := writer.WriteField(field, value); err != nil {
+				return nil, "", fmt.Errorf("append multipart field %s: %w", field, err)
+			}
 		}
 	}
 	if err := writer.Close(); err != nil {

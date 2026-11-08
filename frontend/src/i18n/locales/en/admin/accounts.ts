@@ -1,5 +1,22 @@
 export default {
     accounts: {
+      imageQualityMapping: {
+        title: 'Image quality adaptation',
+        hint: 'Applies only to this account’s Images API. Enter the exact, case-sensitive upstream model name after channel and account model mapping. Only configured request qualities are converted; all other qualities remain unchanged and are never inferred.',
+        model: 'Upstream model name',
+        modelPlaceholder: 'For example Nano Banana 2 (case-sensitive)',
+        requested: 'Request quality',
+        upstream: 'Upstream quality',
+        addRow: 'Add quality adaptation',
+        removeRow: 'Delete this quality adaptation',
+        empty: 'No configuration forwards quality unchanged. Remove all rows and save to clear saved mappings.',
+        invalidModel: 'Enter an exact upstream model name of at most 256 bytes, without wildcards or control characters.',
+        invalidRequestedQuality: 'Select a supported request quality.',
+        invalidUpstreamQuality: 'Select a supported upstream quality.',
+        duplicate: 'Each request quality can be mapped only once per upstream model.',
+        tooManyModels: 'Quality adaptation supports at most 64 upstream models.',
+        qualities: { auto: 'Auto (auto)', low: 'Low (low)', medium: 'Medium (medium)', high: 'High (high)', xhigh: 'Extra high (xhigh)', max: 'Maximum (max)', '1k': '1K (1k)', '2k': '2K (2k)', '4k': '4K (4k)' }
+      },
       video: {
         apiKeyDescription: 'Connect a video service using its Base URL and API key. Supports text and image to video.',
         protocol: 'Video protocol',

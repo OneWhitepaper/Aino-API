@@ -214,6 +214,43 @@ async function submitApiKeyAccount(
   return wrapper
 }
 
+describe('OpenAI API key image quality adaptation creation', () => {
+  beforeEach(() => {
+    createAccountMock.mockReset().mockResolvedValue({ id: 91 })
+    probeUpstreamBillingMock.mockReset().mockResolvedValue({ success: true })
+  })
+
+  it('saves an explicitly configured upstream quality and blocks incomplete rows', async () => {
+    const wrapper = mountModal()
+    await selectButtonByText(wrapper, 'OpenAI')
+    await selectButtonByText(wrapper, 'API Key')
+    await wrapper.get('form#create-account-form input[type="text"]').setValue('Nano account')
+    await wrapper.get('form#create-account-form input[type="password"]').setValue('test-api-key')
+    expect(wrapper.get('[data-testid="image-quality-mapping"]').attributes('open')).toBeUndefined()
+    await wrapper.get('[data-testid="image-quality-add"]').trigger('click')
+    await wrapper.get('form#create-account-form').trigger('submit.prevent')
+    await flushPromises()
+    expect(createAccountMock).not.toHaveBeenCalled()
+    await wrapper.get('[data-testid="image-quality-model"]').setValue('Nano Banana 2')
+    await wrapper.get('[data-testid="image-quality-upstream"]').setValue('1k')
+    await wrapper.get('form#create-account-form').trigger('submit.prevent')
+    await flushPromises()
+    expect(createAccountMock.mock.calls[0]?.[0]?.credentials).toMatchObject({
+      api_key: 'test-api-key', image_quality_mapping: { 'Nano Banana 2': { auto: '1k' } }
+    })
+  })
+
+  it('hides image quality adaptation for OAuth and other platforms', async () => {
+    const wrapper = mountModal()
+    await selectButtonByText(wrapper, 'OpenAI')
+    expect(wrapper.find('[data-testid="image-quality-mapping"]').exists()).toBe(false)
+    await selectButtonByText(wrapper, 'API Key')
+    expect(wrapper.find('[data-testid="image-quality-mapping"]').exists()).toBe(true)
+    await wrapper.get('[data-testid="platform-button-video"]').trigger('click')
+    expect(wrapper.find('[data-testid="image-quality-mapping"]').exists()).toBe(false)
+  })
+})
+
 async function openCodexImportStep(toggleClicks = 0) {
   const wrapper = mountModal()
   await selectButtonByText(wrapper, 'OpenAI')

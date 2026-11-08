@@ -877,6 +877,12 @@
         </div>
       </div>
 
+      <ImageQualityMappingEditor
+        v-if="account.platform === 'openai' && account.type === 'apikey'"
+        :rows="imageQualityMappingRows"
+        @update:rows="imageQualityMappingRows = $event"
+      />
+
       <!-- OpenAI/Grok OAuth Model Mapping (OAuth 类型没有 apikey 容器，需要独立的模型映射区域) -->
       <div
         v-if="(account.platform === 'openai' || account.platform === 'grok') && account.type === 'oauth'"
@@ -3428,6 +3434,14 @@ import {
 } from '@/utils/geminiExplicitCache'
 import OpenCodeGoProtocolRulesEditor from '@/components/account/OpenCodeGoProtocolRulesEditor.vue'
 import HeaderOverrideEditor from '@/components/account/HeaderOverrideEditor.vue'
+import ImageQualityMappingEditor from '@/components/account/ImageQualityMappingEditor.vue'
+import {
+  IMAGE_QUALITY_MAPPING_CREDENTIAL_KEY,
+  buildImageQualityMapping,
+  readImageQualityMapping,
+  validateImageQualityMappingRows,
+  type ImageQualityMappingRow
+} from '@/components/account/imageQualityMapping'
 import OllamaCloudUsageSettings from '@/components/account/OllamaCloudUsageSettings.vue'
 import {
   applyAntigravityProjectID,
@@ -3878,6 +3892,7 @@ const selectedErrorCodes = ref<number[]>([])
 const customErrorCodeInput = ref<number | null>(null)
 const headerOverrideEnabled = ref(false)
 const headerOverrideRows = ref<HeaderOverrideRow[]>([])
+const imageQualityMappingRows = ref<ImageQualityMappingRow[]>([])
 
 const headerOverrideCapable = computed(
   () => !!props.account && isHeaderOverrideCapable(props.account.platform, props.account.type)
@@ -4823,6 +4838,10 @@ const syncFormFromAccount = (newAccount: Account | null) => {
       overrideCreds[HEADER_OVERRIDES_CREDENTIAL_KEY]
     )
   }
+
+  imageQualityMappingRows.value = newAccount.platform === 'openai' && newAccount.type === 'apikey'
+    ? readImageQualityMapping(credentials?.[IMAGE_QUALITY_MAPPING_CREDENTIAL_KEY])
+    : []
 
   // Load Grok OAuth custom upstream URL state（存储的官方地址视同未定制）
   grokOAuthCustomBaseUrlEnabled.value = false
@@ -5795,6 +5814,15 @@ const handleSubmit = async () => {
           }
         }
         applyHeaderOverride(newCredentials, headerOverrideEnabled.value, headerOverrideRows.value, 'edit')
+      }
+
+      if (props.account.platform === 'openai') {
+        const qualityError = validateImageQualityMappingRows(imageQualityMappingRows.value)
+        if (qualityError) {
+          appStore.showError(t(`admin.accounts.imageQualityMapping.${qualityError}`))
+          return
+        }
+        newCredentials[IMAGE_QUALITY_MAPPING_CREDENTIAL_KEY] = buildImageQualityMapping(imageQualityMappingRows.value)
       }
 
       // Add intercept warmup requests setting

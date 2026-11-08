@@ -1,5 +1,22 @@
 export default {
     accounts: {
+      imageQualityMapping: {
+        title: '图片画质适配',
+        hint: '仅对本账号的 Images 接口生效。模型名填写渠道与账号模型映射后的实际完整上游名称，精确匹配；只转换已配置的请求画质，其他画质保持原值，不会自动推测。',
+        model: '上游模型名称',
+        modelPlaceholder: '例如 Nano Banana 2（区分大小写）',
+        requested: '请求画质',
+        upstream: '上游画质',
+        addRow: '添加画质适配',
+        removeRow: '删除这条画质适配',
+        empty: '未配置时原样转发。删除全部适配并保存即可清空已有配置。',
+        invalidModel: '请填写完整的上游模型名称，不支持通配符或控制字符，最多 256 字节。',
+        invalidRequestedQuality: '请选择支持的请求画质。',
+        invalidUpstreamQuality: '请选择支持的上游画质。',
+        duplicate: '同一上游模型的同一请求画质只能配置一次。',
+        tooManyModels: '最多为 64 个上游模型配置画质适配。',
+        qualities: { auto: '自动 (auto)', low: '低 (low)', medium: '中 (medium)', high: '高 (high)', xhigh: '更高 (xhigh)', max: '最高 (max)', '1k': '1K (1k)', '2k': '2K (2k)', '4k': '4K (4k)' }
+      },
       video: {
         apiKeyDescription: '使用视频服务的 Base URL 和 API Key，支持文生视频与图生视频。',
         protocol: '视频协议',

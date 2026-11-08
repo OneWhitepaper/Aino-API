@@ -329,6 +329,43 @@ function mountModal(account = buildAccount(), renderGroupSelector = false) {
   })
 }
 
+describe('OpenAI image quality adaptation editing', () => {
+  beforeEach(() => {
+    updateAccountMock.mockReset().mockResolvedValue(buildAccount())
+    checkMixedChannelRiskMock.mockReset().mockResolvedValue({ has_risk: false })
+  })
+
+  it('loads saved mappings, preserves other credentials, and explicitly clears deleted mappings', async () => {
+    const account = buildAccount()
+    account.credentials.image_quality_mapping = { 'Nano Banana 2': { auto: '1k' } }
+    account.credentials.unrelated_option = 'preserved'
+    const wrapper = mountModal(account)
+    expect(wrapper.get('[data-testid="image-quality-mapping"]').attributes('open')).toBeUndefined()
+    expect((wrapper.get('[data-testid="image-quality-model"]').element as HTMLInputElement).value).toBe('Nano Banana 2')
+    await wrapper.get('[data-testid="image-quality-upstream"]').setValue('2k')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+    expect(updateAccountMock.mock.calls[0]?.[1]?.credentials).toMatchObject({
+      api_key: 'sk-test', unrelated_option: 'preserved', image_quality_mapping: { 'Nano Banana 2': { auto: '2k' } }
+    })
+    await wrapper.get('[data-testid="image-quality-remove"]').trigger('click')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+    expect(updateAccountMock.mock.calls[1]?.[1]?.credentials?.image_quality_mapping).toEqual({})
+  })
+
+  it('blocks invalid mappings and reloads state when switching accounts', async () => {
+    const account = buildAccount()
+    account.credentials.image_quality_mapping = { 'Nano Banana 2': { auto: '1k' } }
+    const wrapper = mountModal(account)
+    await wrapper.get('[data-testid="image-quality-model"]').setValue('*')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+    expect(updateAccountMock).not.toHaveBeenCalled()
+    await wrapper.setProps({ account: buildAccount() })
+    expect(wrapper.findAll('[data-testid="image-quality-row"]')).toHaveLength(0)
+    await wrapper.setProps({ account: { ...buildAccount(), type: 'oauth' } })
+    expect(wrapper.find('[data-testid="image-quality-mapping"]').exists()).toBe(false)
+  })
+})
+
 describe('EditAccountModal', () => {
   beforeEach(() => {
     authIsSimpleMode.value = true

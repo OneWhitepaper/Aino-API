@@ -473,6 +473,18 @@ func (s *OpenAIGatewayService) streamRawChatCompletions(
 		}
 	}
 
+	terminalEvent := ""
+	switch {
+	case terminal.sawDone:
+		terminalEvent = "[DONE]"
+	case terminal.sawFinishReason:
+		terminalEvent = "finish_reason"
+	case terminal.sawUsage:
+		terminalEvent = "usage_chunk"
+	case clientAborted:
+		terminalEvent = "client_aborted"
+	}
+	logOpenAISuccessMissingUsage(c.Request.Context(), c, account, resp, &usage, terminalEvent, clientDisconnected)
 	return resultWithUsage(), nil
 }
 
@@ -548,6 +560,7 @@ func (s *OpenAIGatewayService) bufferRawChatCompletions(
 		upstreamRequestID := firstNonEmpty(requestID, resp.Header.Get("xai-request-id"))
 		return nil, newGrokMissingUsageFailoverError(c, account, upstreamRequestID)
 	}
+	logOpenAISuccessMissingUsage(c.Request.Context(), c, account, resp, &usage, "json", false)
 	respBody = applyOllamaCloudRawChatCompletionsResponse(account, respBody)
 	respBody = s.replaceModelInResponseBody(respBody, upstreamModel, originalModel)
 

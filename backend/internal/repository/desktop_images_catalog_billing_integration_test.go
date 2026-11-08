@@ -58,6 +58,7 @@ func TestDesktopCatalogImageAliasUsesSameKeyAndSettles(t *testing.T) {
 		if strings.HasPrefix(req.Header.Get("Content-Type"), "multipart/") {
 			require.NoError(t, req.ParseMultipartForm(1<<20))
 			require.Equal(t, "gemini-3.1-flash-image", req.FormValue("model"))
+			require.Equal(t, "2k", req.FormValue("quality"))
 			file, _, err := req.FormFile("image")
 			require.NoError(t, err)
 			defer file.Close()
@@ -68,6 +69,7 @@ func TestDesktopCatalogImageAliasUsesSameKeyAndSettles(t *testing.T) {
 			body, err := io.ReadAll(req.Body)
 			require.NoError(t, err)
 			require.Equal(t, model, gjson.GetBytes(body, "model").String())
+			require.Equal(t, "1k", gjson.GetBytes(body, "quality").String())
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{"data":[{"b64_json":"aW1hZ2U="}],"usage":{"input_tokens":10,"output_tokens":5}}`)
@@ -91,7 +93,7 @@ func TestDesktopCatalogImageAliasUsesSameKeyAndSettles(t *testing.T) {
 		parsed, err := gateway.ParseOpenAIImagesRequest(c, body)
 		require.NoError(t, err)
 		require.Equal(t, service.OpenAIImagesCapabilityAPIKey, parsed.RequiredCapability)
-		account := &service.Account{ID: accountRow.ID, Platform: service.PlatformOpenAI, Type: service.AccountTypeAPIKey, Credentials: map[string]any{"base_url": upstream.URL, "api_key": "fixture-only"}}
+		account := &service.Account{ID: accountRow.ID, Platform: service.PlatformOpenAI, Type: service.AccountTypeAPIKey, Credentials: map[string]any{"base_url": upstream.URL, "api_key": "fixture-only", "image_quality_mapping": map[string]any{model: map[string]any{"auto": "1k"}, "gemini-3.1-flash-image": map[string]any{"auto": "2k"}}}}
 		if parsed.IsEdits() {
 			account.Credentials["model_mapping"] = map[string]any{model: "gemini-3.1-flash-image"}
 		}

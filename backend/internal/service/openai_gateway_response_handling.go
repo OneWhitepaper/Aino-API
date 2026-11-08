@@ -1316,7 +1316,7 @@ func logOpenAISuccessMissingUsage(ctx context.Context, c *gin.Context, account *
 		return
 	}
 	terminalEvent = strings.TrimSpace(terminalEvent)
-	if terminalEvent != "response.completed" && terminalEvent != "response.done" && terminalEvent != "[DONE]" && terminalEvent != "json" {
+	if !openAIUsageDiagnosticTerminal(terminalEvent) {
 		return
 	}
 	logNow, total, suppressed := openAIMissingUsageSampler.sample(time.Now())
@@ -1329,16 +1329,12 @@ func logOpenAISuccessMissingUsage(ctx context.Context, c *gin.Context, account *
 		accountID = account.ID
 		accountType = string(account.Type)
 	}
-	inboundEndpoint := ""
-	if c != nil && c.Request != nil && c.Request.URL != nil {
-		inboundEndpoint = c.Request.URL.Path
-	}
-	logger.FromContext(ctx).With(
+	logger.FromContext(ctx).With(openAIMissingUsageDiagnosticFields(c, usage, terminalEvent)...).With(
 		zap.String("component", "service.openai_gateway"),
 		zap.Int64("account_id", accountID),
 		zap.String("account_type", accountType),
-		zap.String("inbound_endpoint", inboundEndpoint),
-		zap.String("upstream_request_id", strings.TrimSpace(resp.Header.Get("x-request-id"))),
+		zap.String("inbound_endpoint", openAIUsageDiagnosticEndpoint(c)),
+		zap.String("upstream_request_id", openAIUsageDiagnosticSlug(resp.Header.Get("x-request-id"))),
 		zap.Int("upstream_status_code", resp.StatusCode),
 		zap.String("terminal_event", terminalEvent),
 		zap.Bool("client_disconnected", clientDisconnected),

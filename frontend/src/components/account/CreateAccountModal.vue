@@ -2048,6 +2048,12 @@
 
       </div>
 
+      <ImageQualityMappingEditor
+        v-if="form.platform === 'openai' && accountCategory === 'apikey'"
+        :rows="imageQualityMappingRows"
+        @update:rows="imageQualityMappingRows = $event"
+      />
+
       <!-- Bedrock credentials (only for Anthropic Bedrock type) -->
       <div v-if="form.platform === 'anthropic' && accountCategory === 'bedrock'" class="space-y-4">
         <!-- Auth Mode Radio -->
@@ -4185,6 +4191,13 @@ import CnBaseUrlPresets from '@/components/account/CnBaseUrlPresets.vue'
 import { applyExplicitCacheUpstreamCredentials, isOfficialGeminiBaseUrl } from '@/utils/geminiExplicitCache'
 import OpenCodeGoProtocolRulesEditor from '@/components/account/OpenCodeGoProtocolRulesEditor.vue'
 import HeaderOverrideEditor from '@/components/account/HeaderOverrideEditor.vue'
+import ImageQualityMappingEditor from '@/components/account/ImageQualityMappingEditor.vue'
+import {
+  IMAGE_QUALITY_MAPPING_CREDENTIAL_KEY,
+  buildImageQualityMapping,
+  validateImageQualityMappingRows,
+  type ImageQualityMappingRow
+} from '@/components/account/imageQualityMapping'
 import { allSelectedGroupsEnableLongContextPricing } from '@/components/account/longContextBilling'
 import {
   applyAntigravityProjectID,
@@ -4684,6 +4697,7 @@ const selectedErrorCodes = ref<number[]>([])
 const customErrorCodeInput = ref<number | null>(null)
 const headerOverrideEnabled = ref(false)
 const headerOverrideRows = ref<HeaderOverrideRow[]>([])
+const imageQualityMappingRows = ref<ImageQualityMappingRow[]>([])
 
 // Grok OAuth：自定义上游地址（base_url 仅改写转发端点，OAuth 授权/刷新不受影响）
 const grokOAuthCustomBaseUrlEnabled = ref(false)
@@ -5253,6 +5267,7 @@ watch(
     // 避免上一平台的配置行被提交到新平台账号
     headerOverrideEnabled.value = false
     headerOverrideRows.value = []
+    imageQualityMappingRows.value = []
     openAIImagesUrlToB64JsonEnabled.value = false
     grokOAuthCustomBaseUrlEnabled.value = false
     grokOAuthBaseUrl.value = ''
@@ -5689,6 +5704,7 @@ const resetForm = () => {
   customErrorCodeInput.value = null
   headerOverrideEnabled.value = false
   headerOverrideRows.value = []
+  imageQualityMappingRows.value = []
   openAIImagesUrlToB64JsonEnabled.value = false
   grokOAuthCustomBaseUrlEnabled.value = false
   grokOAuthBaseUrl.value = ''
@@ -6240,6 +6256,15 @@ const handleSubmit = async () => {
       }
     }
     applyHeaderOverride(credentials, headerOverrideEnabled.value, headerOverrideRows.value, 'create')
+  }
+
+  if (form.platform === 'openai') {
+    const qualityError = validateImageQualityMappingRows(imageQualityMappingRows.value)
+    if (qualityError) {
+      appStore.showError(t(`admin.accounts.imageQualityMapping.${qualityError}`))
+      return
+    }
+    credentials[IMAGE_QUALITY_MAPPING_CREDENTIAL_KEY] = buildImageQualityMapping(imageQualityMappingRows.value)
   }
 
   applyInterceptWarmup(credentials, interceptWarmupRequests.value, 'create')

@@ -1029,7 +1029,6 @@ var ProviderSet = wire.NewSet(
 	ProvideDiagnosticsCleanup,
 	NewDesktopCredentialService,
 	NewDesktopDeviceKeyService,
-	NewDesktopSyncService,
 	NewContentModerationService,
 	NewAffiliateService,
 	ProvidePaymentConfigService,

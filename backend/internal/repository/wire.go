@@ -118,7 +118,6 @@ var ProviderSet = wire.NewSet(
 	NewUserPlatformQuotaServiceAdapter, // T14: adapter → service.UserPlatformQuotaRepository
 	NewDesktopCredentialRepository,     // B2: desktop model credentials
 	NewDesktopDeviceKeyRepository,
-	NewDesktopSyncRepository,
 
 	// Cache implementations
 	NewGatewayCache,

@@ -1,61 +1,55 @@
-# Desktop cloud sync v1
+# Desktop cloud sync — permanently removed
 
-The JWT-authenticated desktop route group exposes `POST /api/v1/desktop/sync/exchange`
-and `PUT`/`GET /api/v1/desktop/sync/blobs/:sha256`. Exchange uses the ordinary
-`data` response envelope; blob GET returns private raw bytes. These endpoints do
-not invoke inference or provision credentials. The authenticated JWT subject is
-the only source of account ownership. Responses are marked `Cache-Control: no-store`.
+Desktop account cloud synchronization has been removed. It is no longer an
+available or recoverable product feature. Local conversations, profiles and
+attachments continue to be stored on the device.
 
-Exchange accepts version 1, a nonempty device ID (at most 256 UTF-8 bytes), a
-canonical nonnegative decimal `after`, a `limit` from 1 to 50, and up to 16
-operations. An operation supplies a UUID `operation_id`, a 1–256-character key
-from `[A-Za-z0-9._:/-]`, a decimal `base_revision`, a boolean `deleted`, and a
-JSON object payload (or null/omitted for a tombstone). Request bodies and exchange
-responses are limited to 16 MiB; individual documents and raw blobs to 8 MiB.
-Invalid, unknown, trailing, oversized, or invalid UTF-8 request input is rejected.
+## Retired HTTP endpoints
 
-Apply compares the current revision (`0` for absent keys) with `base_revision`.
-A tombstone cannot be resurrected. Each result is `applied` or `conflict`, with
-its record; the absent conflicting record has revision `0` and null payload.
-The client must create a new key for recovered or divergent work. Identical
-operation retries return their original result, even after subsequent writes;
-changed content for a used operation ID returns HTTP 409. Input object key order
-and whitespace do not affect the operation fingerprint. Integer precision is
-preserved. Exponent-form numeric expansion is bounded before database conversion;
-inside the transaction, document validation and quota charges use PostgreSQL's
-actual normalized representation. JSONB-incompatible values return HTTP 400 and roll back the exchange.
+The following routes are no longer registered:
 
-Migration `254_desktop_cloud_sync.sql` creates the four private tables. Each
-exchange and blob write locks its account row for the entire transaction. Revision
-advancement, current documents, byte accounting, and receipts commit together.
-The feed returns current records ordered by revision. `cursor` advances only
-through emitted records when `has_more` is true, and otherwise to the committed
-account revision. `after` ahead of the committed revision is rejected. Results
-consume response space first; a page can contain zero changes with `has_more`
-when retries/results fill the byte budget. Continue with the returned cursor and
-without the already-acknowledged operations. If the operation receipts alone exceed
-16 MiB, HTTP 413 `DESKTOP_SYNC_REBATCH` rolls back the entire exchange, including
-new receipts and quota changes. Retry each original operation individually,
-retaining its operation ID, device ID, base revision and exact content. A single
-bounded document always leaves room for its receipt; feed rows use the remaining
-budget. Existing committed receipts still replay their original results. Generic
-413 quota and 400 input failures do not mean a batch may be discarded.
+- `POST /api/v1/desktop/sync/exchange`
+- `PUT /api/v1/desktop/sync/blobs/:sha256`
+- `GET /api/v1/desktop/sync/blobs/:sha256`
 
-The initial quota is 256 MiB per account, persisted as `quota_bytes`. `used_bytes`
-counts current document JSON/metadata, durable operation receipts/metadata, and
-private blob content/metadata. Replacements subtract the previous document charge;
-identical blob retries add nothing. Applied receipts keep the result metadata and
-input fingerprint, reconstructing their payload from the validated identical retry
-input. Conflict receipts preserve their original record. Tombstones, receipts,
-and blobs are retained; they are removed only with account deletion. Thus long-lived
-receipt/blob retention can eventually exhaust quota. HTTP 413
-`DESKTOP_SYNC_QUOTA` rolls back the entire exchange or blob write. This is logical
-content/metadata accounting, not a measurement of PostgreSQL physical disk usage.
+Requests receive HTTP 404 without entering desktop JWT authentication or any
+synchronization handler, service or repository. Older compatible desktop clients
+recognize this response as `sync_unavailable` and stop automatic sync polling.
+The dedicated sync implementation and its dependency-injection providers have
+also been removed; there is no server-side sync worker or scheduled job to keep
+running.
 
-Blob names are lowercase SHA-256 hex. PUT verifies the digest before storage;
-GET verifies it again before responding. The primary key includes account ID, so
-a hash stored by one account grants another account no read access.
+## Cloud-data cleanup
 
-The migration is forward-only and follows the normal application migration
-runner. No deployment, production migration, data import, or storage cleanup is
-performed by adding these source files. Rollout requires separate review.
+Forward migration `256_remove_desktop_cloud_sync.sql` permanently drops only:
+
+- `desktop_sync_blobs`
+- `desktop_sync_operations`
+- `desktop_sync_documents`
+- `desktop_sync_accounts`
+
+These tables contain the former private cloud attachment bytes, operation
+receipts, synchronized documents and synchronization revision/quota accounting.
+Attachment bytes were stored entirely in the `desktop_sync_blobs.content` BYTEA
+column, so there is no external object-store or filesystem cleanup.
+
+The migration uses `DROP TABLE IF EXISTS` in child-to-parent order without
+`CASCADE`. It is safe to rerun and does not remove unrelated dependencies. Keep
+historical migration `254_desktop_cloud_sync.sql` unchanged to preserve deployed
+migration checksums. Migration 255 and the separate device-information feature
+remain intact. Running migration 256 deletes existing synchronized cloud data;
+there is no retained recovery or re-enable path in this feature.
+
+## Unaffected services and deployment state
+
+Account login, users, permanent device Keys, device metadata, model catalogs,
+model requests, subscriptions, account balances and billing retain their existing
+behavior. The cleanup does not access or delete desktop-local conversation
+history, profiles or attachment files. Sync quota accounting is separate from
+account balances and model charges.
+
+These source changes do not constitute a production deployment. No production
+database has been contacted or migrated as part of this change. Cloud tables and
+their existing data are deleted only when the new migration is executed during
+an actual API upgrade; old deployed API instances keep their previous behavior
+until replaced.

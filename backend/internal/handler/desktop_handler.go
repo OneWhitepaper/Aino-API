@@ -162,6 +162,11 @@ func (h *DesktopHandler) ListDevices(c *gin.Context) {
 			return
 		}
 	}
+	devices, err = h.credentials.AttachDeviceInfo(c.Request.Context(), subject.UserID, devices)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
 	response.Success(c, devices)
 }
 

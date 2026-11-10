@@ -41,6 +41,7 @@ func RegisterDesktopRoutes(
 		desktop.POST("/device-keys", h.Desktop.ProvisionDeviceKey)
 		desktop.GET("/device-keys/:device_id", h.Desktop.GetDeviceKey)
 		desktop.GET("/devices", h.Desktop.ListDevices)
+		desktop.PUT("/devices/:device_id/info", h.Desktop.UpdateDeviceInfo)
 		desktop.DELETE("/devices/:device_id", h.Desktop.RevokeDevice)
 		desktop.POST("/diagnostics", h.Desktop.UploadDiagnostics)
 		desktop.GET("/diagnostics/:id", h.Desktop.GetOwnDiagnostic)

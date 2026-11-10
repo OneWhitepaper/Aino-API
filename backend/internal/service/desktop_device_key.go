@@ -166,7 +166,7 @@ func (s *DesktopDeviceKeyService) MergeDevices(ctx context.Context, userID int64
 		if key.LastUsedAt != nil {
 			lastUsed = *key.LastUsedAt
 		}
-		device := DesktopDevice{DeviceID: key.DesktopDeviceID, LastUsedAt: lastUsed, Status: state.Status, Revoked: state.Status != "active"}
+		device := DesktopDevice{DeviceID: key.DesktopDeviceID, CredentialType: "device", LastUsedAt: lastUsed, Status: state.Status, Revoked: state.Status != "active"}
 		if i, ok := byID[device.DeviceID]; ok {
 			devices[i] = device
 		} else {

@@ -158,11 +158,13 @@ type DesktopCredentialResponse struct {
 }
 
 type DesktopDevice struct {
-	DeviceID   string     `json:"device_id"`
-	LastUsedAt time.Time  `json:"last_used_at"`
-	ExpiresAt  *time.Time `json:"expires_at"`
-	Revoked    bool       `json:"revoked"`
-	Status     string     `json:"status"`
+	DeviceInfo     *DesktopDeviceInfo `json:"device_info,omitempty"`
+	CredentialType string             `json:"credential_type"`
+	DeviceID       string             `json:"device_id"`
+	LastUsedAt     time.Time          `json:"last_used_at"`
+	ExpiresAt      *time.Time         `json:"expires_at"`
+	Revoked        bool               `json:"revoked"`
+	Status         string             `json:"status"`
 }
 
 func (s *DesktopCredentialService) ListDevices(ctx context.Context, userID int64) ([]DesktopDevice, error) {
@@ -178,7 +180,7 @@ func (s *DesktopCredentialService) ListDevices(ctx context.Context, userID int64
 		if !ok {
 			index = len(devices)
 			byID[lease.DeviceID] = index
-			devices = append(devices, DesktopDevice{DeviceID: lease.DeviceID, Status: "revoked", Revoked: true})
+			devices = append(devices, DesktopDevice{DeviceID: lease.DeviceID, CredentialType: "lease", Status: "revoked", Revoked: true})
 		}
 		device := &devices[index]
 		if lease.UpdatedAt.After(device.LastUsedAt) {

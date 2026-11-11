@@ -167,7 +167,7 @@
 
           <template #cell-name="{ value, row }">
             <div class="flex items-center gap-1.5">
-              <span class="font-medium text-gray-900 dark:text-white">{{ value }}</span>
+              <span class="font-medium text-gray-900 dark:text-white">{{ deviceInfoForKey(row)?.installation_name || value }}</span>
               <Icon
                 v-if="row.ip_whitelist?.length > 0 || row.ip_blacklist?.length > 0"
                 name="shield"
@@ -176,8 +176,8 @@
                 :title="t('keys.ipRestrictionEnabled')"
               />
             </div>
-            <span v-if="isDeviceKey(row) && row.desktop_device_id" class="mt-1 block font-mono text-xs text-gray-500 dark:text-dark-400" :title="row.desktop_device_id">
-              {{ t('keys.desktopDevice') }} · {{ row.desktop_device_id.slice(0, 8) }}
+            <span v-if="row.desktop_managed && row.desktop_device_id" class="mt-1 block text-xs text-gray-500 dark:text-dark-400" :title="row.desktop_device_id">
+              {{ deviceDescription(row) }}
             </span>
           </template>
 
@@ -1076,7 +1076,7 @@
     <ConfirmDialog
       :show="showDeleteDialog"
       :title="t(selectedKey && isDeviceKey(selectedKey) ? 'keys.revokeDevice' : 'keys.deleteKey')"
-      :message="t(selectedKey && isDeviceKey(selectedKey) ? 'keys.revokeDeviceConfirm' : 'keys.deleteConfirmMessage', { name: selectedKey?.name })"
+      :message="t(selectedKey && isDeviceKey(selectedKey) ? 'keys.revokeDeviceConfirm' : 'keys.deleteConfirmMessage', { name: (selectedKey && deviceInfoForKey(selectedKey)?.installation_name) || selectedKey?.name })"
       :confirm-text="t(selectedKey && isDeviceKey(selectedKey) ? 'keys.revokeDevice' : 'common.delete')"
       :cancel-text="t('common.cancel')"
       :danger="true"
@@ -1268,6 +1268,7 @@ import BulkEditKeysModal from '@/components/keys/BulkEditKeysModal.vue'
 	import type { ApiKey, Group, PublicSettings, SubscriptionType, GroupPlatform, UpdateApiKeyRequest } from '@/types'
 import type { Column } from '@/components/common/types'
 import type { BatchApiKeyUsageStats } from '@/api/usage'
+import type { DesktopDeviceInfo } from '@/api/keys'
 import { formatDateTime } from '@/utils/format'
 import { maskApiKey } from '@/utils/maskApiKey'
 import PlatformIcon from '@/components/common/PlatformIcon.vue'
@@ -1400,6 +1401,31 @@ const columns = computed<Column[]>(() =>
 
 const apiKeys = ref<ApiKey[]>([])
 const isDeviceKey = (key: ApiKey) => key.desktop_managed === true && key.desktop_credential_type === 'device'
+const deviceInfoById = ref<Record<string, DesktopDeviceInfo>>({})
+const deviceInfoForKey = (key: ApiKey) => key.desktop_managed && key.desktop_device_id
+  ? deviceInfoById.value[key.desktop_device_id]
+  : undefined
+const deviceDescription = (key: ApiKey) => {
+  const info = deviceInfoForKey(key)
+  if (!info) return `${t('keys.desktopDevice')} · ${key.desktop_device_id?.slice(0, 8)}`
+  const client = { desktop: 'keys.desktopRelease', desktop_dev: 'keys.desktopDevelopment', browser: 'keys.desktopBrowser' }[info.client_type]
+  const os = { macos: 'macOS', windows: 'Windows', linux: 'Linux' }[info.os]
+  return [t(client), os, info.client_version].filter(Boolean).join(' · ')
+}
+
+const loadDeviceInfo = async (keys: ApiKey[], signal: AbortSignal) => {
+  if (!keys.some(key => key.desktop_managed && key.desktop_device_id)) return
+  try {
+    const devices = await keysAPI.listDesktopDevices({ signal })
+    if (!signal.aborted) {
+      deviceInfoById.value = Object.fromEntries(devices
+        .filter(device => device.device_info)
+        .map(device => [device.device_id, device.device_info!]))
+    }
+  } catch {
+    // Older API versions and missing optional metadata keep the original key name.
+  }
+}
 const selectedIds = ref<number[]>([])
 const showBulkEditModal = ref(false)
 const isKeySelectable = (key: ApiKey) => !key.desktop_managed
@@ -1664,6 +1690,7 @@ const loadApiKeys = async () => {
   const controller = new AbortController()
   abortController = controller
   const { signal } = controller
+  deviceInfoById.value = {}
   loading.value = true
   try {
     // Build filters
@@ -1686,6 +1713,7 @@ const loadApiKeys = async () => {
     })
     if (signal.aborted) return
     apiKeys.value = response.items
+    void loadDeviceInfo(response.items, signal)
     handleSelectionChange(selectedIds.value)
     pagination.value.total = response.total
     pagination.value.pages = response.pages
@@ -2173,6 +2201,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  abortController?.abort()
   document.removeEventListener('click', closeGroupSelector)
   if (resetTimer) clearInterval(resetTimer)
 })

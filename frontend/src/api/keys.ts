@@ -6,6 +6,23 @@
 import { apiClient } from './client'
 import type { ApiKey, CreateApiKeyRequest, UpdateApiKeyRequest, PaginatedResponse } from '@/types'
 
+export interface DesktopDeviceInfo {
+  installation_name: string
+  os: 'macos' | 'windows' | 'linux'
+  client_type: 'desktop' | 'desktop_dev' | 'browser'
+  client_version: string
+}
+
+export interface DesktopDeviceAuthorization {
+  device_id: string
+  device_info?: DesktopDeviceInfo
+}
+
+export async function listDesktopDevices(options?: { signal?: AbortSignal }): Promise<DesktopDeviceAuthorization[]> {
+  const { data } = await apiClient.get<DesktopDeviceAuthorization[]>('/desktop/devices', options)
+  return data
+}
+
 /**
  * List all API keys for current user
  * @param page - Page number (default: 1)
@@ -161,6 +178,7 @@ export async function toggleStatus(id: number, status: 'active' | 'inactive'): P
 
 export const keysAPI = {
   list,
+  listDesktopDevices,
   getById,
   create,
   update,

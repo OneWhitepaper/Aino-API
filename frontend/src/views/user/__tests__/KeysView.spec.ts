@@ -9,6 +9,7 @@ import KeysView from '../KeysView.vue'
 
 const {
   listKeys,
+  listDesktopDevices,
   updateKey,
   getPublicSettings,
   getDashboardApiKeysUsage,
@@ -21,6 +22,7 @@ const {
   nextStep,
 } = vi.hoisted(() => ({
   listKeys: vi.fn(),
+  listDesktopDevices: vi.fn(),
   updateKey: vi.fn(),
   getPublicSettings: vi.fn(),
   getDashboardApiKeysUsage: vi.fn(),
@@ -66,6 +68,7 @@ const messages: Record<string, string> = {
 vi.mock('@/api', () => ({
   keysAPI: {
     list: listKeys,
+    listDesktopDevices,
     create: vi.fn(),
     update: updateKey,
     delete: vi.fn(),
@@ -310,6 +313,7 @@ describe('user KeysView column settings', () => {
     localStorage.clear()
 
     listKeys.mockReset()
+    listDesktopDevices.mockReset()
     updateKey.mockReset()
     vi.mocked(keysAPI.create).mockReset()
     getPublicSettings.mockReset()
@@ -330,6 +334,7 @@ describe('user KeysView column settings', () => {
       pages: 1,
     })
     getPublicSettings.mockResolvedValue({})
+    listDesktopDevices.mockResolvedValue([])
     getDashboardApiKeysUsage.mockResolvedValue({ stats: {} })
     getAvailableGroups.mockResolvedValue([])
     getUserGroupRates.mockResolvedValue({})
@@ -375,6 +380,65 @@ describe('user KeysView column settings', () => {
     expect(keysAPI.delete).toHaveBeenCalledWith(1)
     expect(updateKey).not.toHaveBeenCalled()
     wrapper.unmount()
+  })
+
+  it('shows the native computer name for its own desktop authorization and keeps the full device ID available', async () => {
+    const deviceId = '00000000-0000-4000-8000-000000000001'
+    listKeys.mockResolvedValueOnce({ items: [
+      { ...createApiKey(), name: 'Aino desktop (00000000)', key: '', desktop_managed: true, desktop_credential_type: 'device', desktop_device_id: deviceId },
+      { ...createApiKey(), id: 2, name: 'Personal project' }
+    ], total: 2, page: 1, page_size: 20, pages: 1 })
+    listDesktopDevices.mockResolvedValueOnce([
+      { device_id: deviceId, device_info: { installation_name: '仔仔木头', os: 'macos', client_type: 'desktop_dev', client_version: '0.23.0' } },
+      { device_id: 'other-device', device_info: { installation_name: 'Other account computer' } }
+    ])
+    const wrapper = await mountView()
+    expect(wrapper.text()).toContain('仔仔木头')
+    expect(wrapper.text()).toContain('macOS')
+    expect(wrapper.text()).toContain('0.23.0')
+    expect(wrapper.text()).toContain('Personal project')
+    expect(wrapper.text()).not.toContain('Aino desktop (00000000)')
+    expect(wrapper.text()).not.toContain('Other account computer')
+    expect(wrapper.find(`[title="${deviceId}"]`).exists()).toBe(true)
+    expect(listDesktopDevices).toHaveBeenCalledWith({ signal: expect.any(AbortSignal) })
+    expect(wrapper.find('button[title="keys.copyToClipboard"]').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('keeps older desktop authorizations usable when computer metadata is unavailable', async () => {
+    listKeys.mockResolvedValueOnce({ items: [
+      { ...createApiKey(), name: 'Legacy desktop', key: '', desktop_managed: true, desktop_credential_type: 'device', desktop_device_id: '00000000-0000-4000-8000-000000000001' }
+    ], total: 1, page: 1, page_size: 20, pages: 1 })
+    listDesktopDevices.mockRejectedValueOnce(new Error('older server'))
+    const wrapper = await mountView()
+    expect(listDesktopDevices).toHaveBeenCalledOnce()
+    expect(wrapper.text()).toContain('Legacy desktop')
+    expect(wrapper.text()).toContain('keys.desktopDevice · 00000000')
+    expect(getButtonByText(wrapper, 'keys.revokeDevice').exists()).toBe(true)
+    expect(showError).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('does not replace refreshed device names with a late result from a previous request', async () => {
+    const deviceId = '00000000-0000-4000-8000-000000000001'
+    const device = (name: string) => [{ device_id: deviceId, device_info: { installation_name: name, os: 'macos', client_type: 'desktop_dev', client_version: '0.23.0' } }]
+    let release!: (value: ReturnType<typeof device>) => void
+    listDesktopDevices.mockReturnValueOnce(new Promise(resolve => { release = resolve }))
+      .mockResolvedValueOnce(device('Current computer name'))
+    listKeys.mockResolvedValue({ items: [
+      { ...createApiKey(), key: '', desktop_managed: true, desktop_credential_type: 'device', desktop_device_id: deviceId }
+    ], total: 1, page: 1, page_size: 20, pages: 1 })
+    const wrapper = await mountView()
+    await wrapper.get('button[title="Refresh"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('Current computer name')
+    expect(listDesktopDevices.mock.calls[0][0].signal.aborted).toBe(true)
+    release(device('Stale computer name'))
+    await flushPromises()
+    expect(wrapper.text()).toContain('Current computer name')
+    expect(wrapper.text()).not.toContain('Stale computer name')
+    wrapper.unmount()
+    expect(listDesktopDevices.mock.calls[1][0].signal.aborted).toBe(true)
   })
 
   it('shows a disabled device authorization as revoked without a renewal or reactivate control', async () => {

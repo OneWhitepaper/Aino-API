@@ -24,6 +24,20 @@ without reported metadata omit `device_info`; clients may display “Unknown”.
 `os` is `macos`, `windows` or `linux`. `client_type` is `desktop`, `desktop_dev` or
 `browser`. These values are untrusted display labels and never grant capabilities.
 
+Desktop reports the operating system's friendly computer name as
+`installation_name`: macOS uses `ComputerName`, while other platforms use the
+hostname. macOS falls back to the hostname if the bounded native lookup fails;
+invalid or unavailable machine names fall back to the product name. Names are
+limited to 80 Unicode code points before reporting. The stable installation UUID
+continues to identify the device; changing a display name does not issue or rotate
+a credential. Restarting desktop refreshes the reported native name.
+
+The API keys page joins device metadata by `desktop_device_id`, displaying the
+computer name above the client type, operating system and version. The full
+installation UUID remains in the row's tooltip. Missing metadata and older API
+versions keep the existing key name and short device ID. Ordinary API key names
+are not changed.
+
 The response uses the existing success envelope with the saved four-field object
 in `data`. Invalid information returns 400; an absent or foreign device association
 returns 404. Account authentication remains required. An installation may update

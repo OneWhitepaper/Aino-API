@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler"
@@ -79,6 +80,15 @@ func TestTeamFundingManagementHTTPUsesJWTActor(t *testing.T) {
 }
 
 func TestDesktopTeamSharedBalanceZeroPersonalWallet(t *testing.T) {
+	testDesktopTeamSharedZeroPersonalWallet(t, false)
+}
+
+func TestDesktopTeamSharedSubscriptionZeroPersonalWallet(t *testing.T) {
+	testDesktopTeamSharedZeroPersonalWallet(t, true)
+}
+
+func testDesktopTeamSharedZeroPersonalWallet(t *testing.T, sharedSubscription bool) {
+	t.Helper()
 	r := newDesktopModelRig(t)
 	owner, member := r.user(t, service.StatusActive, false), r.user(t, service.StatusActive, false)
 	_, err := r.userRepo.SetBalance(r.ctx, owner.ID, 500)
@@ -100,11 +110,23 @@ func TestDesktopTeamSharedBalanceZeroPersonalWallet(t *testing.T) {
 	_, err = funding.UpdateFunding(r.ctx, member.ID, &service.FundingUpdateCommand{Mode: service.FundingModeTeamOnly, TeamID: &team.ID})
 	require.NoError(t, err)
 
-	group := r.group(t, false)
+	group := r.group(t, sharedSubscription)
 	inputPrice, outputPrice := 2e-6, 6e-6
 	group.ModelPricing = []service.ChannelModelPricing{{Models: []string{"fixture-team-billing"}, InputPrice: &inputPrice, OutputPrice: &outputPrice}}
 	require.NoError(t, r.groups.Update(r.ctx, group))
-	require.NoError(t, r.userRepo.AddGroupToAllowedGroups(r.ctx, member.ID, group.ID))
+	expectedSource := service.TeamFundingSourceBalance
+	var sharedSub *service.UserSubscription
+	if sharedSubscription {
+		expectedSource = service.TeamFundingSourceSubscription
+		now := time.Now()
+		sharedSub = &service.UserSubscription{UserID: owner.ID, GroupID: group.ID, StartsAt: now.Add(-time.Minute), ExpiresAt: now.Add(time.Hour), Status: service.SubscriptionStatusActive, DailyWindowStart: &now, WeeklyWindowStart: &now, MonthlyWindowStart: &now}
+		require.NoError(t, r.subs.Create(r.ctx, sharedSub))
+		ids, mode := []int64{sharedSub.ID}, service.TeamSharedModeSubscriptionOnly
+		_, err = funding.UpdateTeam(r.ctx, owner.ID, team.ID, &service.TeamUpdateCommand{SharedMode: &mode, SharedSubscriptionIDs: &ids})
+		require.NoError(t, err)
+	} else {
+		require.NoError(t, r.userRepo.AddGroupToAllowedGroups(r.ctx, member.ID, group.ID))
+	}
 	entry := desktopEntry("team-shared-device-model", group.ID)
 	entry.Model, entry.APIMode = "fixture-team-billing", "responses"
 	r.catalog(t, []service.DesktopModelEntry{entry}, entry.ID)
@@ -135,11 +157,12 @@ func TestDesktopTeamSharedBalanceZeroPersonalWallet(t *testing.T) {
 	subscriptions := service.NewSubscriptionService(r.groups, r.subs, billingCache, r.client, cfg)
 	t.Cleanup(subscriptions.Stop)
 	router := gin.New()
+	billingRequestID := uuid.NewString()
 	router.POST("/v1/responses", gin.HandlerFunc(middleware.ProvideAPIKeyAuthMiddleware(r.keys, subscriptions, cfg, r.models, nil)), func(c *gin.Context) {
 		key, ok := middleware.GetAPIKeyFromContext(c)
 		require.True(t, ok)
 		require.NotNil(t, key.Funding)
-		require.Equal(t, service.TeamFundingSourceBalance, key.Funding.Source)
+		require.Equal(t, expectedSource, key.Funding.Source)
 		require.Equal(t, owner.ID, key.Funding.PayerUserID)
 		subscription, _ := middleware.GetSubscriptionFromContext(c)
 		body, readErr := io.ReadAll(c.Request.Body)
@@ -148,7 +171,7 @@ func TestDesktopTeamSharedBalanceZeroPersonalWallet(t *testing.T) {
 		result, forwardErr := gateway.Forward(c.Request.Context(), c, account, body)
 		require.NoError(t, forwardErr)
 		require.NotNil(t, result)
-		result.RequestID = "desktop-team-shared-request"
+		result.RequestID = billingRequestID
 		usage := &service.OpenAIRecordUsageInput{Result: result, APIKey: key, User: key.User, Account: account, Subscription: subscription}
 		require.NoError(t, gateway.RecordUsage(context.Background(), usage))
 		// A duplicate billing task for one dispatched request must not settle twice.
@@ -176,22 +199,30 @@ func TestDesktopTeamSharedBalanceZeroPersonalWallet(t *testing.T) {
 	require.NoError(t, db.QueryRowContext(r.ctx, "SELECT balance::numeric(20,8)::text FROM users WHERE id=$1", owner.ID).Scan(&ownerBalance))
 	require.NoError(t, db.QueryRowContext(r.ctx, "SELECT balance::numeric(20,8)::text FROM users WHERE id=$1", member.ID).Scan(&memberBalance))
 	require.Equal(t, "0.00000000", memberBalance)
-	require.Less(t, ownerBalance, "500.00000000")
+	if sharedSubscription {
+		require.Equal(t, "500.00000000", ownerBalance)
+	} else {
+		require.Less(t, ownerBalance, "500.00000000")
+	}
 	ledger, err := funding.ListLedger(r.ctx, owner.ID, team.ID, 1, 20)
 	require.NoError(t, err)
 	require.Len(t, ledger.Items, 1)
 	require.Equal(t, member.ID, ledger.Items[0].UserID)
 	require.Equal(t, owner.ID, ledger.Items[0].PayerUserID)
-	require.Equal(t, service.TeamFundingSourceBalance, ledger.Items[0].Source)
+	require.Equal(t, expectedSource, ledger.Items[0].Source)
 	require.NotEmpty(t, ledger.Items[0].RequestID)
 	var spent, reserved string
 	require.NoError(t, db.QueryRowContext(r.ctx, "SELECT spent::numeric(20,8)::text,reserved::numeric(20,8)::text FROM team_members WHERE team_id=$1 AND user_id=$2", team.ID, member.ID).Scan(&spent, &reserved))
 	require.Equal(t, "0.00000000", reserved)
 	require.NotEqual(t, "0.00000000", spent)
 	var debit string
-	require.NoError(t, db.QueryRowContext(r.ctx, "SELECT (500::numeric-balance)::numeric(20,8)::text FROM users WHERE id=$1", owner.ID).Scan(&debit))
+	if sharedSubscription {
+		require.NoError(t, db.QueryRowContext(r.ctx, "SELECT daily_usage_usd::numeric(20,8)::text FROM user_subscriptions WHERE id=$1", sharedSub.ID).Scan(&debit))
+	} else {
+		require.NoError(t, db.QueryRowContext(r.ctx, "SELECT (500::numeric-balance)::numeric(20,8)::text FROM users WHERE id=$1", owner.ID).Scan(&debit))
+	}
 	require.Equal(t, spent, debit)
 	var usageCount int
-	require.NoError(t, db.QueryRowContext(r.ctx, "SELECT COUNT(*) FROM usage_logs WHERE request_id=$1", "desktop-team-shared-request").Scan(&usageCount))
+	require.NoError(t, db.QueryRowContext(r.ctx, "SELECT COUNT(*) FROM usage_logs WHERE request_id=$1", billingRequestID).Scan(&usageCount))
 	require.Equal(t, 1, usageCount)
 }

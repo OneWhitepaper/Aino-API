@@ -8,6 +8,8 @@ const { t } = useI18n()
 const ledger = ref<TeamLedger>({ items: [], total: 0, page: 1, page_size: 20 })
 const loading = ref(false)
 const failed = ref(false)
+// Decimal strings stay exact, including the smallest eight-decimal overage.
+function hasPendingReviewAmount(value?: string): boolean { return /^\d+(?:\.\d+)?$/.test(value ?? '') && /[1-9]/.test(value ?? '') }
 let generation = 0
 async function load(page = 1) {
   const current = ++generation
@@ -29,7 +31,7 @@ watch(() => [props.teamId, props.revision], () => { ledger.value = { items: [], 
       <div class="mt-4 overflow-x-auto">
         <table class="w-full text-left text-sm">
           <thead><tr class="border-b border-gray-200 text-gray-500 dark:border-dark-600"><th class="whitespace-nowrap p-3">{{ t('teamFunding.date') }}</th><th class="p-3">{{ t('teamFunding.caller') }}</th><th class="p-3">{{ t('teamFunding.payer') }}</th><th class="p-3">{{ t('teamFunding.source') }}</th><th class="p-3">{{ t('teamFunding.amount') }}</th><th class="p-3">{{ t('teamFunding.request') }}</th></tr></thead>
-          <tbody><tr v-for="entry in ledger.items" :key="entry.id" class="border-b border-gray-100 dark:border-dark-700"><td class="whitespace-nowrap p-3">{{ new Date(entry.created_at).toLocaleString() }}</td><td class="p-3">#{{ entry.user_id }}</td><td class="p-3">#{{ entry.payer_user_id }}</td><td class="whitespace-nowrap p-3">{{ t(`teamFunding.sources.${entry.source}`) }}<span v-if="entry.subscription_id"> #{{ entry.subscription_id }}</span></td><td class="whitespace-nowrap p-3 font-medium">{{ displayAmount(entry.amount, t('teamFunding.credits')) }}</td><td class="max-w-48 break-all p-3 font-mono text-xs">{{ entry.request_id }}</td></tr></tbody>
+          <tbody><tr v-for="entry in ledger.items" :key="entry.id" class="border-b border-gray-100 dark:border-dark-700"><td class="whitespace-nowrap p-3">{{ new Date(entry.created_at).toLocaleString() }}</td><td class="p-3">#{{ entry.user_id }}</td><td class="p-3">#{{ entry.payer_user_id }}</td><td class="whitespace-nowrap p-3">{{ t(`teamFunding.sources.${entry.source}`) }}<span v-if="entry.subscription_id"> #{{ entry.subscription_id }}</span></td><td class="p-3"><p class="whitespace-nowrap font-medium" data-testid="team-charge">{{ displayAmount(entry.amount, t('teamFunding.credits')) }}</p><p v-if="hasPendingReviewAmount(entry.unauthorized_amount)" class="mt-1 min-w-40 max-w-64 text-xs leading-relaxed text-amber-700 dark:text-amber-300" data-testid="pending-review-amount">{{ t('teamFunding.pendingReviewAmount', { amount: displayAmount(entry.unauthorized_amount || '0', t('teamFunding.credits')) }) }}</p></td><td class="max-w-48 break-all p-3 font-mono text-xs">{{ entry.request_id }}</td></tr></tbody>
         </table>
       </div>
       <div class="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm"><span>{{ t('teamFunding.ledgerCount', { total: ledger.total, page: ledger.page }) }}</span><div class="flex gap-2"><button class="btn btn-secondary btn-sm" :disabled="ledger.page <= 1" @click="load(ledger.page - 1)">{{ t('pagination.previous') }}</button><button class="btn btn-secondary btn-sm" :disabled="ledger.page * ledger.page_size >= ledger.total" @click="load(ledger.page + 1)">{{ t('pagination.next') }}</button></div></div>

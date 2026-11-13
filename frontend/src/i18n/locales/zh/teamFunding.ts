@@ -27,7 +27,8 @@ export default {
   operationFailed: '操作失败，请重试。', operationSuccess: '操作已完成', detailFailed: '团队详情暂时无法加载。',
   status: { active: '启用中', paused: '已暂停', removed: '已移除' },
   ledgerTitle: '团队共享账目', ownerLedgerHelp: '仅显示此团队的共享消费，不含成员个人消费或对话内容。', memberLedgerHelp: '仅显示你在此团队的共享消费，不含其他成员或个人消费。',
-  ledgerFailed: '账目暂时无法加载。', noLedger: '暂无共享消费记录。', ledgerCount: '共 {total} 条 · 第 {page} 页', date: '时间', caller: '调用人', payer: '付款人', source: '付款来源', amount: '金额', request: '请求 ID',
+  ledgerFailed: '账目暂时无法加载。', noLedger: '暂无共享消费记录。', ledgerCount: '共 {total} 条 · 第 {page} 页', date: '时间', caller: '调用人', payer: '付款人', source: '付款来源', amount: '团队实际扣费', request: '请求 ID',
+  pendingReviewAmount: '待核对金额：{amount}。未计入团队实际扣费。',
   sources: { team_balance: '组织人余额', team_subscription: '组织人订阅' },
   modes: { personal_first: '个人优先', personal_only: '仅用个人余额', team_first: '团队优先', team_only: '仅用团队', subscription_first: '订阅优先', subscription_only: '仅用个人订阅' },
   sharedModes: { balance_first: '组织人余额 → 已选共享订阅', subscription_first: '已选共享订阅 → 组织人余额', balance_only: '仅用组织人余额', subscription_only: '仅用已选共享订阅' }

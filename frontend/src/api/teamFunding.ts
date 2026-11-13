@@ -37,7 +37,7 @@ export interface MemberSettingsInput {
 }
 export interface TeamLedgerEntry {
   id: number; request_id: string; user_id: number; payer_user_id: number
-  source: 'team_balance' | 'team_subscription'; subscription_id?: number | null; amount: string; created_at: string
+  source: 'team_balance' | 'team_subscription'; subscription_id?: number | null; amount: string; unauthorized_amount?: string; created_at: string
 }
 export interface TeamLedger { items: TeamLedgerEntry[]; total: number; page: number; page_size: number }
 const base = '/user'

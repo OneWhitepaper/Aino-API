@@ -27,7 +27,8 @@ export default {
   operationFailed: 'Operation failed. Please retry.', operationSuccess: 'Operation completed', detailFailed: 'Team details could not be loaded.',
   status: { active: 'Active', paused: 'Paused', removed: 'Removed' },
   ledgerTitle: 'Team shared ledger', ownerLedgerHelp: 'Only this team’s shared charges are shown. Personal charges and conversations remain private.', memberLedgerHelp: 'Only your shared charges in this team are shown, excluding other members and personal charges.',
-  ledgerFailed: 'Ledger could not be loaded.', noLedger: 'No shared charges yet.', ledgerCount: '{total} entries · Page {page}', date: 'Date', caller: 'Caller', payer: 'Payer', source: 'Payment source', amount: 'Amount', request: 'Request ID',
+  ledgerFailed: 'Ledger could not be loaded.', noLedger: 'No shared charges yet.', ledgerCount: '{total} entries · Page {page}', date: 'Date', caller: 'Caller', payer: 'Payer', source: 'Payment source', amount: 'Team charge', request: 'Request ID',
+  pendingReviewAmount: 'Amount pending review: {amount}. Not included in the team charge.',
   sources: { team_balance: 'Owner balance', team_subscription: 'Owner subscription' },
   modes: { personal_first: 'Personal first', personal_only: 'Personal balance only', team_first: 'Team first', team_only: 'Team only', subscription_first: 'Subscription first', subscription_only: 'Personal subscription only' },
   sharedModes: { balance_first: 'Owner balance → Selected shared subscriptions', subscription_first: 'Selected shared subscriptions → Owner balance', balance_only: 'Owner balance only', subscription_only: 'Selected shared subscriptions only' }

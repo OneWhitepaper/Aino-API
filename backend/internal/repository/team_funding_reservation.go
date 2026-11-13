@@ -85,7 +85,7 @@ func (r *teamFundingRepository) Reserve(ctx context.Context, c *service.TeamFund
 		old, e := scanTeamReservation(tx.QueryRowContext(ctx, teamReservationSQL+" WHERE request_id=$1 AND api_key_id=$2", c.RequestID, c.APIKeyID))
 		if e == nil {
 			if !sameReservation(old, c) {
-				return service.ErrTeamFundingConflict
+				return service.ErrUsageBillingRequestConflict
 			}
 			out = old
 			return nil

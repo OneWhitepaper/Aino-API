@@ -103,15 +103,16 @@ type Invitation struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 type TeamLedgerEntry struct {
-	ID             int64     `json:"id"`
-	RequestID      string    `json:"request_id"`
-	UserID         int64     `json:"user_id"`
-	PayerUserID    int64     `json:"payer_user_id"`
-	TeamID         int64     `json:"-"`
-	Source         string    `json:"source"`
-	SubscriptionID *int64    `json:"subscription_id"`
-	Amount         string    `json:"amount"`
-	CreatedAt      time.Time `json:"created_at"`
+	ID                 int64     `json:"id"`
+	RequestID          string    `json:"request_id"`
+	UserID             int64     `json:"user_id"`
+	PayerUserID        int64     `json:"payer_user_id"`
+	TeamID             int64     `json:"-"`
+	Source             string    `json:"source"`
+	SubscriptionID     *int64    `json:"subscription_id"`
+	Amount             string    `json:"amount"`
+	UnauthorizedAmount string    `json:"unauthorized_amount"`
+	CreatedAt          time.Time `json:"created_at"`
 }
 type TeamLedgerPage struct {
 	Items    []TeamLedgerEntry `json:"items"`

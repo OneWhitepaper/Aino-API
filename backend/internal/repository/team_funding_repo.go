@@ -471,14 +471,14 @@ func (r *teamFundingRepository) ListLedger(ctx context.Context, user, team int64
 	if e := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM team_funding_ledger WHERE team_id=$1 AND ($2::bigint=0 OR user_id=$2)", team, filterUser).Scan(&out.Total); e != nil {
 		return nil, e
 	}
-	rows, e := r.db.QueryContext(ctx, `SELECT id,request_id,user_id,payer_user_id,team_id,source,subscription_id,amount::text,created_at FROM team_funding_ledger WHERE team_id=$1 AND ($2::bigint=0 OR user_id=$2) ORDER BY id DESC LIMIT $3 OFFSET $4`, team, filterUser, size, (page-1)*size)
+	rows, e := r.db.QueryContext(ctx, `SELECT id,request_id,user_id,payer_user_id,team_id,source,subscription_id,(amount-unauthorized_amount)::numeric(20,8)::text,unauthorized_amount::text,created_at FROM team_funding_ledger WHERE team_id=$1 AND ($2::bigint=0 OR user_id=$2) ORDER BY id DESC LIMIT $3 OFFSET $4`, team, filterUser, size, (page-1)*size)
 	if e != nil {
 		return nil, e
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var v service.TeamLedgerEntry
-		if e := rows.Scan(&v.ID, &v.RequestID, &v.UserID, &v.PayerUserID, &v.TeamID, &v.Source, &v.SubscriptionID, &v.Amount, &v.CreatedAt); e != nil {
+		if e := rows.Scan(&v.ID, &v.RequestID, &v.UserID, &v.PayerUserID, &v.TeamID, &v.Source, &v.SubscriptionID, &v.Amount, &v.UnauthorizedAmount, &v.CreatedAt); e != nil {
 			return nil, e
 		}
 		out.Items = append(out.Items, v)

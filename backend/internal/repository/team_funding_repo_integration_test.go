@@ -4,6 +4,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -307,7 +308,7 @@ func TestTeamFundingReservationIdempotenceAndCrossSourceMemberCap(t *testing.T) 
 	conflict := *cmd
 	conflict.Amount = "61"
 	_, e = repo.Reserve(ctx, &conflict)
-	require.ErrorIs(t, e, service.ErrTeamFundingConflict)
+	require.ErrorIs(t, e, service.ErrUsageBillingRequestConflict)
 	g := mustCreateGroup(t, testEntClient(t), &service.Group{Name: "mixed-sub-" + uuid.NewString(), Platform: service.PlatformOpenAI, SubscriptionType: service.SubscriptionTypeSubscription})
 	sub := mustCreateSubscription(t, testEntClient(t), &service.UserSubscription{UserID: owner, GroupID: g.ID})
 	ids := []int64{sub.ID}
@@ -359,14 +360,14 @@ func TestTeamFundingDispatchedAndSettledReservationsCannotBeReplayed(t *testing.
 	require.NoError(t, e)
 	require.NoError(t, repo.MarkDispatched(ctx, r.ID, member))
 	_, e = repo.Reserve(ctx, cmd)
-	require.ErrorIs(t, e, service.ErrTeamFundingConflict)
+	require.ErrorIs(t, e, service.ErrUsageBillingRequestConflict)
 	tx, e := integrationDB.BeginTx(ctx, nil)
 	require.NoError(t, e)
 	_, e = repo.SettleTeamFundingReservationTx(ctx, tx, r.ID, r.RequestID, key, "1")
 	require.NoError(t, e)
 	require.NoError(t, tx.Commit())
 	_, e = repo.Reserve(ctx, cmd)
-	require.ErrorIs(t, e, service.ErrTeamFundingConflict)
+	require.ErrorIs(t, e, service.ErrUsageBillingRequestConflict)
 }
 
 func TestTeamFundingZeroCapRejectsEvenZeroCostSharedReservation(t *testing.T) {
@@ -410,4 +411,43 @@ func TestTeamFundingMarkDispatchedConcurrentCallersOnlyDispatchOnce(t *testing.T
 	require.Equal(t, "490.00000000", balance)
 	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT reserved::text FROM team_members WHERE team_id=$1 AND user_id=$2", team, member).Scan(&reserved))
 	require.Equal(t, "10.00000000", reserved)
+}
+
+func TestTeamFundingLedgerSeparatesChargedAmountFromUnauthorizedOverage(t *testing.T) {
+	ctx := context.Background()
+	repo, owner, member, team, key := teamFundingFixture(t)
+	hold, err := teamFundingReserve(repo, owner, member, team, key, "10")
+	require.NoError(t, err)
+	require.NoError(t, repo.MarkDispatched(ctx, hold.ID, member))
+	tx, err := integrationDB.BeginTx(ctx, nil)
+	require.NoError(t, err)
+	_, err = repo.SettleTeamFundingReservationTx(ctx, tx, hold.ID, hold.RequestID, key, "15")
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit())
+	ledger, err := repo.ListLedger(ctx, owner, team, 1, 20)
+	require.NoError(t, err)
+	require.Len(t, ledger.Items, 1)
+	require.Equal(t, "10.00000000", ledger.Items[0].Amount)
+	encoded, err := json.Marshal(ledger.Items[0])
+	require.NoError(t, err)
+	var entry map[string]any
+	require.NoError(t, json.Unmarshal(encoded, &entry))
+	require.Equal(t, "5.00000000", entry["unauthorized_amount"])
+	var spent, balance string
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT spent::text FROM team_members WHERE team_id=$1 AND user_id=$2", team, member).Scan(&spent))
+	require.Equal(t, "10.00000000", spent)
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT balance::text FROM users WHERE id=$1", owner).Scan(&balance))
+	require.Equal(t, "490.00000000", balance)
+}
+
+func TestTeamFundingReleasedReservationCannotFallBackAsCapacityFailure(t *testing.T) {
+	ctx := context.Background()
+	repo, owner, member, team, key := teamFundingFixture(t)
+	cmd := &service.TeamFundingReserveCommand{RequestID: uuid.NewString(), APIKeyID: key, TeamID: team, MemberUserID: member, PayerUserID: owner, Source: "team_balance", Amount: "2"}
+	hold, err := repo.Reserve(ctx, cmd)
+	require.NoError(t, err)
+	require.NoError(t, repo.Release(ctx, hold.ID, member))
+	_, err = repo.Reserve(ctx, cmd)
+	require.ErrorIs(t, err, service.ErrUsageBillingRequestConflict)
+	require.NotErrorIs(t, err, service.ErrTeamFundingConflict)
 }

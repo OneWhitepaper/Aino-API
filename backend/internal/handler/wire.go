@@ -182,6 +182,7 @@ func ProvideAdminSettingHandler(settingService *service.SettingService, emailSer
 
 // ProvideHandlers creates the Handlers struct
 func ProvideHandlers(
+	teamFundingHandler *TeamFundingHandler,
 	iqTestHandler *IQTestHandler,
 	iqRadarHandler *IQRadarHandler,
 	authHandler *AuthHandler,
@@ -212,6 +213,7 @@ func ProvideHandlers(
 	_ *service.OpenAIQuotaAutoResetService,
 ) *Handlers {
 	return &Handlers{
+		TeamFunding:      teamFundingHandler,
 		IQTest:           iqTestHandler,
 		IQRadar:          iqRadarHandler,
 		Auth:             authHandler,
@@ -242,6 +244,7 @@ func ProvideHandlers(
 
 // ProviderSet is the Wire provider set for all handlers
 var ProviderSet = wire.NewSet(
+	NewTeamFundingHandler,
 	NewIQTestHandler,
 	NewIQRadarHandler,
 	// Top-level handlers

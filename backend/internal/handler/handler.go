@@ -47,6 +47,7 @@ type AdminHandlers struct {
 
 // Handlers contains all HTTP handlers
 type Handlers struct {
+	TeamFunding      *TeamFundingHandler
 	IQTest           *IQTestHandler
 	IQRadar          *IQRadarHandler
 	Auth             *AuthHandler

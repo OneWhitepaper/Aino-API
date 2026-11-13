@@ -1,6 +1,7 @@
 # 本地杂项文档、测试数据和外部项目副本
 /docs-local/
 .codex
+.superpowers/
 
 # ===================
 # Go 后端
@@ -144,6 +145,7 @@ docs/*
 !docs/BATCH_IMAGE_MVP.md
 !docs/COMPOSITE_GROUPS.md
 !docs/DEVICE_KEY_VALIDATION.md
+!docs/TEAM_SHARED_BILLING.md
 !docs/DESKTOP_DEVICE_INFO.md
 !docs/UPSTREAM_V0220_COMPATIBILITY.md
 !docs/VIDEO_API.md

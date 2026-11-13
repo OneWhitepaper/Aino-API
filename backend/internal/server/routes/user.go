@@ -40,6 +40,7 @@ func RegisterUserRoutes(
 
 		// 用户接口
 		user := authenticated.Group("/user")
+		registerTeamFundingRoutes(user, h.TeamFunding)
 		{
 			user.GET("/profile", h.User.GetProfile)
 			if h.MCPOAuth != nil {

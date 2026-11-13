@@ -2,6 +2,7 @@ export default {
   preferencesTitle: 'Funding preferences', preferencesDescription: 'Choose payment sources and personal permissions. Team funds are always displayed separately from your balance.',
   teamTitle: 'Team sharing', teamDescription: 'Manage invitations, shared resources, cumulative member limits, and team billing.',
   credits: 'credits',
+  sharedSupportHelp: 'Team sharing currently supports text conversations and local function tools. Images, audio, video, remote attachments, and hosted tools require personal funding.',
   save: 'Save preferences', saved: 'Funding preferences saved', saveFailed: 'Could not save. Please retry.', loadFailed: 'Could not load. Please retry.',
   mode: 'Funding mode', modeHelp: 'Try sources in the order below when available for the current model and group. Only modes never fall back to another category.',
   fallback: 'Order of sources', personalBalance: 'Personal balance', personalSubscription: 'Personal subscription', teamSource: 'Current team (using its shared mode)',

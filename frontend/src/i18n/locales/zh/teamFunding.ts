@@ -2,6 +2,7 @@ export default {
   preferencesTitle: '额度使用方式', preferencesDescription: '选择请求的付款来源，管理个人授权。团队资金始终与个人余额分开展示。',
   teamTitle: '团队共享管理', teamDescription: '管理邀请、共享资源、成员累计上限与团队账目。',
   credits: '额度',
+  sharedSupportHelp: '团队共享当前支持文本对话和本地函数工具。图片、音视频、远程附件及托管工具暂不支持共享，请选择个人额度。',
   save: '保存设置', saved: '额度使用方式已保存', saveFailed: '保存失败，请重试。', loadFailed: '暂时无法加载，请重试。',
   mode: '额度使用模式', modeHelp: '按下方顺序尝试当前模型和分组真正可用的来源。仅用模式不会跨类回退。',
   fallback: '实际尝试顺序', personalBalance: '个人余额', personalSubscription: '个人订阅', teamSource: '当前团队（按团队共享方式）',

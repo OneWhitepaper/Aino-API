@@ -16,6 +16,10 @@ func (r *teamFundingRepository) GetFundingContext(ctx context.Context, user int6
 	p := &out.Preferences
 	e := r.db.QueryRowContext(ctx, "SELECT mode,team_id,allow_personal_balance,allow_personal_subscription FROM funding_preferences WHERE user_id=$1", user).Scan(&p.Mode, &p.TeamID, &p.AllowPersonalBalance, &p.AllowPersonalSubscription)
 	if errors.Is(e, sql.ErrNoRows) {
+		e = r.db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM teams WHERE owner_user_id=$1 AND status='active')", user).Scan(&p.Configured)
+		if e != nil {
+			return nil, e
+		}
 		return out, nil
 	}
 	if e != nil {

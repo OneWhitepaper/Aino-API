@@ -15,6 +15,7 @@ export default {
   subscriptionHelp: '订阅仍受原分组、模型、图片权限及日、周、月窗口限制。', expires: '到期：{date}', noExpiry: '无到期时间',
   suggested: '组织人建议：{mode}。此建议不会修改你的模式或个人授权。',
   createTeam: '创建团队', teamName: '团队名称', create: '创建', ownedTeams: '我管理的团队', joinedTeams: '我加入的团队', noTeams: '暂无团队。创建团队或接受邀请后开始共享。',
+  deleteTeam: '删除团队', deleteTeamTitle: '确认删除团队', deleteTeamMessage: '确定删除团队「{name}」？删除后停止新的团队共享请求，并撤销待处理邀请。已受理的请求继续按原付款来源结算，历史账单和个人额度均保留。团队删除后无法恢复。',
   chooseTeam: '选择要查看的团队', owner: '组织人', member: '成员', pendingInvitations: '收到的待处理邀请',
   invitationFrom: '组织人 #{id}', accept: '接受邀请', decline: '拒绝', invitationHelp: '接受只建立成员关系。请在「额度使用方式」中自行选择付款团队。',
   inviteUserId: '已有账号 ID', invite: '发送站内邀请', inviteHelp: '邀请有效期 7 天，需要目标账号本人接受；不会自动发送邮件。', invalidUserId: '请输入有效的正整数账号 ID。', inviteSent: '邀请已发送', revoke: '撤回邀请', pendingOutgoing: '已发出的待处理邀请',

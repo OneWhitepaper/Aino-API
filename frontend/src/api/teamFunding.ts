@@ -46,6 +46,7 @@ export const teamFundingAPI = {
   async saveFunding(input: FundingPreferencesInput): Promise<void> { await apiClient.put(`${base}/funding`, input) },
   async listTeams(): Promise<{ owned: TeamSummary[]; joined: TeamSummary[] }> { return (await apiClient.get(`${base}/teams`)).data },
   async createTeam(name: string): Promise<TeamDetail> { return (await apiClient.post(`${base}/teams`, { name })).data },
+  async deleteTeam(id: number): Promise<void> { await apiClient.delete(`${base}/teams/${id}`) },
   async getTeam(id: number): Promise<TeamDetail> { return (await apiClient.get(`${base}/teams/${id}`)).data },
   async updateTeam(id: number, input: TeamSettingsInput): Promise<void> { await apiClient.patch(`${base}/teams/${id}`, input) },
   async invite(id: number, userId: number): Promise<TeamInvitation> { return (await apiClient.post(`${base}/teams/${id}/invitations`, { user_id: userId })).data },

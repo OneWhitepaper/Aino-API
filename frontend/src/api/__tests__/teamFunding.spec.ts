@@ -32,4 +32,9 @@ describe('team funding HTTP contract', () => {
     expect(remove).toHaveBeenCalledWith('/user/teams/7/members/9')
     expect(get).toHaveBeenCalledWith('/user/teams/7/ledger', { params: { page: 2, page_size: 20 } })
   })
+  it('deletes only the selected team through the owner management endpoint', async () => {
+    await teamFundingAPI.deleteTeam(7)
+    expect(remove).toHaveBeenCalledWith('/user/teams/7')
+  })
+
 })

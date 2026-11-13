@@ -28,7 +28,10 @@ func incrementUsageBillingSubscriptionProtected(ctx context.Context, tx *sql.Tx,
 		return "", "", err
 	}
 	var shared bool
-	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM team_shared_subscriptions ts JOIN teams t ON t.id=ts.team_id WHERE ts.subscription_id=$1 AND t.owner_user_id=$2 AND t.status='active')`, *cmd.SubscriptionID, owner).Scan(&shared); err != nil {
+	if err = tx.QueryRowContext(ctx, `SELECT
+ EXISTS(SELECT 1 FROM team_shared_subscriptions ts JOIN teams t ON t.id=ts.team_id WHERE ts.subscription_id=$1 AND t.owner_user_id=$2 AND t.status='active')
+ OR EXISTS(SELECT 1 FROM team_funding_reservations WHERE subscription_id=$1 AND payer_user_id=$2 AND status IN ('reserved','queued','dispatched'))
+ OR EXISTS(SELECT 1 FROM personal_funding_reservations WHERE subscription_id=$1 AND member_user_id=$2 AND status IN ('reserved','queued','dispatched'))`, *cmd.SubscriptionID, owner).Scan(&shared); err != nil {
 		return "", "", err
 	}
 	if !shared {

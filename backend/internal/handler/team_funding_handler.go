@@ -139,6 +139,17 @@ func (h *TeamFundingHandler) CreateInvitation(c *gin.Context) {
 	v, e := h.funding.CreateInvitation(c.Request.Context(), u, id, &req)
 	teamFundingResult(c, v, e)
 }
+func (h *TeamFundingHandler) DeleteTeam(c *gin.Context) {
+	u, ok := teamFundingActor(c)
+	if !ok {
+		return
+	}
+	id, ok := teamFundingID(c, "id")
+	if !ok {
+		return
+	}
+	teamFundingResult(c, nil, h.funding.DeleteTeam(c.Request.Context(), u, id))
+}
 func (h *TeamFundingHandler) ListInvitations(c *gin.Context) {
 	u, ok := teamFundingActor(c)
 	if !ok {

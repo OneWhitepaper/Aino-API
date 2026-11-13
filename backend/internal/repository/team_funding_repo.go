@@ -36,7 +36,7 @@ func teamFundingTx(ctx context.Context, db *sql.DB, fn func(*sql.Tx) error) erro
 }
 func teamOwner(ctx context.Context, q teamFundingQuery, actor, team int64, lock bool) (int64, error) {
 	var owner int64
-	query := "SELECT owner_user_id FROM teams WHERE id=$1"
+	query := "SELECT owner_user_id FROM teams WHERE id=$1 AND status<>'deleted'"
 	if lock {
 		query += " FOR UPDATE"
 	}
@@ -54,10 +54,14 @@ func teamOwner(ctx context.Context, q teamFundingQuery, actor, team int64, lock 
 }
 func teamReadRole(ctx context.Context, q teamFundingQuery, user, team int64, history bool) (string, error) {
 	var owner int64
-	if e := q.QueryRowContext(ctx, "SELECT owner_user_id FROM teams WHERE id=$1", team).Scan(&owner); errors.Is(e, sql.ErrNoRows) {
+	var state string
+	if e := q.QueryRowContext(ctx, "SELECT owner_user_id,status FROM teams WHERE id=$1", team).Scan(&owner, &state); errors.Is(e, sql.ErrNoRows) {
 		return "", service.ErrTeamFundingNotFound
 	} else if e != nil {
 		return "", e
+	}
+	if !history && state == "deleted" {
+		return "", service.ErrTeamFundingNotFound
 	}
 	if owner == user {
 		return "owner", nil
@@ -102,8 +106,14 @@ func (r *teamFundingRepository) UpdateFunding(ctx context.Context, user int64, v
 	}
 	e := teamFundingTx(ctx, r.db, func(tx *sql.Tx) error {
 		if v.TeamID != nil {
+			// Match the team -> member -> preferences order used by reservations
+			// and deletion, so selecting a team cannot race its revocation.
+			var state string
+			if e := tx.QueryRowContext(ctx, "SELECT status FROM teams WHERE id=$1 AND owner_user_id<>$2 FOR SHARE", *v.TeamID, user).Scan(&state); e != nil || state == "deleted" {
+				return service.ErrTeamFundingForbidden
+			}
 			var status string
-			if e := tx.QueryRowContext(ctx, "SELECT m.status FROM team_members m JOIN teams t ON t.id=m.team_id WHERE m.team_id=$1 AND m.user_id=$2 AND t.owner_user_id<>$2 FOR SHARE OF m,t", *v.TeamID, user).Scan(&status); e != nil || status == "removed" {
+			if e := tx.QueryRowContext(ctx, "SELECT status FROM team_members WHERE team_id=$1 AND user_id=$2 FOR SHARE", *v.TeamID, user).Scan(&status); e != nil || status == "removed" {
 				return service.ErrTeamFundingForbidden
 			}
 		}
@@ -116,7 +126,7 @@ func (r *teamFundingRepository) UpdateFunding(ctx context.Context, user int64, v
 	return r.GetFunding(ctx, user)
 }
 
-const teamSummarySQL = `SELECT t.id,t.owner_user_id,t.name,CASE WHEN t.owner_user_id=$1 THEN 'owner' ELSE 'member' END,CASE WHEN t.owner_user_id=$1 THEN t.status ELSE m.status END,COALESCE(m.shared_mode,t.shared_mode),COALESCE(m.suggested_mode,t.suggested_mode),u.balance::text,CASE WHEN t.owner_user_id=$1 THEN COALESCE((SELECT SUM(spent) FROM team_members WHERE team_id=t.id),0)::numeric(20,8)::text ELSE m.spent::text END,CASE WHEN t.owner_user_id=$1 THEN NULL ELSE m.spend_limit::text END,CASE WHEN t.owner_user_id=$1 OR m.spend_limit IS NULL THEN NULL ELSE GREATEST(m.spend_limit-m.spent-m.reserved,0)::numeric(20,8)::text END FROM teams t JOIN users u ON u.id=t.owner_user_id LEFT JOIN team_members m ON m.team_id=t.id AND m.user_id=$1 WHERE (t.owner_user_id=$1 OR (m.user_id=$1 AND m.status<>'removed'))`
+const teamSummarySQL = `SELECT t.id,t.owner_user_id,t.name,CASE WHEN t.owner_user_id=$1 THEN 'owner' ELSE 'member' END,CASE WHEN t.owner_user_id=$1 THEN t.status ELSE m.status END,COALESCE(m.shared_mode,t.shared_mode),COALESCE(m.suggested_mode,t.suggested_mode),u.balance::text,CASE WHEN t.owner_user_id=$1 THEN COALESCE((SELECT SUM(spent) FROM team_members WHERE team_id=t.id),0)::numeric(20,8)::text ELSE m.spent::text END,CASE WHEN t.owner_user_id=$1 THEN NULL ELSE m.spend_limit::text END,CASE WHEN t.owner_user_id=$1 OR m.spend_limit IS NULL THEN NULL ELSE GREATEST(m.spend_limit-m.spent-m.reserved,0)::numeric(20,8)::text END FROM teams t JOIN users u ON u.id=t.owner_user_id LEFT JOIN team_members m ON m.team_id=t.id AND m.user_id=$1 WHERE t.status<>'deleted' AND (t.owner_user_id=$1 OR (m.user_id=$1 AND m.status<>'removed'))`
 
 func scanTeamSummary(row interface{ Scan(...any) error }) (v service.TeamSummary, e error) {
 	e = row.Scan(&v.ID, &v.OwnerUserID, &v.Name, &v.Role, &v.Status, &v.SharedMode, &v.SuggestedMode, &v.AvailableBalance, &v.Spent, &v.SpendLimit, &v.RemainingLimit)
@@ -159,6 +169,9 @@ func (r *teamFundingRepository) GetTeam(ctx context.Context, user, team int64) (
 		return nil, e
 	}
 	summary, e := scanTeamSummary(r.db.QueryRowContext(ctx, teamSummarySQL+" AND t.id=$2", user, team))
+	if errors.Is(e, sql.ErrNoRows) {
+		return nil, service.ErrTeamFundingNotFound
+	}
 	if e != nil {
 		return nil, e
 	}
@@ -269,6 +282,41 @@ func (r *teamFundingRepository) UpdateTeam(ctx context.Context, user, team int64
 	return r.GetTeam(ctx, user, team)
 }
 
+// DeleteTeam revokes future sharing while retaining payer identities and escrow
+// for work that was already accepted. Team locking serializes it with admission.
+func (r *teamFundingRepository) DeleteTeam(ctx context.Context, user, team int64) error {
+	return teamFundingTx(ctx, r.db, func(tx *sql.Tx) error {
+		var owner int64
+		var state string
+		e := tx.QueryRowContext(ctx, "SELECT owner_user_id,status FROM teams WHERE id=$1 FOR UPDATE", team).Scan(&owner, &state)
+		if errors.Is(e, sql.ErrNoRows) {
+			return service.ErrTeamFundingNotFound
+		}
+		if e != nil {
+			return e
+		}
+		if owner != user {
+			return service.ErrTeamFundingForbidden
+		}
+		if state == "deleted" {
+			return nil
+		}
+		for _, query := range []string{
+			"UPDATE teams SET status='deleted',updated_at=NOW() WHERE id=$1",
+			"UPDATE team_members SET status='removed',updated_at=NOW() WHERE team_id=$1 AND status<>'removed'",
+			"UPDATE team_invitations SET status='revoked',updated_at=NOW() WHERE team_id=$1 AND status='pending'",
+			// Preserve the member's mode and personal authorizations. In particular,
+			// team_only must never become permission to charge a personal wallet.
+			"UPDATE funding_preferences SET team_id=NULL,updated_at=NOW() WHERE team_id=$1",
+		} {
+			if _, e = tx.ExecContext(ctx, query, team); e != nil {
+				return e
+			}
+		}
+		return nil
+	})
+}
+
 const invitationSQL = `SELECT i.id,i.team_id,t.name,t.owner_user_id,i.user_id,i.status,i.expires_at,i.created_at FROM team_invitations i JOIN teams t ON t.id=i.team_id`
 
 func scanInvitation(row interface{ Scan(...any) error }) (v service.Invitation, e error) {
@@ -278,7 +326,7 @@ func scanInvitation(row interface{ Scan(...any) error }) (v service.Invitation, 
 func teamInvitations(ctx context.Context, q teamFundingQuery, team, user int64, pending bool) ([]service.Invitation, error) {
 	query := invitationSQL + " WHERE ($1::bigint=0 OR i.team_id=$1) AND ($2::bigint=0 OR i.user_id=$2)"
 	if pending {
-		query += " AND i.status='pending' AND i.expires_at>NOW()"
+		query += " AND t.status<>'deleted' AND i.status='pending' AND i.expires_at>NOW()"
 	}
 	rows, e := q.QueryContext(ctx, query+" ORDER BY i.id DESC", team, user)
 	if e != nil {
@@ -357,6 +405,9 @@ func (r *teamFundingRepository) respondInvitation(ctx context.Context, user, id 
 		if e := tx.QueryRowContext(ctx, "SELECT status FROM teams WHERE id=$1 FOR UPDATE", team).Scan(&state); e != nil {
 			return e
 		}
+		if state == "deleted" {
+			return service.ErrTeamFundingNotFound
+		}
 		v, e := scanInvitation(tx.QueryRowContext(ctx, invitationSQL+" WHERE i.id=$1 FOR UPDATE OF i", id))
 		if e != nil {
 			return e
@@ -432,7 +483,9 @@ func (r *teamFundingRepository) UpdateMember(ctx context.Context, user, team, me
 func (r *teamFundingRepository) RemoveMember(ctx context.Context, user, team, member int64) error {
 	return teamFundingTx(ctx, r.db, func(tx *sql.Tx) error {
 		var owner int64
-		if e := tx.QueryRowContext(ctx, "SELECT owner_user_id FROM teams WHERE id=$1 FOR UPDATE", team).Scan(&owner); e != nil {
+		if e := tx.QueryRowContext(ctx, "SELECT owner_user_id FROM teams WHERE id=$1 AND status<>'deleted' FOR UPDATE", team).Scan(&owner); errors.Is(e, sql.ErrNoRows) {
+			return service.ErrTeamFundingNotFound
+		} else if e != nil {
 			return e
 		}
 		if owner != user && user != member {

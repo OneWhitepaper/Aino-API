@@ -249,6 +249,7 @@ type TeamFundingRepository interface {
 	CreateTeam(context.Context, int64, *TeamCreateCommand) (*TeamDetail, error)
 	GetTeam(context.Context, int64, int64) (*TeamDetail, error)
 	UpdateTeam(context.Context, int64, int64, *TeamUpdateCommand) (*TeamDetail, error)
+	DeleteTeam(context.Context, int64, int64) error
 	CreateInvitation(context.Context, int64, int64, *InvitationCreateCommand) (*Invitation, error)
 	ListInvitations(context.Context, int64) ([]Invitation, error)
 	AcceptInvitation(context.Context, int64, int64) error
@@ -295,6 +296,9 @@ func (s *TeamFundingService) UpdateTeam(c context.Context, u, id int64, v *TeamU
 		return nil, err
 	}
 	return s.repo.UpdateTeam(c, u, id, v)
+}
+func (s *TeamFundingService) DeleteTeam(c context.Context, u, id int64) error {
+	return s.repo.DeleteTeam(c, u, id)
 }
 func (s *TeamFundingService) CreateInvitation(c context.Context, u, id int64, v *InvitationCreateCommand) (*Invitation, error) {
 	if v == nil || v.UserID <= 0 {

@@ -27,6 +27,7 @@ const inviteId = ref('')
 const busy = ref('')
 const message = ref('')
 const operationFailed = ref(false)
+const deletionTarget = ref<{ teamId: number; name: string } | null>(null)
 const removalTarget = ref<{ teamId: number; userId: number; leaving: boolean } | null>(null)
 const ledgerRevision = ref(0)
 const settings = reactive<Omit<TeamSettingsInput, 'suggested_mode'> & { suggested_mode: FundingMode | null }>({ name: '', shared_mode: 'balance_first', shared_subscription_ids: [], suggested_mode: null })
@@ -41,6 +42,7 @@ function applyDetail(value: TeamDetail) {
 }
 async function selectTeam(id: number | null) {
   removalTarget.value = null
+  deletionTarget.value = null
   const generation = ++detailGeneration
   selectedId.value = id; detail.value = null; detailFailed.value = false
   if (id === null) { detailLoading.value = false; return }
@@ -98,6 +100,7 @@ function requestRemoval(userId?: number) {
   if (!detail.value || busy.value || (userId !== undefined && !isOwner.value)) return
   const targetUserId = userId ?? auth.user?.id
   if (!targetUserId) return
+  deletionTarget.value = null
   removalTarget.value = { teamId: detail.value.id, userId: targetUserId, leaving: userId === undefined }
 }
 async function remove() {
@@ -105,12 +108,29 @@ async function remove() {
   if (!target || busy.value) return
   await run('remove', async () => { await teamFundingAPI.removeMember(target.teamId, target.userId); removalTarget.value = null; await load(); ledgerRevision.value++ })
 }
+function requestTeamDeletion() {
+  if (!detail.value || !isOwner.value || busy.value) return
+  removalTarget.value = null
+  message.value = ''; operationFailed.value = false
+  deletionTarget.value = { teamId: detail.value.id, name: detail.value.name }
+}
+async function deleteTeam() {
+  const target = deletionTarget.value
+  if (!target || busy.value || !isOwner.value || detail.value?.id !== target.teamId) return
+  await run('delete-team', async () => {
+    await teamFundingAPI.deleteTeam(target.teamId)
+    owned.value = owned.value.filter(team => team.id !== target.teamId)
+    joined.value = joined.value.filter(team => team.id !== target.teamId)
+    await selectTeam(null)
+    await load()
+  })
+}
 async function revoke(id: number) {
   if (!detail.value || !isOwner.value) return
   const teamId = detail.value.id
   await run(`revoke-${id}`, async () => { await teamFundingAPI.revokeInvitation(teamId, id); await selectTeam(teamId) })
 }
-function changeTeam(event: Event) { void selectTeam(Number((event.target as HTMLSelectElement).value)) }
+function changeTeam(event: Event) { if (!busy.value) void selectTeam(Number((event.target as HTMLSelectElement).value)) }
 onMounted(load)
 </script>
 <template>
@@ -118,7 +138,7 @@ onMounted(load)
     <div class="user-page space-y-6">
       <UserPageHeader :title="t('teamFunding.teamTitle')" :description="t('teamFunding.teamDescription')"><button class="btn btn-primary" :disabled="!!busy || loading" @click="createOpen = !createOpen">{{ t('teamFunding.createTeam') }}</button></UserPageHeader>
       <form v-if="createOpen" class="card flex flex-wrap items-end gap-3 p-5 sm:p-6" @submit.prevent="create"><label for="new-team-name" class="min-w-0 flex-1 space-y-2 text-sm"><span>{{ t('teamFunding.teamName') }}</span><input id="new-team-name" v-model="newName" class="input w-full" maxlength="100" required :disabled="!!busy" /></label><button class="btn btn-primary" :disabled="!!busy || !newName.trim()" type="submit">{{ t('teamFunding.create') }}</button></form>
-      <p v-if="message" :role="operationFailed ? 'alert' : 'status'" class="rounded-lg p-3 text-sm" :class="operationFailed ? 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300' : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300'">{{ message }}</p>
+      <p v-if="message && deletionTarget === null" :role="operationFailed ? 'alert' : 'status'" class="rounded-lg p-3 text-sm" :class="operationFailed ? 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300' : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300'">{{ message }}</p>
       <div v-if="loading" class="flex justify-center py-12"><LoadingSpinner /></div>
       <div v-else-if="failed" class="card p-8 text-center" role="alert"><p>{{ t('teamFunding.loadFailed') }}</p><button class="btn btn-secondary mt-4" @click="load">{{ t('workspace.retry') }}</button></div>
       <template v-else>
@@ -128,7 +148,7 @@ onMounted(load)
         <div v-if="detailLoading" class="flex justify-center py-10"><LoadingSpinner /></div>
         <div v-else-if="detailFailed" class="card p-6" role="alert"><p>{{ t('teamFunding.detailFailed') }}</p><button class="btn btn-secondary mt-3" @click="selectTeam(selectedId)">{{ t('workspace.retry') }}</button></div>
         <template v-else-if="detail">
-          <section class="card p-5 sm:p-6"><header class="flex flex-wrap items-center justify-between gap-3"><div><h3 class="text-xl font-semibold">{{ detail.name }}</h3><p class="mt-1 text-sm text-gray-500">{{ t(isOwner ? 'teamFunding.owner' : 'teamFunding.member') }} · #{{ detail.owner_user_id }}</p></div><button v-if="!isOwner && detail.status !== 'removed'" class="btn btn-secondary btn-sm" :disabled="!!busy" @click="requestRemoval()">{{ t('teamFunding.leave') }}</button></header><dl class="mt-5 grid gap-5 sm:grid-cols-3"><div><dt class="text-sm text-gray-500">{{ t('teamFunding.teamBalance') }}</dt><dd class="mt-1 break-all text-2xl font-semibold">{{ displayAmount(detail.available_balance, t('teamFunding.credits')) }}</dd></div><div><dt class="text-sm text-gray-500">{{ t('teamFunding.spent') }}</dt><dd class="mt-1 break-all text-2xl font-semibold">{{ displayAmount(detail.spent, t('teamFunding.credits')) }}</dd></div><div><dt class="text-sm text-gray-500">{{ t('teamFunding.limit') }}</dt><dd class="mt-1 text-2xl font-semibold">{{ detail.spend_limit === null ? t('teamFunding.unlimited') : displayAmount(detail.spend_limit, t('teamFunding.credits')) }}</dd></div></dl><p class="mt-5 text-sm leading-relaxed text-gray-500">{{ t('teamFunding.ownerFundsHelp') }}</p></section>
+          <section class="card p-5 sm:p-6"><header class="flex flex-wrap items-center justify-between gap-3"><div><h3 class="text-xl font-semibold">{{ detail.name }}</h3><p class="mt-1 text-sm text-gray-500">{{ t(isOwner ? 'teamFunding.owner' : 'teamFunding.member') }} · #{{ detail.owner_user_id }}</p></div><button v-if="isOwner" type="button" class="btn btn-danger btn-sm" data-delete-team :disabled="!!busy" @click="requestTeamDeletion">{{ t('teamFunding.deleteTeam') }}</button><button v-else-if="detail.status !== 'removed'" class="btn btn-secondary btn-sm" :disabled="!!busy" @click="requestRemoval()">{{ t('teamFunding.leave') }}</button></header><dl class="mt-5 grid gap-5 sm:grid-cols-3"><div><dt class="text-sm text-gray-500">{{ t('teamFunding.teamBalance') }}</dt><dd class="mt-1 break-all text-2xl font-semibold">{{ displayAmount(detail.available_balance, t('teamFunding.credits')) }}</dd></div><div><dt class="text-sm text-gray-500">{{ t('teamFunding.spent') }}</dt><dd class="mt-1 break-all text-2xl font-semibold">{{ displayAmount(detail.spent, t('teamFunding.credits')) }}</dd></div><div><dt class="text-sm text-gray-500">{{ t('teamFunding.limit') }}</dt><dd class="mt-1 text-2xl font-semibold">{{ detail.spend_limit === null ? t('teamFunding.unlimited') : displayAmount(detail.spend_limit, t('teamFunding.credits')) }}</dd></div></dl><p class="mt-5 text-sm leading-relaxed text-gray-500">{{ t('teamFunding.ownerFundsHelp') }}</p></section>
           <template v-if="isOwner">
             <section class="card p-5 sm:p-6"><h3 class="text-lg font-semibold">{{ t('teamFunding.sharedSettings') }}</h3><p class="mt-1 text-sm leading-relaxed text-gray-500">{{ t('teamFunding.consentBoundary') }}</p><form class="mt-5 space-y-5" @submit.prevent="saveTeam"><fieldset :disabled="!!busy" class="grid gap-5 md:grid-cols-2"><label class="space-y-2 text-sm" for="team-name"><span>{{ t('teamFunding.teamName') }}</span><input id="team-name" v-model="settings.name" class="input w-full" maxlength="100" required /></label><label class="space-y-2 text-sm" for="team-shared-mode"><span>{{ t('teamFunding.sharedMode') }}</span><select id="team-shared-mode" v-model="settings.shared_mode" class="input w-full"><option v-for="mode in sharedModes" :key="mode" :value="mode">{{ t(`teamFunding.sharedModes.${mode}`) }}</option></select></label><label class="space-y-2 text-sm" for="team-suggested-mode"><span>{{ t('teamFunding.suggestedMode') }}</span><select id="team-suggested-mode" v-model="settings.suggested_mode" class="input w-full"><option :value="null">{{ t('teamFunding.noSuggestion') }}</option><option v-for="mode in fundingModes" :key="mode" :value="mode">{{ t(`teamFunding.modes.${mode}`) }}</option></select></label><div class="space-y-3 text-sm"><p class="font-medium">{{ t('teamFunding.sharedSubscriptions') }}</p><p v-if="!subscriptions.length" class="text-gray-500">{{ t('teamFunding.noSharedSubscriptions') }}</p><label v-for="subscription in subscriptions" :key="subscription.id" class="flex items-start gap-2" :for="`shared-subscription-${subscription.id}`"><input :id="`shared-subscription-${subscription.id}`" v-model="settings.shared_subscription_ids" type="checkbox" class="checkbox mt-0.5" :value="subscription.id" /><span>{{ subscription.group_name }} #{{ subscription.id }}<span class="mt-1 block text-xs text-gray-500">{{ subscription.expires_at ? t('teamFunding.expires', { date: new Date(subscription.expires_at).toLocaleDateString() }) : t('teamFunding.noExpiry') }}</span></span></label><div v-if="unavailableSharedIds.length" class="space-y-3 rounded-lg border border-amber-200 p-3 dark:border-amber-700"><p class="text-xs leading-relaxed text-amber-700 dark:text-amber-300">{{ t('teamFunding.unavailableSubscriptionsHelp') }}</p><label v-for="id in unavailableSharedIds" :key="id" :for="`unavailable-shared-subscription-${id}`" class="flex items-start gap-2"><input :id="`unavailable-shared-subscription-${id}`" v-model="settings.shared_subscription_ids" type="checkbox" class="checkbox mt-0.5" :value="id" /><span>{{ t('teamFunding.unavailableSubscription', { id }) }}</span></label></div><p class="text-xs leading-relaxed text-gray-500">{{ t('teamFunding.subscriptionHelp') }}</p></div><div class="md:col-span-2"><button class="btn btn-primary" type="submit" :disabled="!settings.name.trim() || unavailableSharedIds.length > 0">{{ t('teamFunding.saveTeam') }}</button></div></fieldset></form></section>
             <section class="card p-5 sm:p-6"><form class="flex flex-wrap items-end gap-3" @submit.prevent="invite"><label for="invite-user-id" class="min-w-0 flex-1 space-y-2 text-sm"><span>{{ t('teamFunding.inviteUserId') }}</span><input id="invite-user-id" v-model="inviteId" inputmode="numeric" class="input w-full" required :disabled="!!busy" /></label><button class="btn btn-primary" type="submit" :disabled="!!busy || !inviteId">{{ t('teamFunding.invite') }}</button></form><p class="mt-3 text-sm text-gray-500">{{ t('teamFunding.inviteHelp') }}</p><div v-if="outgoing.length" class="mt-5"><h4 class="text-sm font-medium">{{ t('teamFunding.pendingOutgoing') }}</h4><ul class="mt-2 divide-y divide-gray-100 dark:divide-dark-700"><li v-for="invitation in outgoing" :key="invitation.id" class="flex flex-wrap items-center justify-between gap-2 py-3 text-sm"><span>#{{ invitation.user_id }} · {{ t('teamFunding.expires', { date: new Date(invitation.expires_at).toLocaleDateString() }) }}</span><button class="btn btn-ghost btn-sm" :disabled="!!busy" @click="revoke(invitation.id)">{{ t('teamFunding.revoke') }}</button></li></ul></div></section>
@@ -138,6 +158,7 @@ onMounted(load)
           <TeamLedger :team-id="detail.id" :owner="isOwner" :revision="ledgerRevision" />
         </template>
       </template>
+      <ConfirmDialog :show="deletionTarget !== null" :title="t('teamFunding.deleteTeamTitle')" :message="t('teamFunding.deleteTeamMessage', { name: deletionTarget?.name ?? '' })" :confirm-text="t('teamFunding.deleteTeam')" :busy="!!busy" danger @confirm="deleteTeam" @cancel="() => { if (!busy) deletionTarget = null }"><p v-if="operationFailed" role="alert" class="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">{{ message }}</p></ConfirmDialog>
       <ConfirmDialog :show="removalTarget !== null" :title="t(removalTarget?.leaving ? 'teamFunding.leaveTitle' : 'teamFunding.removeTitle')" :message="t(removalTarget?.leaving ? 'teamFunding.leaveMessage' : 'teamFunding.removeMessage')" danger @confirm="remove" @cancel="() => { if (!busy) removalTarget = null }" />
     </div>
   </AppLayout>

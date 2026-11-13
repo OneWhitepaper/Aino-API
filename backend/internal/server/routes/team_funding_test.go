@@ -24,6 +24,7 @@ func TestTeamFundingRoutesRequireUserAuthentication(t *testing.T) {
 		{http.MethodGet, "/funding"}, {http.MethodPut, "/funding"},
 		{http.MethodGet, "/teams"}, {http.MethodPost, "/teams"},
 		{http.MethodGet, "/teams/1"}, {http.MethodPatch, "/teams/1"},
+		{http.MethodDelete, "/teams/1"},
 		{http.MethodPost, "/teams/1/invitations"},
 		{http.MethodGet, "/team-invitations"},
 		{http.MethodPost, "/team-invitations/1/accept"},

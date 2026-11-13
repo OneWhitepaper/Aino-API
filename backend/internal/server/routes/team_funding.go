@@ -16,6 +16,7 @@ func registerTeamFundingRoutes(user *gin.RouterGroup, h *handler.TeamFundingHand
 	user.POST("/teams", h.CreateTeam)
 	user.GET("/teams/:id", h.GetTeam)
 	user.PATCH("/teams/:id", h.UpdateTeam)
+	user.DELETE("/teams/:id", h.DeleteTeam)
 	user.POST("/teams/:id/invitations", h.CreateInvitation)
 	user.GET("/team-invitations", h.ListInvitations)
 	user.POST("/team-invitations/:id/accept", h.AcceptInvitation)

@@ -17,7 +17,16 @@ import (
 
 type teamFundingHandlerRepo struct {
 	service.TeamFundingRepository
-	actor int64
+	actor       int64
+	deletedTeam int64
+	deleteCalls int
+	deleteError error
+}
+
+func (r *teamFundingHandlerRepo) DeleteTeam(_ context.Context, u, team int64) error {
+	r.actor, r.deletedTeam = u, team
+	r.deleteCalls++
+	return r.deleteError
 }
 
 func (r *teamFundingHandlerRepo) GetFunding(_ context.Context, u int64) (*service.FundingView, error) {
@@ -54,4 +63,44 @@ func TestTeamFundingHandlerRejectsOwnerPersonalAuthorizationFields(t *testing.T)
 	c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{UserID: 7})
 	h.UpdateMember(c)
 	require.Equal(t, 400, w.Code)
+}
+
+func TestTeamDeletionHandlerUsesJWTActorAndValidatesTeamID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, test := range []struct {
+		name       string
+		team       string
+		user       int64
+		repoError  error
+		statusCode int
+		calls      int
+	}{
+		{name: "authentication required", team: "11", statusCode: 401},
+		{name: "invalid ID", team: "invalid", user: 7, statusCode: 400},
+		{name: "zero ID", team: "0", user: 7, statusCode: 400},
+		{name: "negative ID", team: "-1", user: 7, statusCode: 400},
+		{name: "overflow ID", team: "9223372036854775808", user: 7, statusCode: 400},
+		{name: "JWT identity overrides request", team: "11", user: 7, statusCode: 200, calls: 1},
+		{name: "member forbidden", team: "11", user: 7, repoError: service.ErrTeamFundingForbidden, statusCode: 403, calls: 1},
+		{name: "team not found", team: "11", user: 7, repoError: service.ErrTeamFundingNotFound, statusCode: 404, calls: 1},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			repo := &teamFundingHandlerRepo{deleteError: test.repoError}
+			h := NewTeamFundingHandler(service.NewTeamFundingService(repo))
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request = httptest.NewRequest(http.MethodDelete, "/teams/"+test.team+"?user_id=99", strings.NewReader(`{"owner_user_id":99}`))
+			c.Params = gin.Params{{Key: "id", Value: test.team}}
+			if test.user > 0 {
+				c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{UserID: test.user})
+			}
+			h.DeleteTeam(c)
+			require.Equal(t, test.statusCode, w.Code, w.Body.String())
+			require.Equal(t, test.calls, repo.deleteCalls)
+			if test.calls > 0 {
+				require.Equal(t, test.user, repo.actor)
+				require.Equal(t, int64(11), repo.deletedTeam)
+			}
+		})
+	}
 }

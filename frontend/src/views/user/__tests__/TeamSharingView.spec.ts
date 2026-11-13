@@ -3,18 +3,18 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import TeamSharingView from '../TeamSharingView.vue'
 import messages from '@/i18n/locales/en/teamFunding'
-const { api } = vi.hoisted(() => ({ api: Object.fromEntries(['getFunding','listTeams','listInvitations','getTeam','getLedger','createTeam','updateTeam','invite','acceptInvitation','declineInvitation','revokeInvitation','updateMember','removeMember'].map(key => [key, vi.fn()])) }))
+const { api } = vi.hoisted(() => ({ api: Object.fromEntries(['getFunding','listTeams','listInvitations','getTeam','getLedger','createTeam','deleteTeam','updateTeam','invite','acceptInvitation','declineInvitation','revokeInvitation','updateMember','removeMember'].map(key => [key, vi.fn()])) }))
 vi.mock('@/api/teamFunding', async original => ({ ...await original<typeof import('@/api/teamFunding')>(), teamFundingAPI: api }))
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ user: { id: 9 } }) }))
 const invitation = { id: 12, team_id: 7, team_name: 'Studio', owner_user_id: 1, user_id: 9, status: 'pending', expires_at: '2099-01-01T00:00:00Z', created_at: '2026-11-01T00:00:00Z' }
 const summary = { id: 7, owner_user_id: 1, name: 'Studio', role: 'owner', status: 'active', shared_mode: 'balance_first', suggested_mode: null, available_balance: '500.00000000', spent: '20.00000000', spend_limit: null, remaining_limit: null }
 const member = { user_id: 9, username: 'Member', status: 'active', spend_limit: null, spent: '20.00000000', reserved: '1.00000000', shared_mode: null, suggested_mode: null }
 const detail = () => ({ ...summary, shared_subscription_ids: [], subscriptions: [], members: [{ ...member }], invitations: [] })
-function render() { return mount(TeamSharingView, { global: { plugins: [createI18n({ legacy: false, locale: 'en', missingWarn: false, fallbackWarn: false, messages: { en: { teamFunding: messages, workspace: { retry: 'Retry' } } } })], stubs: { AppLayout: { template: '<main><slot /></main>' }, RouterLink: { template: '<a><slot /></a>' }, ConfirmDialog: { props: ['show', 'message'], emits: ['confirm', 'cancel'], template: '<div v-if="show" data-testid="confirm"><p>{{ message }}</p><button @click="$emit(\'confirm\')">Confirm removal</button></div>' } } } }) }
+function render() { return mount(TeamSharingView, { global: { plugins: [createI18n({ legacy: false, locale: 'en', missingWarn: false, fallbackWarn: false, messages: { en: { teamFunding: messages, workspace: { retry: 'Retry' } } } })], stubs: { AppLayout: { template: '<main><slot /></main>' }, RouterLink: { template: '<a><slot /></a>' }, ConfirmDialog: { props: ['show', 'message', 'title', 'confirmText', 'busy'], emits: ['confirm', 'cancel'], template: '<div v-if="show" data-testid="confirm"><h2>{{ title }}</h2><p>{{ message }}</p><slot /><button :disabled="busy" @click="$emit(\'confirm\')">{{ confirmText || \'Confirm removal\' }}</button><button :disabled="busy" @click="$emit(\'cancel\')">Cancel</button></div>' } } } }) }
 function button(wrapper: ReturnType<typeof render>, text: string) { return wrapper.findAll('button').find(item => item.text() === text)! }
 beforeEach(() => {
   vi.clearAllMocks(); api.listTeams.mockResolvedValue({ owned: [summary], joined: [] }); api.listInvitations.mockResolvedValue({ items: [] }); api.getFunding.mockResolvedValue({ personal_subscriptions: [{ id: 5, group_id: 2, group_name: 'Owner plan', expires_at: null }] }); api.getTeam.mockResolvedValue(detail()); api.getLedger.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20 })
-  for (const key of ['createTeam','updateTeam','invite','acceptInvitation','declineInvitation','revokeInvitation','updateMember','removeMember']) api[key].mockResolvedValue({})
+  for (const key of ['createTeam','deleteTeam','updateTeam','invite','acceptInvitation','declineInvitation','revokeInvitation','updateMember','removeMember']) api[key].mockResolvedValue({})
 })
 describe('team sharing management', () => {
   it('creates teams and sends existing account invitations without accepting for the target', async () => {
@@ -103,4 +103,85 @@ describe('team sharing management', () => {
     api.listTeams.mockResolvedValue({ owned: [], joined: [] }); await button(wrapper, 'Retry').trigger('click'); await flushPromises(); expect(wrapper.text()).toContain('No teams yet')
     wrapper.unmount()
   })
+  it('lets only owners request team deletion and requires a cancellable confirmation', async () => {
+    const wrapper = render(); await flushPromises()
+    await wrapper.get('[data-delete-team]').trigger('click')
+    expect(api.deleteTeam).not.toHaveBeenCalled()
+    expect(wrapper.get('[data-testid="confirm"]').text()).toContain('Studio')
+    expect(wrapper.get('[data-testid="confirm"]').text()).toContain('Accepted requests')
+    expect(wrapper.get('[data-testid="confirm"]').text()).toContain('personal funds')
+    await wrapper.get('[data-testid="confirm"]').findAll('button')[1].trigger('click')
+    expect(wrapper.find('[data-testid="confirm"]').exists()).toBe(false)
+    expect(api.deleteTeam).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+  it('deletes the confirmed team and clears stale details when no teams remain', async () => {
+    const wrapper = render(); await flushPromises()
+    await wrapper.get('[data-delete-team]').trigger('click')
+    api.listTeams.mockResolvedValue({ owned: [], joined: [] })
+    await wrapper.get('[data-testid="confirm"]').find('button').trigger('click'); await flushPromises()
+    expect(api.deleteTeam).toHaveBeenCalledWith(7)
+    expect(wrapper.find('[data-testid="confirm"]').exists()).toBe(false)
+    expect(wrapper.find('#team-name').exists()).toBe(false)
+    expect(wrapper.find('[data-delete-team]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('No teams yet')
+    wrapper.unmount()
+  })
+  it('selects a remaining team after deletion and closes confirmation on team switches', async () => {
+    const next = { ...summary, id: 8, name: 'Second team' }
+    api.listTeams.mockResolvedValue({ owned: [summary, next], joined: [] })
+    api.getTeam.mockImplementation((id: number) => Promise.resolve({ ...detail(), id, name: id === 8 ? next.name : summary.name }))
+    const wrapper = render(); await flushPromises()
+    await wrapper.get('[data-delete-team]').trigger('click')
+    await wrapper.get('#team-detail-selector').setValue('8'); await flushPromises()
+    expect(wrapper.find('[data-testid="confirm"]').exists()).toBe(false)
+    expect(api.deleteTeam).not.toHaveBeenCalled()
+    await wrapper.get('#team-detail-selector').setValue('7'); await flushPromises()
+    await wrapper.get('[data-delete-team]').trigger('click')
+    api.listTeams.mockResolvedValue({ owned: [next], joined: [] })
+    await wrapper.get('[data-testid="confirm"]').find('button').trigger('click'); await flushPromises()
+    expect(api.deleteTeam).toHaveBeenCalledWith(7)
+    expect((wrapper.get('#team-detail-selector').element as HTMLSelectElement).value).toBe('8')
+    expect((wrapper.get('#team-name').element as HTMLInputElement).value).toBe('Second team')
+    wrapper.unmount()
+  })
+  it('keeps a failed deletion available for retry without discarding the current team', async () => {
+    api.deleteTeam.mockRejectedValueOnce(new Error('offline'))
+    const wrapper = render(); await flushPromises()
+    await wrapper.get('[data-delete-team]').trigger('click')
+    await wrapper.get('[data-testid="confirm"]').find('button').trigger('click'); await flushPromises()
+    expect(wrapper.find('[data-testid="confirm"]').exists()).toBe(true)
+    expect((wrapper.get('#team-name').element as HTMLInputElement).value).toBe('Studio')
+    expect(wrapper.get('[data-testid="confirm"]').get('[role="alert"]').text()).toContain('Operation failed')
+    api.listTeams.mockResolvedValue({ owned: [], joined: [] })
+    await wrapper.get('[data-testid="confirm"]').find('button').trigger('click'); await flushPromises()
+    expect(api.deleteTeam).toHaveBeenCalledTimes(2)
+    expect(wrapper.text()).toContain('No teams yet')
+    wrapper.unmount()
+  })
+  it('blocks duplicate deletion and cancellation while a request is pending', async () => {
+    let finish!: () => void
+    api.deleteTeam.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve }))
+    const wrapper = render(); await flushPromises()
+    await wrapper.get('[data-delete-team]').trigger('click')
+    const confirm = wrapper.get('[data-testid="confirm"]').findAll('button')[0]
+    await confirm.trigger('click')
+    expect(confirm.attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-testid="confirm"]').findAll('button')[1].attributes('disabled')).toBeDefined()
+    expect(wrapper.get('#team-detail-selector').attributes('disabled')).toBeDefined()
+    await confirm.trigger('click')
+    expect(api.deleteTeam).toHaveBeenCalledTimes(1)
+    api.listTeams.mockResolvedValue({ owned: [], joined: [] }); finish(); await flushPromises()
+    expect(wrapper.find('[data-testid="confirm"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+  it('hides team deletion for joined members', async () => {
+    api.listTeams.mockResolvedValue({ owned: [], joined: [{ ...summary, role: 'member' }] })
+    api.getTeam.mockResolvedValue({ ...detail(), role: 'member', members: [], invitations: [] })
+    const wrapper = render(); await flushPromises()
+    expect(wrapper.find('[data-delete-team]').exists()).toBe(false)
+    expect(api.deleteTeam).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
 })

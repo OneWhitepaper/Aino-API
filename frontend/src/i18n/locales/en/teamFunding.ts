@@ -15,6 +15,7 @@ export default {
   subscriptionHelp: 'Original group, model, image permissions, and daily, weekly, and monthly windows still apply.', expires: 'Expires: {date}', noExpiry: 'No expiration',
   suggested: 'Owner suggestion: {mode}. This does not change your mode or personal permissions.',
   createTeam: 'Create team', teamName: 'Team name', create: 'Create', ownedTeams: 'Teams I own', joinedTeams: 'Teams I joined', noTeams: 'No teams yet. Create a team or accept an invitation to begin sharing.',
+  deleteTeam: 'Delete team', deleteTeamTitle: 'Delete team?', deleteTeamMessage: 'Delete team “{name}”? This stops new shared requests and revokes pending invitations. Accepted requests continue settling with their original payment source. Billing history and personal funds are preserved. The team cannot be restored.',
   chooseTeam: 'Choose a team to view', owner: 'Owner', member: 'Member', pendingInvitations: 'Received invitations',
   invitationFrom: 'Owner #{id}', accept: 'Accept invitation', decline: 'Decline', invitationHelp: 'Accepting only establishes membership. Choose a payment team yourself in Funding preferences.',
   inviteUserId: 'Existing account ID', invite: 'Send invitation', inviteHelp: 'Invitations expire after 7 days and must be accepted by the target account. No email is sent automatically.', invalidUserId: 'Enter a valid positive integer account ID.', inviteSent: 'Invitation sent', revoke: 'Revoke invitation', pendingOutgoing: 'Pending sent invitations',

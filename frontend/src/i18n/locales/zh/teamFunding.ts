@@ -18,6 +18,7 @@ export default {
   invitationFrom: '组织人 #{id}', accept: '接受邀请', decline: '拒绝', invitationHelp: '接受只建立成员关系。请在「额度使用方式」中自行选择付款团队。',
   inviteUserId: '已有账号 ID', invite: '发送站内邀请', inviteHelp: '邀请有效期 7 天，需要目标账号本人接受；不会自动发送邮件。', invalidUserId: '请输入有效的正整数账号 ID。', inviteSent: '邀请已发送', revoke: '撤回邀请', pendingOutgoing: '已发出的待处理邀请',
   sharedMode: '团队默认共享方式', sharedSubscriptions: '选择要共享的有效订阅', noSharedSubscriptions: '暂无有效的组织人订阅。', suggestedMode: '建议个人使用模式（仅提示）', noSuggestion: '不设置建议', inherit: '继承团队默认',
+  unavailableSubscription: '失效或不可用订阅 #{id}', unavailableSubscriptionsHelp: '以下已选订阅已过期、停用或不可用。请取消勾选后保存，移除这些共享选择。',
   sharedSettings: '共享资源与默认设置', saveTeam: '保存团队设置', consentBoundary: '这里只能管理组织人的共享资源及成员上限。个人余额和个人订阅的授权由成员本人设置。',
   members: '成员累计上限', noMembers: '暂无成员，可通过账号 ID 发送邀请。', memberUsage: '累计已用 {spent} · 当前预留 {reserved}', pause: '暂停', resume: '恢复', remove: '移除', saveMember: '保存成员设置',
   spendLimit: '累计共享上限', limitHelp: '勾选「不限」不设累计上限；输入 0 禁止共享。不是预分配额度，移除或重复邀请不会自动清零已用额。最多 12 位整数、8 位小数。', invalidLimit: '请输入非负金额，最多 12 位整数、8 位小数。', memberSharedMode: '该成员共享方式',

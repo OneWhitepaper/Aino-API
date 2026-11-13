@@ -334,6 +334,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/funding',
+    name: 'FundingPreferences',
+    component: () => import('@/views/user/FundingPreferencesView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: false, title: 'Funding preferences', titleKey: 'teamFunding.preferencesTitle', descriptionKey: 'teamFunding.preferencesDescription' }
+  },
+  {
+    path: '/team-sharing',
+    name: 'TeamSharing',
+    component: () => import('@/views/user/TeamSharingView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: false, title: 'Team sharing', titleKey: 'teamFunding.teamTitle', descriptionKey: 'teamFunding.teamDescription' }
+  },
+  {
     path: '/subscriptions',
     name: 'Subscriptions',
     component: () => import('@/views/user/SubscriptionsView.vue'),

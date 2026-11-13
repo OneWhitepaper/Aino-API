@@ -764,6 +764,8 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
     { path: '/monitor', label: t('nav.channelStatus'), icon: SignalIcon, featureFlag: flagChannelMonitor },
     { path: '/iq-radar', label: t('iqRadar.title'), icon: () => h(Icon, { name: 'radar', class: 'h-5 w-5' }) },
     { path: '/iq-test', label: t('iqTest.title'), icon: () => h(Icon, { name: 'brain', class: 'h-5 w-5' }) },
+    { path: '/funding', label: t('teamFunding.preferencesTitle'), icon: CreditCardIcon },
+    { path: '/team-sharing', label: t('teamFunding.teamTitle'), icon: UsersIcon },
     { path: '/subscriptions', label: t('nav.mySubscriptions'), icon: CreditCardIcon, hideInSimpleMode: true, featureFlag: flagSubscription },
     { path: '/purchase', label: purchaseNavLabel.value, icon: RechargeSubscriptionIcon, hideInSimpleMode: true, featureFlag: flagPayment },
     { path: '/orders', label: t('nav.myOrders'), icon: OrderListIcon, hideInSimpleMode: true, featureFlag: flagPayment },

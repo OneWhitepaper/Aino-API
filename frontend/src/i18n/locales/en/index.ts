@@ -1,3 +1,4 @@
+import teamFunding from './teamFunding'
 import adminAccessKeys from './adminAccessKeys'
 import mcp from './mcp'
 import landing from './landing'
@@ -13,6 +14,7 @@ import iqRadar from './iqRadar'
 import iqTest from './iqTest'
 
 export default {
+  teamFunding,
   adminAccessKeys,
   mcp,
   ...landing,

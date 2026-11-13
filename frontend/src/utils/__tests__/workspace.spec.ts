@@ -13,6 +13,11 @@ describe('workspace navigation and catalog access', () => {
     expect(sections.find(section => section.key === 'access')?.items).toContainEqual({ path: '/iq-radar' })
   })
 
+  it('keeps both shared funding entries in the billing section', () => {
+    const items = [{ path: '/funding' }, { path: '/team-sharing' }]
+    expect(groupWorkspaceNavigation(items)).toEqual([{ key: 'billing', items }])
+  })
+
   it('keeps disabled catalogs hidden and prioritizes models accessible to the user', () => {
     expect(workspaceCatalog(null)).toBeNull()
     expect(workspaceCatalog({ available_channels_enabled: false, model_plaza_enabled: false })).toBeNull()

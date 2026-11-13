@@ -63,6 +63,16 @@ func TestCheckBillingEligibility_AllowsBalanceAtMinimumReserve(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestCheckBillingEligibility_ReadOnlySharedAdapterUsesSelectedSource(t *testing.T) {
+	cache := &balanceEligibilityCacheStub{balance: 0}
+	svc := NewBillingCacheService(cache, nil, nil, nil, nil, nil, &config.Config{}, nil)
+	t.Cleanup(svc.Stop)
+	user := &User{ID: 1}
+	key := &APIKey{ID: 3, UserID: user.ID, Funding: &FundingDecision{Source: TeamFundingSourceBalance, PayerUserID: 2, TeamID: 4}}
+	require.NoError(t, svc.CheckBillingEligibility(WithReadOnlyFunding(t.Context()), user, key, nil, nil, ""))
+	require.ErrorIs(t, svc.CheckBillingEligibility(t.Context(), user, key, nil, nil, ""), ErrInsufficientBalance, "unreserved paid dispatch never inherits the free-adapter exception")
+}
+
 func TestSyncBalanceCacheAfterDeduction_InvalidatesExhaustedBalance(t *testing.T) {
 	cache := &balanceEligibilityCacheStub{
 		balance:                  0.50,

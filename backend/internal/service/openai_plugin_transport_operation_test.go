@@ -107,3 +107,16 @@ func TestOpenAIPluginTransportOrdinaryRequestStillUsesPlugin(t *testing.T) {
 	require.EqualValues(t, 1, plugin.calls.Load())
 	require.Nil(t, upstream.request)
 }
+
+func TestOpenAIPluginTransportFundingOperationUsesHTTP(t *testing.T) {
+	plugin, upstream := &operationPluginClient{}, &operationRecordingHTTPUpstream{}
+	gateway := operationPluginGateway(upstream, plugin)
+	ctx := WithFundingDispatchGuard(t.Context(), "funding-operation", func(context.Context) error { return nil }, nil)
+	request, err := http.NewRequestWithContext(context.WithoutCancel(ctx), http.MethodPost, "https://example.com/v1/responses", strings.NewReader("payload"))
+	require.NoError(t, err)
+	response, err := gateway.doOpenAIUpstream(request, "", &Account{ID: 7, Platform: PlatformOpenAI, Type: AccountTypeOAuth})
+	require.NoError(t, err)
+	require.NoError(t, response.Body.Close())
+	require.Same(t, request, upstream.request)
+	require.Zero(t, plugin.calls.Load(), "funding dispatch policy must also apply to non-desktop calls")
+}

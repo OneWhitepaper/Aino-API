@@ -25,6 +25,10 @@ func resolveRequestFunding(c *gin.Context, keys *service.APIKeyService, key *ser
 		return next, subscription, nil
 	}
 	key = next
+	if isReadOnlyFundingRequest(c) {
+		c.Request = c.Request.WithContext(service.WithReadOnlyFunding(c.Request.Context()))
+		return next, subscription, nil
+	}
 	if strings.EqualFold(c.GetHeader("Upgrade"), "websocket") {
 		if next.Funding.IsShared() {
 			return nil, nil, service.ErrTeamFundingCostUnbounded
@@ -36,9 +40,22 @@ func resolveRequestFunding(c *gin.Context, keys *service.APIKeyService, key *ser
 	}
 	var body []byte
 	if c.Request.Body != nil {
-		body, err = io.ReadAll(http.MaxBytesReader(c.Writer, c.Request.Body, service.ConfiguredFundingBodyReadLimit))
+		originalBody := c.Request.Body
+		body, err = io.ReadAll(io.LimitReader(originalBody, service.ConfiguredFundingBodyReadLimit+1))
 		if err != nil {
 			return nil, nil, service.ErrTeamFundingCostUnbounded.WithCause(err)
+		}
+		if len(body) > service.ConfiguredFundingBodyReadLimit {
+			if next.Funding.IsShared() {
+				return nil, nil, service.ErrTeamFundingCostUnbounded
+			}
+			// Personal adapters keep their established body limit and billing
+			// path. Reattach the consumed prefix without poisoning later reads.
+			c.Request.Body = struct {
+				io.Reader
+				io.Closer
+			}{Reader: io.MultiReader(bytes.NewReader(body), originalBody), Closer: originalBody}
+			return next, subscription, nil
 		}
 	}
 	next, subscription, prepared, err := keys.PrepareConfiguredFundingRequest(c.Request.Context(), key, c.Request.URL.Path, body, c.GetHeader("Idempotency-Key"))
@@ -64,6 +81,28 @@ func resolveRequestFunding(c *gin.Context, keys *service.APIKeyService, key *ser
 	c.Request.Body = io.NopCloser(bytes.NewReader(prepared))
 	c.Request.ContentLength = int64(len(prepared))
 	return next, subscription, nil
+}
+
+// These registered adapters only discover models or count input tokens; none
+// executes generation or records paid usage. Matching full route patterns keeps
+// unrelated media polling and other GET requests on normal funding admission.
+func isReadOnlyFundingRequest(c *gin.Context) bool {
+	switch c.Request.Method {
+	case http.MethodGet:
+		switch c.FullPath() {
+		case "/v1/models", "/v1/models/:model", "/models", "/models/:model",
+			"/backend-api/codex/models", "/antigravity/v1/models",
+			"/v1beta/models", "/v1beta/models/:model",
+			"/antigravity/v1beta/models", "/antigravity/v1beta/models/:model":
+			return true
+		}
+	case http.MethodPost:
+		switch c.FullPath() {
+		case "/v1/messages/count_tokens", "/messages/count_tokens", "/antigravity/v1/messages/count_tokens":
+			return true
+		}
+	}
+	return false
 }
 
 func releaseUndispatchedRequestFunding(c *gin.Context) {

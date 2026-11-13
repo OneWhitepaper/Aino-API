@@ -756,24 +756,23 @@ func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user 
 		return ErrBillingServiceUnavailable
 	}
 
-	// A shared decision already escrowed money and quota in PostgreSQL. Reading
-	// the actor wallet (or the now-depleted payer wallet) would reject an admitted
-	// request. Caller key/rate/platform/concurrency controls remain below.
+	// Reserved decisions already escrowed money and quota in PostgreSQL. Exact
+	// free adapters may also use their selected shared source without escrow.
+	// Caller key/rate/platform/concurrency controls remain below.
 	isSubscriptionMode := group != nil && group.IsSubscriptionType() && subscription != nil
-	shared := apiKey != nil && apiKey.Funding.HasReservation()
+	readOnly, _ := ctx.Value(readOnlyFundingKey{}).(bool)
+	funded := apiKey != nil && (apiKey.Funding.HasReservation() || readOnly && apiKey.Funding.IsShared())
 	if apiKey != nil && apiKey.Funding != nil {
 		isSubscriptionMode = apiKey.Funding.IsSubscription()
 	}
-	if shared {
-		if apiKey.Funding.ReservationID <= 0 {
-			return ErrFundingUnavailable
-		}
-	} else if isSubscriptionMode {
-		if err := s.checkSubscriptionEligibility(ctx, user.ID, group, subscription); err != nil {
+	if !funded {
+		if isSubscriptionMode {
+			if err := s.checkSubscriptionEligibility(ctx, user.ID, group, subscription); err != nil {
+				return err
+			}
+		} else if err := s.checkBalanceEligibility(ctx, user.ID); err != nil {
 			return err
 		}
-	} else if err := s.checkBalanceEligibility(ctx, user.ID); err != nil {
-		return err
 	}
 
 	// user × platform quota 仅在 standard（余额）模式生效；订阅模式豁免

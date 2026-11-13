@@ -58,7 +58,10 @@ func (r *teamFundingRepository) ReservePersonalFunding(ctx context.Context, c *s
 		e := tx.QueryRowContext(ctx, "SELECT mode,allow_personal_balance,allow_personal_subscription FROM funding_preferences WHERE user_id=$1 FOR SHARE", c.MemberUserID).Scan(&mode, &allowBalance, &allowSub)
 		if errors.Is(e, sql.ErrNoRows) {
 			var team int64
-			if e = tx.QueryRowContext(ctx, "SELECT id FROM teams WHERE owner_user_id=$1 AND status='active' LIMIT 1 FOR SHARE", c.MemberUserID).Scan(&team); e != nil {
+			// This only detects implicit owner opt-in; it does not spend team
+			// funds. Shared reservations lock team then owner, so acquiring a
+			// team lock after the wallet lock would invert that order.
+			if e = tx.QueryRowContext(ctx, "SELECT id FROM teams WHERE owner_user_id=$1 AND status='active' LIMIT 1", c.MemberUserID).Scan(&team); e != nil {
 				return service.ErrTeamFundingForbidden
 			}
 			mode = service.FundingModePersonalFirst

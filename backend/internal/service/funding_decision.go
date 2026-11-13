@@ -355,8 +355,9 @@ func (s *APIKeyService) PrepareConfiguredFundingRequest(ctx context.Context, key
 	if parseErr == nil && key.Group != nil && !key.Group.ModelAllowlist.Allows(model) {
 		return nil, nil, nil, infraerrors.Forbidden("MODEL_NOT_ALLOWED", "model is not allowed for this group")
 	}
+	explicitOutputCap := fundingHasExplicitOutputCap(body)
 	var required *decimal.Decimal
-	if parseErr == nil {
+	if parseErr == nil && (base.IsShared() || explicitOutputCap) {
 		if text, e := s.strictFundingTextCost(ctx, key, model, input, output, count); e == nil {
 			v, _ := decimal.NewFromString(text)
 			required = &v
@@ -366,8 +367,8 @@ func (s *APIKeyService) PrepareConfiguredFundingRequest(ctx context.Context, key
 	}
 	copy := *key
 	copy.Funding = base
-	// Existing personal image/audio and other unbounded adapters keep their
-	// established path. They cannot change to a shared source after dispatch.
+	// Existing uncapped personal text and other unbounded adapters keep their
+	// established body and billing path. Only shared calls receive a default cap.
 	if required == nil {
 		if base.IsShared() {
 			return nil, nil, nil, ErrTeamFundingCostUnbounded
@@ -381,6 +382,18 @@ func (s *APIKeyService) PrepareConfiguredFundingRequest(ctx context.Context, key
 	}
 	excluded := map[string]bool{}
 	var d *FundingDecision
+	preparedSnapshot := false
+	defer func() {
+		if !preparedSnapshot {
+			cleanup := *key
+			cleanup.Funding = cloneFundingDecision(d)
+			if cleanup.Funding == nil {
+				cleanup.Funding = &FundingDecision{}
+			}
+			cleanup.Funding.RequestID, cleanup.Funding.AdmissionToken = operationID, admissionToken
+			s.ReleaseUndispatchedFunding(ctx, &cleanup)
+		}
+	}()
 	for attempts := 0; attempts < 32; attempts++ {
 		d, err = s.resolveFundingDecisionExcluding(ctx, &copy, required, excluded)
 		if err != nil {
@@ -391,6 +404,12 @@ func (s *APIKeyService) PrepareConfiguredFundingRequest(ctx context.Context, key
 		}
 		d.RequestID = operationID
 		d.AdmissionToken = admissionToken
+		if !d.IsShared() && !explicitOutputCap {
+			personal := copy
+			personal.Funding = cloneFundingDecision(d)
+			personal.Funding.RequestID, personal.Funding.AdmissionToken = "", ""
+			return &personal, d.Subscription, body, nil
+		}
 		groupID := int64(0)
 		if key.GroupID != nil {
 			groupID = *key.GroupID
@@ -419,16 +438,38 @@ func (s *APIKeyService) PrepareConfiguredFundingRequest(ctx context.Context, key
 	if err != nil || d == nil || d.ReservationID <= 0 {
 		return nil, nil, nil, ErrFundingUnavailable
 	}
+	// The dispatch callbacks and detached usage inputs share exactly this
+	// request-local snapshot. The authentication-cache key remains untouched.
+	d = cloneFundingDecision(d)
 	guarded := WithFundingDispatchGuard(ctx, operationID, func(dispatchCtx context.Context) error {
+		if !d.HasReservation() {
+			return s.teamFunding.ClaimDispatch(dispatchCtx, operationID, key.ID, key.UserID)
+		}
 		return s.teamFunding.BeginSnapshotDispatch(dispatchCtx, operationID, key.ID, key.UserID, d.ReservationID, d.IsShared())
 	}, func(releaseCtx context.Context) error {
+		if !d.HasReservation() {
+			return nil
+		}
 		if d.IsShared() {
 			return s.teamFunding.ReleaseDispatchedUnused(releaseCtx, d.ReservationID, key.UserID)
 		}
 		return s.teamFunding.ReleasePersonalProvenUnused(releaseCtx, d.ReservationID, key.UserID)
 	})
+	guard, _ := guarded.Value(fundingDispatchKey{}).(*fundingDispatchGuard)
+	guard.preparePersonalOAuth = func(releaseCtx context.Context) error {
+		if d.IsShared() {
+			return ErrTeamFundingCostUnbounded
+		}
+		if d.HasReservation() {
+			if err := s.teamFunding.ReleasePersonal(releaseCtx, d.ReservationID, key.UserID); err != nil {
+				return err
+			}
+			d.ReservationID, d.ReservedAmount = 0, ""
+		}
+		return nil
+	}
 	WithFundingDispatchLimits(guarded, input, output, count)
-	copy.Funding = cloneFundingDecision(d)
+	copy.Funding = d
 	copy.Funding.dispatchContext = guarded
 	if key.Group != nil {
 		group := *key.Group
@@ -436,6 +477,7 @@ func (s *APIKeyService) PrepareConfiguredFundingRequest(ctx context.Context, key
 		group.FallbackGroupIDOnInvalidRequest = nil
 		copy.Group = &group
 	}
+	preparedSnapshot = true
 	return &copy, d.Subscription, prepared, nil
 }
 func fundingCandidateKey(d *FundingDecision) string {
@@ -467,6 +509,19 @@ func fundingOperationRequestIDForContext(ctx context.Context, key *APIKey, idemp
 	}
 	sum := sha256.Sum256([]byte(fmt.Sprintf("%d|%d|%s", key.UserID, key.ID, token)))
 	return fmt.Sprintf("team:%d:%d:%x", key.UserID, key.ID, sum[:])
+}
+
+func fundingHasExplicitOutputCap(body []byte) bool {
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(body, &fields) != nil {
+		return false
+	}
+	for _, name := range []string{"max_tokens", "max_output_tokens", "max_completion_tokens"} {
+		if _, ok := fields[name]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 // Only self-contained text calls have an enforceable output bound here. Local
@@ -704,18 +759,20 @@ func (s *APIKeyService) strictFundingTextCostOne(ctx context.Context, key *APIKe
 // ReleaseUndispatchedFunding cannot refund a dispatched or uncertain request:
 // the repository only releases a row whose durable state is still reserved.
 func (s *APIKeyService) ReleaseUndispatchedFunding(ctx context.Context, key *APIKey) {
-	if s == nil || s.teamFunding == nil || key == nil || !key.Funding.HasReservation() {
+	if s == nil || s.teamFunding == nil || key == nil || key.Funding == nil {
 		return
 	}
 	releaseCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
 	defer cancel()
 	var err error
-	if key.Funding.IsShared() {
-		err = s.teamFunding.Release(releaseCtx, key.Funding.ReservationID, key.UserID)
-	} else {
-		err = s.teamFunding.ReleasePersonal(releaseCtx, key.Funding.ReservationID, key.UserID)
+	if key.Funding.HasReservation() {
+		if key.Funding.IsShared() {
+			err = s.teamFunding.Release(releaseCtx, key.Funding.ReservationID, key.UserID)
+		} else {
+			err = s.teamFunding.ReleasePersonal(releaseCtx, key.Funding.ReservationID, key.UserID)
+		}
 	}
-	if err == nil {
+	if err == nil && key.Funding.AdmissionToken != "" {
 		_ = s.teamFunding.ReleaseAdmission(releaseCtx, key.Funding.RequestID, key.ID, key.UserID, key.Funding.AdmissionToken)
 	}
 }
@@ -776,14 +833,44 @@ func (s *APIKeyService) strictFundingTextCost(ctx context.Context, key *APIKey, 
 }
 
 type fundingDispatchKey struct{}
+type readOnlyFundingKey struct{}
+
+// WithReadOnlyFunding is set by authentication only for registered, free
+// model-discovery and token-count adapters. It never authorizes paid dispatch.
+func WithReadOnlyFunding(ctx context.Context) context.Context {
+	return context.WithValue(ctx, readOnlyFundingKey{}, true)
+}
+
 type fundingDispatchGuard struct {
-	requestID       string
-	begin           func(context.Context) error
-	releaseUnused   func(context.Context) error
-	count           uint32
-	maxInputBytes   int
-	maxOutputTokens int
-	maxCompletions  int
+	requestID            string
+	begin                func(context.Context) error
+	releaseUnused        func(context.Context) error
+	preparePersonalOAuth func(context.Context) error
+	count                uint32
+	maxInputBytes        int
+	maxOutputTokens      int
+	maxCompletions       int
+}
+
+// Codex OAuth removes output caps. Personal requests may retain their existing
+// unbounded billing only after their undispatched escrow is refunded. Shared
+// sources cannot use this protocol. The permanent operation guard survives.
+func prepareFundingForOpenAIOAuth(ctx context.Context) error {
+	g, _ := ctx.Value(fundingDispatchKey{}).(*fundingDispatchGuard)
+	if g == nil {
+		return nil
+	}
+	if atomic.LoadUint32(&g.count) != 0 {
+		return ErrTeamFundingConflict
+	}
+	if g.preparePersonalOAuth == nil {
+		return ErrTeamFundingCostUnbounded
+	}
+	if err := g.preparePersonalOAuth(ctx); err != nil {
+		return err
+	}
+	g.maxInputBytes, g.maxOutputTokens, g.maxCompletions = 0, 0, 0
+	return nil
 }
 
 func WithFundingDispatchGuard(ctx context.Context, id string, begin func(context.Context) error, releaseUnused func(context.Context) error) context.Context {

@@ -340,8 +340,10 @@ func buildUsageBillingCommand(requestID string, usageLog *UsageLog, p *postUsage
 
 	if d := p.APIKey.Funding; d != nil {
 		cmd.PayerUserID = d.PayerUserID
-		if d.HasReservation() {
+		if d.RequestID != "" {
 			cmd.RequestID = d.RequestID
+		}
+		if d.HasReservation() {
 			cmd.FundingSource = d.Source
 			if d.IsShared() {
 				cmd.FundingReservationID = d.ReservationID

@@ -11,7 +11,7 @@ func (s *OpenAIGatewayService) SetPluginManager(manager *PluginManager) {
 func (s *OpenAIGatewayService) doOpenAIUpstream(request *http.Request, proxyURL string, account *Account) (*http.Response, error) {
 	// The plugin protocol cannot disable redirects or replay. Operation-aware
 	// OAuth calls use the existing HTTP path that enforces one dispatch.
-	if s.pluginManager != nil && DesktopInferenceOperationID(request.Context()) == "" {
+	if s.pluginManager != nil && DesktopInferenceOperationID(request.Context()) == "" && FundingDispatchRequestID(request.Context()) == "" {
 		response, handled, err := s.pluginManager.RoundTripOpenAIOAuth(request.Context(), request, proxyURL, account)
 		if handled {
 			return response, err

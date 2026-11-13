@@ -4,14 +4,226 @@ package service
 
 import (
 	"context"
-	"github.com/shopspring/decimal"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/gin-gonic/gin"
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/require"
 )
+
+type fundingPreparationRepoStub struct {
+	TeamFundingRepository
+	personalFundingReservationRepository
+	data       *FundingContext
+	admissions map[string]string
+	reserved   map[int64]bool
+	claimed    map[string]bool
+	nextID     int64
+	releases   int
+	reserveErr error
+}
+
+func (r *fundingPreparationRepoStub) GetFundingContext(context.Context, int64) (*FundingContext, error) {
+	return r.data, nil
+}
+func (r *fundingPreparationRepoStub) AcquireFundingAdmission(_ context.Context, id string, _, _ int64, token string) error {
+	if r.admissions[id] != "" || r.claimed[id] {
+		return ErrUsageBillingRequestConflict
+	}
+	r.admissions[id] = token
+	return nil
+}
+func (r *fundingPreparationRepoStub) ReleaseFundingAdmission(_ context.Context, id string, _, _ int64, token string) error {
+	if r.admissions[id] == token && !r.claimed[id] {
+		delete(r.admissions, id)
+	}
+	return nil
+}
+func (r *fundingPreparationRepoStub) ReservePersonalFunding(_ context.Context, cmd *PersonalFundingReserveCommand) (*PersonalFundingReservation, error) {
+	if r.reserveErr != nil {
+		return nil, r.reserveErr
+	}
+	r.nextID++
+	r.reserved[r.nextID] = true
+	return &PersonalFundingReservation{ID: r.nextID, Amount: cmd.Amount}, nil
+}
+func (r *fundingPreparationRepoStub) Reserve(_ context.Context, cmd *TeamFundingReserveCommand) (*TeamFundingReservation, error) {
+	r.nextID++
+	r.reserved[r.nextID] = true
+	return &TeamFundingReservation{ID: r.nextID, ReservedAmount: cmd.Amount}, nil
+}
+func (r *fundingPreparationRepoStub) ReleasePersonalFunding(_ context.Context, id, _ int64) error {
+	if !r.reserved[id] {
+		return ErrTeamFundingConflict
+	}
+	delete(r.reserved, id)
+	r.releases++
+	return nil
+}
+func (r *fundingPreparationRepoStub) Release(ctx context.Context, id, user int64) error {
+	return r.ReleasePersonalFunding(ctx, id, user)
+}
+func (r *fundingPreparationRepoStub) ClaimFundingDispatch(_ context.Context, id string, _, _ int64) error {
+	if r.claimed[id] {
+		return ErrUsageBillingRequestConflict
+	}
+	r.claimed[id] = true
+	return nil
+}
+
+func fundingPreparationFixture(source string) (*APIKeyService, *APIKey, *fundingPreparationRepoStub) {
+	user := &User{ID: 22, Balance: 100}
+	price := 1.0
+	group := &Group{ID: 3, RateMultiplier: 1, ModelPricing: []ChannelModelPricing{{Models: []string{"funding-oauth-model"}, BillingMode: BillingModePerRequest, PerRequestPrice: &price}}}
+	data := &FundingContext{Preferences: FundingPreferences{Configured: true, Mode: FundingModePersonalOnly, AllowPersonalBalance: true}}
+	var subs []UserSubscription
+	if source == FundingSourcePersonalSubscription {
+		data.Preferences.Mode = FundingModeSubscriptionOnly
+		data.Preferences.AllowPersonalSubscription = true
+		group.SubscriptionType = SubscriptionTypeSubscription
+		subs = []UserSubscription{{ID: 9, UserID: user.ID, GroupID: group.ID, Status: SubscriptionStatusActive, StartsAt: time.Now().Add(-time.Hour), ExpiresAt: time.Now().Add(time.Hour)}}
+	} else if source == TeamFundingSourceBalance {
+		data.Preferences.Mode = FundingModeTeamOnly
+		data.Preferences.TeamID = ptrInt64ForFundingTest(4)
+		data.Team = &TeamFundingCandidate{TeamID: 4, MemberUserID: user.ID, PayerUserID: 11, Status: TeamMemberActive, SharedMode: TeamSharedModeBalanceOnly, AvailableBalance: "100", Spent: "0", Reserved: "0"}
+	}
+	repo := &fundingPreparationRepoStub{data: data, admissions: map[string]string{}, reserved: map[int64]bool{}, claimed: map[string]bool{}}
+	billing := NewBillingService(&config.Config{}, nil)
+	svc := &APIKeyService{teamFunding: NewTeamFundingService(repo), userRepo: &fundingUserRepoStub{user: user}, userSubRepo: fundingSubscriptionsStub{subs: subs}, fundingBilling: billing, fundingPricing: NewModelPricingResolver(nil, billing)}
+	return svc, &APIKey{ID: 7, UserID: user.ID, User: user, GroupID: &group.ID, Group: group}, repo
+}
+
+func TestFundingPreparationInsufficientBudgetRefillRetriesSameToken(t *testing.T) {
+	svc, key, repo := fundingPreparationFixture(FundingSourcePersonalBalance)
+	key.User.Balance = 0.1
+	body := []byte(`{"model":"funding-oauth-model","input":"hello","max_output_tokens":64}`)
+	_, _, _, err := svc.PrepareConfiguredFundingRequest(t.Context(), key, "/v1/responses", body, "refill-retry")
+	require.ErrorIs(t, err, ErrFundingUnavailable)
+	require.Empty(t, repo.admissions, "failure before middleware cleanup must release its admission")
+	key.User.Balance = 100
+	prepared, _, _, err := svc.PrepareConfiguredFundingRequest(t.Context(), key, "/v1/responses", body, "refill-retry")
+	require.NoError(t, err)
+	require.True(t, prepared.Funding.HasReservation())
+	svc.ReleaseUndispatchedFunding(t.Context(), prepared)
+	require.Empty(t, repo.admissions)
+	require.Empty(t, repo.reserved)
+}
+
+func TestFundingPersonalUncappedTextPreservesBodyWhileSharedGetsDefault(t *testing.T) {
+	body := []byte(`{"model":"funding-oauth-model","input":"hello"}`)
+	for _, source := range []string{FundingSourcePersonalBalance, FundingSourcePersonalSubscription, TeamFundingSourceBalance} {
+		t.Run(source, func(t *testing.T) {
+			svc, key, repo := fundingPreparationFixture(source)
+			prepared, _, result, err := svc.PrepareConfiguredFundingRequest(t.Context(), key, "/v1/responses", body, "uncapped")
+			require.NoError(t, err)
+			defer svc.ReleaseUndispatchedFunding(t.Context(), prepared)
+			if source == TeamFundingSourceBalance {
+				require.True(t, prepared.Funding.HasReservation())
+				require.Contains(t, string(result), `"max_output_tokens":4096`)
+			} else {
+				require.Equal(t, body, result)
+				require.False(t, prepared.Funding.HasReservation())
+				require.Empty(t, repo.admissions)
+				require.Empty(t, repo.reserved)
+			}
+		})
+	}
+}
+
+func TestFundingPreparationReservationErrorsReleaseAdmission(t *testing.T) {
+	for _, reserveErr := range []error{ErrTeamFundingConflict, ErrUsageBillingRequestConflict} {
+		t.Run(reserveErr.Error(), func(t *testing.T) {
+			svc, key, repo := fundingPreparationFixture(FundingSourcePersonalBalance)
+			repo.reserveErr = reserveErr
+			body := []byte(`{"model":"funding-oauth-model","input":"hello","max_output_tokens":64}`)
+			_, _, _, err := svc.PrepareConfiguredFundingRequest(t.Context(), key, "/v1/responses", body, "reserve-error-retry")
+			require.Error(t, err)
+			require.Empty(t, repo.admissions)
+			repo.reserveErr = nil
+			prepared, _, _, err := svc.PrepareConfiguredFundingRequest(t.Context(), key, "/v1/responses", body, "reserve-error-retry")
+			require.NoError(t, err)
+			svc.ReleaseUndispatchedFunding(t.Context(), prepared)
+		})
+	}
+}
+
+func TestFundingPersonalOAuthLocalFailureReleasesAdmission(t *testing.T) {
+	svc, key, repo := fundingPreparationFixture(FundingSourcePersonalBalance)
+	prepared, _, _, err := svc.PrepareConfiguredFundingRequest(t.Context(), key, "/v1/responses", []byte(`{"model":"funding-oauth-model","input":"hello","max_output_tokens":64}`), "local-error-retry")
+	require.NoError(t, err)
+	require.NoError(t, prepareFundingForOpenAIOAuth(FundingDispatchContext(t.Context(), prepared)))
+	require.False(t, prepared.Funding.HasReservation())
+	svc.ReleaseUndispatchedFunding(t.Context(), prepared)
+	require.Empty(t, repo.admissions, "a refunded OAuth hold still owns admission until local cleanup")
+	require.Empty(t, repo.claimed)
+	require.Empty(t, repo.reserved)
+	_, _, _, err = svc.PrepareConfiguredFundingRequest(t.Context(), key, "/v1/responses", []byte(`{"model":"funding-oauth-model","input":"hello","max_output_tokens":64}`), "local-error-retry")
+	require.NoError(t, err)
+}
+
+func TestFundingPersonalOAuthTransformPreservesLegacySourceAndDispatchGuard(t *testing.T) {
+	for _, source := range []string{FundingSourcePersonalBalance, FundingSourcePersonalSubscription, TeamFundingSourceBalance} {
+		t.Run(source, func(t *testing.T) {
+			svc, key, repo := fundingPreparationFixture(source)
+			prepared, sub, body, err := svc.PrepareConfiguredFundingRequest(t.Context(), key, "/v1/responses", []byte(`{"model":"funding-oauth-model","input":"hello","max_output_tokens":64}`), "oauth-operation")
+			require.NoError(t, err)
+			defer svc.ReleaseUndispatchedFunding(t.Context(), prepared)
+			asyncKey := *prepared
+			var fields map[string]any
+			require.NoError(t, json.Unmarshal(body, &fields))
+			result := applyCodexOAuthTransformWithOptions(fields, codexOAuthTransformOptions{})
+			require.NoError(t, result.Error)
+			require.NotContains(t, fields, "max_output_tokens", "the actual OAuth transform removes the escrow output bound")
+			transformed, err := json.Marshal(fields)
+			require.NoError(t, err)
+			c, _ := gin.CreateTestContext(httptest.NewRecorder())
+			c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+			gateway := &OpenAIGatewayService{}
+			account := &Account{ID: 5, Platform: PlatformOpenAI, Type: AccountTypeOAuth}
+			ctx := context.WithoutCancel(FundingDispatchContext(t.Context(), prepared))
+			req, err := gateway.buildUpstreamRequest(ctx, c, account, transformed, "fixture-token", true, "", false)
+			if source == TeamFundingSourceBalance {
+				require.ErrorIs(t, err, ErrTeamFundingCostUnbounded)
+				require.Nil(t, req, "shared OAuth must fail before any provider dispatch")
+				require.Empty(t, repo.claimed)
+				require.Zero(t, repo.releases, "shared escrow remains eligible for ordinary undispatched cleanup")
+				return
+			}
+			require.NoError(t, err)
+			require.NoError(t, ValidateFundingDispatchRequest(req))
+			require.False(t, prepared.Funding.HasReservation())
+			require.False(t, asyncKey.Funding.HasReservation(), "detached usage must see the same request-local downgrade")
+			require.Equal(t, source, asyncKey.Funding.Source)
+			require.Equal(t, key.UserID, asyncKey.Funding.PayerUserID)
+			require.Equal(t, 1, repo.releases)
+			require.Empty(t, repo.reserved)
+			require.Nil(t, key.Funding, "the cached authentication key must not change")
+			cmd := buildUsageBillingCommand("provider-id", nil, &postUsageBillingParams{APIKey: &asyncKey, User: key.User, Account: account, Subscription: sub, IsSubscriptionBill: source == FundingSourcePersonalSubscription, Cost: &CostBreakdown{ActualCost: 0.3, TotalCost: 0.3}})
+			require.Equal(t, prepared.Funding.RequestID, cmd.RequestID)
+			require.Zero(t, cmd.PersonalFundingReservationID)
+			require.Zero(t, cmd.FundingCost)
+			if source == FundingSourcePersonalSubscription {
+				require.Equal(t, 0.3, cmd.SubscriptionCost)
+				require.Equal(t, sub.ID, *cmd.SubscriptionID)
+				require.Zero(t, cmd.BalanceCost)
+			} else {
+				require.Equal(t, 0.3, cmd.BalanceCost)
+				require.Zero(t, cmd.SubscriptionCost)
+			}
+			require.NoError(t, BeginFundingDispatch(ctx))
+			require.True(t, repo.claimed[prepared.Funding.RequestID])
+			require.ErrorIs(t, BeginFundingDispatch(ctx), ErrTeamFundingConflict)
+			svc.ReleaseUndispatchedFunding(t.Context(), prepared)
+			require.ErrorIs(t, repo.ClaimFundingDispatch(ctx, prepared.Funding.RequestID, key.ID, key.UserID), ErrUsageBillingRequestConflict, "cleanup cannot clear the permanent operation claim")
+		})
+	}
+}
 
 func TestFundingPolicyOnlyModesNeverCrossConsent(t *testing.T) {
 	prefs := FundingPreferences{Configured: true, Mode: FundingModeTeamOnly, AllowPersonalBalance: true, AllowPersonalSubscription: true}

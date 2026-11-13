@@ -20,6 +20,13 @@ import (
 // The timeout only covers dialing; an established session is not interrupted.
 const DefaultGrokRealtimeDialTimeout = 12 * time.Second
 
+// GrokRealtimeMaxSessionDuration is an enforced gateway lifetime used by both
+// funding admission and relay cancellation. Sharing a configuration with Live
+// keeps all long-lived voice transports under the operator's session limit.
+func (s *OpenAIGatewayService) GrokRealtimeMaxSessionDuration() time.Duration {
+	return min(s.liveMaxSessionDuration(), time.Hour)
+}
+
 // supportedGrokVoiceHTTPEndpoints are xAI Voice HTTP paths we forward as-is.
 var supportedGrokVoiceHTTPEndpoints = map[string]struct{}{
 	"tts":           {},
@@ -253,7 +260,16 @@ func (s *OpenAIGatewayService) ProxyGrokRealtimeConn(ctx context.Context, c *gin
 		}
 	}()
 
-	return awaitGrokRealtimeAudioObserved(errCh, &audioObserved)
+	_, relayErr := awaitGrokRealtimeAudioObserved(errCh, &audioObserved)
+	cancel()
+	_ = upstream.Close()
+	// Let the other direction finish before freezing observed usage. Audio can
+	// be in flight at the same time that the peer reports an abnormal close.
+	select {
+	case <-errCh:
+	case <-time.After(2 * time.Second):
+	}
+	return audioObserved.Load(), relayErr
 }
 
 // ProbeGrokRealtime performs the upstream WebSocket handshake without sending

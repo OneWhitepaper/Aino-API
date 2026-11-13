@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
@@ -44,6 +45,7 @@ type FundingDecision struct {
 	dispatchContext context.Context
 	fundingContext  *FundingContext
 	AdmissionToken  string
+	Plan            *FundingRequestPlan `json:"plan,omitempty"`
 }
 
 func (d *FundingDecision) IsShared() bool {
@@ -337,7 +339,36 @@ func (s *APIKeyService) ResolveRequestFunding(ctx context.Context, key *APIKey) 
 }
 
 func (s *APIKeyService) PrepareConfiguredFundingRequest(ctx context.Context, key *APIKey, path string, body []byte, idempotencyKey string) (*APIKey, *UserSubscription, []byte, error) {
+	return s.PrepareFundingRequestForTransport(ctx, key, path, "application/json", body, idempotencyKey)
+}
+
+func (s *APIKeyService) PrepareFundingRequestForTransport(ctx context.Context, key *APIKey, path, contentType string, body []byte, idempotencyKey string) (*APIKey, *UserSubscription, []byte, error) {
+	return s.prepareFundingRequestWithPlan(ctx, key, path, contentType, body, idempotencyKey, nil, nil)
+}
+
+func (s *APIKeyService) PrepareFundingRequestForFixedSource(ctx context.Context, key *APIKey, plan *FundingRequestPlan, source *FundingDecision, operationID string) (*APIKey, *UserSubscription, []byte, error) {
+	if plan == nil || source == nil {
+		return nil, nil, nil, ErrTeamFundingInvalid
+	}
+	current, err := s.ValidateNewFundingOperation(ctx, key)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	key = current
+
+	return s.prepareFundingRequestWithPlan(ctx, key, plan.Endpoint, plan.ContentType, plan.Body, operationID, source, plan)
+}
+
+func (s *APIKeyService) prepareFundingRequestWithPlan(ctx context.Context, key *APIKey, path, contentType string, body []byte, idempotencyKey string, fixed *FundingDecision, supplied *FundingRequestPlan) (*APIKey, *UserSubscription, []byte, error) {
+
 	base := key.Funding
+	if fixed != nil {
+		base = cloneFundingDecision(fixed)
+		base.ReservationID = 0
+		base.RequestID = ""
+		base.ReservedAmount = ""
+		base.dispatchContext = nil
+	}
 	var err error
 	if base == nil {
 		base, err = s.resolveFundingDecision(ctx, key)
@@ -351,29 +382,50 @@ func (s *APIKeyService) PrepareConfiguredFundingRequest(ctx context.Context, key
 	if fundingModeBlockedByRunMode(s.cfg) {
 		return nil, nil, nil, ErrFundingUnavailable
 	}
-	prepared, model, input, output, count, parseErr := prepareFundingTextRequest(path, body)
-	if parseErr == nil && key.Group != nil && !key.Group.ModelAllowlist.Allows(model) {
-		return nil, nil, nil, infraerrors.Forbidden("MODEL_NOT_ALLOWED", "model is not allowed for this group")
+	plan, parseErr := s.prepareFundingRequestPlan(ctx, key, path, contentType, body)
+	if supplied != nil {
+		plan = cloneFundingPlan(supplied)
+		parseErr = nil
 	}
 	explicitOutputCap := fundingHasExplicitOutputCap(body)
 	var required *decimal.Decimal
-	if parseErr == nil && (base.IsShared() || explicitOutputCap) {
-		if text, e := s.strictFundingTextCost(ctx, key, model, input, output, count); e == nil {
-			v, _ := decimal.NewFromString(text)
-			required = &v
-		} else if base.IsShared() {
-			return nil, nil, nil, e
+	if parseErr == nil && plan.Kind == FundingRequestControl {
+		copy := *key
+		copy.Funding = cloneFundingDecision(base)
+		copy.Funding.Plan = cloneFundingPlan(plan)
+		return &copy, base.Subscription, body, nil
+	}
+	if parseErr == nil && key.Group != nil && plan.Model != "" && !key.Group.ModelAllowlist.Allows(plan.Model) {
+		return nil, nil, nil, infraerrors.Forbidden("MODEL_NOT_ALLOWED", "model is not allowed for this group")
+	}
+	if parseErr == nil {
+		parseErr = s.prepareFundingReachableEnvelope(ctx, key, plan)
+		if parseErr == nil {
+			var quote string
+			quote, parseErr = s.quoteFundingRequestPlan(ctx, key, plan)
+			if parseErr == nil {
+				v, e := decimal.NewFromString(quote)
+				if e != nil {
+					return nil, nil, nil, e
+				}
+				required = &v
+			}
 		}
 	}
 	copy := *key
 	copy.Funding = base
-	// Existing uncapped personal text and other unbounded adapters keep their
-	// established body and billing path. Only shared calls receive a default cap.
 	if required == nil {
 		if base.IsShared() {
+			if parseErr != nil {
+				return nil, nil, nil, parseErr
+			}
 			return nil, nil, nil, ErrTeamFundingCostUnbounded
 		}
 		return &copy, base.Subscription, body, nil
+	}
+	prepared := plan.Body
+	if prepared == nil {
+		prepared = body
 	}
 	operationID := fundingOperationRequestIDForContext(ctx, key, idempotencyKey)
 	admissionToken := uuid.NewString()
@@ -395,7 +447,11 @@ func (s *APIKeyService) PrepareConfiguredFundingRequest(ctx context.Context, key
 		}
 	}()
 	for attempts := 0; attempts < 32; attempts++ {
-		d, err = s.resolveFundingDecisionExcluding(ctx, &copy, required, excluded)
+		if fixed != nil {
+			d = cloneFundingDecision(base)
+		} else {
+			d, err = s.resolveFundingDecisionExcluding(ctx, &copy, required, excluded)
+		}
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -404,7 +460,7 @@ func (s *APIKeyService) PrepareConfiguredFundingRequest(ctx context.Context, key
 		}
 		d.RequestID = operationID
 		d.AdmissionToken = admissionToken
-		if !d.IsShared() && !explicitOutputCap {
+		if !d.IsShared() && !explicitOutputCap && plan.Kind == FundingRequestText {
 			personal := copy
 			personal.Funding = cloneFundingDecision(d)
 			personal.Funding.RequestID, personal.Funding.AdmissionToken = "", ""
@@ -430,7 +486,7 @@ func (s *APIKeyService) PrepareConfiguredFundingRequest(ctx context.Context, key
 		if err == nil {
 			break
 		}
-		if !errors.Is(err, ErrTeamFundingConflict) {
+		if fixed != nil || !errors.Is(err, ErrTeamFundingConflict) {
 			return nil, nil, nil, err
 		}
 		excluded[fundingCandidateKey(d)] = true
@@ -441,6 +497,8 @@ func (s *APIKeyService) PrepareConfiguredFundingRequest(ctx context.Context, key
 	// The dispatch callbacks and detached usage inputs share exactly this
 	// request-local snapshot. The authentication-cache key remains untouched.
 	d = cloneFundingDecision(d)
+	d.Plan = cloneFundingPlan(plan)
+	copy.Funding = d
 	guarded := WithFundingDispatchGuard(ctx, operationID, func(dispatchCtx context.Context) error {
 		if !d.HasReservation() {
 			return s.teamFunding.ClaimDispatch(dispatchCtx, operationID, key.ID, key.UserID)
@@ -468,7 +526,41 @@ func (s *APIKeyService) PrepareConfiguredFundingRequest(ctx context.Context, key
 		}
 		return nil
 	}
-	WithFundingDispatchLimits(guarded, input, output, count)
+	guard.shared = d.IsShared()
+	guard.plan = d.Plan
+	guard.prepareAccount = func(c context.Context, account *Account) error {
+		next := cloneFundingPlan(d.Plan)
+		next.ImageTokenPricing = false
+		s.classifyFundingImagePricing(c, &copy, next, next.Model)
+		candidateModel := FundingDispatchModel(c)
+		if candidateModel == "" || next.ImageEndpoint {
+			candidateModel = account.GetMappedModel(next.Model)
+		}
+		s.classifyFundingImagePricing(c, &copy, next, candidateModel)
+		if hint := FundingDispatchModel(c); hint != "" && !next.ImageEndpoint {
+			next.BillingModels = append(next.BillingModels, hint)
+		}
+		if err := applyFundingAccountEnvelope(c, account, next); err != nil {
+			model := FundingDispatchModel(c)
+			if model == "" {
+				model = account.GetMappedModel(next.Model)
+			}
+			if !errors.Is(err, ErrFundingModelLimitsUnavailable) || !s.applyFundingExactPricingEnvelope(next, model) {
+				return err
+			}
+		}
+		quote, err := s.quoteFundingRequestPlan(c, &copy, next)
+		if err != nil {
+			return err
+		}
+		if err = s.EnsureFundingReservation(c, &copy, quote); err != nil {
+			return err
+		}
+		*d.Plan = *next
+		guard.plan = d.Plan
+		return s.refreshAsyncFundingEnvelope(c, &copy)
+	}
+	WithFundingDispatchLimits(guarded, plan.BodyBytes, plan.OutputTokens, plan.Count)
 	copy.Funding = d
 	copy.Funding.dispatchContext = guarded
 	if key.Group != nil {
@@ -804,15 +896,9 @@ func (s *APIKeyService) addSharedSubscriptionGroups(ctx context.Context, userID 
 }
 
 func (s *APIKeyService) strictFundingTextCost(ctx context.Context, key *APIKey, model string, input, output, count int) (string, error) {
-	if key.Group != nil && key.Group.Platform == PlatformComposite {
-		return "", ErrTeamFundingCostUnbounded
-	}
 	candidates := []string{model}
 	if s.fundingPricing != nil && s.fundingPricing.channelService != nil && key.GroupID != nil {
 		m := s.fundingPricing.channelService.ResolveChannelMapping(ctx, *key.GroupID, model)
-		if m.BillingModelSource == BillingModelSourceUpstream {
-			return "", ErrTeamFundingCostUnbounded
-		}
 		if m.MappedModel != "" && m.MappedModel != model && m.BillingModelSource != BillingModelSourceRequested {
 			candidates = append(candidates, m.MappedModel)
 		}
@@ -850,11 +936,15 @@ type fundingDispatchGuard struct {
 	maxInputBytes        int
 	maxOutputTokens      int
 	maxCompletions       int
+	plan                 *FundingRequestPlan
+	prepareAccount       func(context.Context, *Account) error
+	dispatchModel        string
+	shared               bool
 }
 
 // Codex OAuth removes output caps. Personal requests may retain their existing
 // unbounded billing only after their undispatched escrow is refunded. Shared
-// sources cannot use this protocol. The permanent operation guard survives.
+// sources retain their real provider envelope and are rechecked before sending.
 func prepareFundingForOpenAIOAuth(ctx context.Context) error {
 	g, _ := ctx.Value(fundingDispatchKey{}).(*fundingDispatchGuard)
 	if g == nil {
@@ -863,6 +953,9 @@ func prepareFundingForOpenAIOAuth(ctx context.Context) error {
 	if atomic.LoadUint32(&g.count) != 0 {
 		return ErrTeamFundingConflict
 	}
+	if g.shared && g.plan != nil && g.prepareAccount != nil {
+		return nil
+	}
 	if g.preparePersonalOAuth == nil {
 		return ErrTeamFundingCostUnbounded
 	}
@@ -870,6 +963,8 @@ func prepareFundingForOpenAIOAuth(ctx context.Context) error {
 		return err
 	}
 	g.maxInputBytes, g.maxOutputTokens, g.maxCompletions = 0, 0, 0
+	g.plan = nil
+	g.prepareAccount = nil
 	return nil
 }
 
@@ -902,6 +997,7 @@ func cloneFundingDecision(d *FundingDecision) *FundingDecision {
 		return nil
 	}
 	copy := *d
+	copy.Plan = cloneFundingPlan(d.Plan)
 	if d.SubscriptionID != nil {
 		id := *d.SubscriptionID
 		copy.SubscriptionID = &id
@@ -959,6 +1055,9 @@ func ValidateFundingDispatchRequest(req *http.Request) error {
 		return nil
 	}
 	g, _ := req.Context().Value(fundingDispatchKey{}).(*fundingDispatchGuard)
+	if g != nil && g.plan != nil {
+		return validateFundingRequestPlan(req, g.plan)
+	}
 	if g == nil || g.maxOutputTokens == 0 {
 		return nil
 	}
@@ -1019,4 +1118,227 @@ func ValidateFundingDispatchRequest(req *http.Request) error {
 
 func FundingTextEndpoint(path string) bool {
 	return strings.HasSuffix(path, "/chat/completions") || strings.HasSuffix(path, "/responses") || strings.HasSuffix(path, "/messages")
+}
+
+func cloneFundingPlan(p *FundingRequestPlan) *FundingRequestPlan {
+	if p == nil {
+		return nil
+	}
+	copy := *p
+	copy.Body = append([]byte(nil), p.Body...)
+	copy.BillingModels = append([]string(nil), p.BillingModels...)
+	if p.BatchAccountMultiplier != nil {
+		rate := *p.BatchAccountMultiplier
+		copy.BatchAccountMultiplier = &rate
+	}
+	return &copy
+}
+func FundingAccountDispatchRequired(ctx context.Context) bool {
+	g, _ := ctx.Value(fundingDispatchKey{}).(*fundingDispatchGuard)
+	return g != nil && g.prepareAccount != nil
+}
+func PrepareFundingAccountDispatch(ctx context.Context, account *Account) error {
+	g, _ := ctx.Value(fundingDispatchKey{}).(*fundingDispatchGuard)
+	if g == nil || g.prepareAccount == nil {
+		return nil
+	}
+	if atomic.LoadUint32(&g.count) != 0 {
+		return ErrTeamFundingConflict
+	}
+	return g.prepareAccount(ctx, account)
+}
+func FundingDispatchModel(ctx context.Context) string {
+	g, _ := ctx.Value(fundingDispatchKey{}).(*fundingDispatchGuard)
+	if g == nil {
+		return ""
+	}
+	return g.dispatchModel
+}
+func SetFundingDispatchModel(ctx context.Context, model string) {
+	g, _ := ctx.Value(fundingDispatchKey{}).(*fundingDispatchGuard)
+	if g != nil {
+		g.dispatchModel = model
+	}
+}
+func ValidateFundingFrameDispatch(ctx context.Context, payload []byte) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://funding.local/v1/responses", bytes.NewReader(payload))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	return ValidateFundingDispatchRequest(req)
+}
+
+// CopyFundingDispatchEnvelope preserves price/validation callbacks when queued
+// tasks exchange the synchronous dispatch claim for their durable queue claim.
+func CopyFundingDispatchEnvelope(from, to context.Context) {
+	old, _ := from.Value(fundingDispatchKey{}).(*fundingDispatchGuard)
+	next, _ := to.Value(fundingDispatchKey{}).(*fundingDispatchGuard)
+	if old == nil || next == nil {
+		return
+	}
+	next.maxInputBytes, next.maxOutputTokens, next.maxCompletions = old.maxInputBytes, old.maxOutputTokens, old.maxCompletions
+	next.shared = old.shared
+	next.plan = old.plan
+	next.prepareAccount = old.prepareAccount
+	next.preparePersonalOAuth = old.preparePersonalOAuth
+	next.dispatchModel = old.dispatchModel
+}
+
+func (s *APIKeyService) FundingBodyReadLimit() int64 {
+	if s != nil && s.cfg != nil && s.cfg.Gateway.MaxBodySize > 0 {
+		return s.cfg.Gateway.MaxBodySize
+	}
+	return ConfiguredFundingBodyReadLimit
+}
+
+// Transport admission checks identity and caller controls before a stateful
+// transport has its first billable payload. Each turn/session still needs its
+// own bounded reservation and dispatch guard before upstream work is sent.
+type fundingTransportAdmissionKey struct{}
+
+func WithFundingTransportAdmission(ctx context.Context) context.Context {
+	return context.WithValue(ctx, fundingTransportAdmissionKey{}, true)
+}
+
+// ValidateNewFundingOperation reloads caller controls for a paid resource
+// mutation after authentication restored a historical resource snapshot.
+func (s *APIKeyService) ValidateNewFundingOperation(ctx context.Context, key *APIKey) (*APIKey, error) {
+	if key == nil {
+		return nil, ErrTeamFundingInvalid
+	}
+	next := *key
+	if s != nil && s.apiKeyRepo != nil {
+		current, err := s.apiKeyRepo.GetByID(ctx, key.ID)
+		if err != nil {
+			return nil, err
+		}
+		if current == nil || current.UserID != key.UserID {
+			return nil, ErrAPIKeyNotFound
+		}
+		next = *current
+		next.Group, next.GroupID, next.User, next.Funding = key.Group, key.GroupID, key.User, key.Funding
+		next.DesktopUsage = key.DesktopUsage
+	}
+	if s != nil && s.userRepo != nil {
+		actor, err := s.userRepo.GetByID(ctx, next.UserID)
+		if err != nil {
+			return nil, err
+		}
+		if actor == nil || !actor.IsActive() {
+			return nil, ErrTeamFundingForbidden
+		}
+		next.User = actor
+	}
+	if next.Status == StatusAPIKeyExpired {
+		return nil, ErrAPIKeyExpired
+	}
+	if next.Status == StatusAPIKeyQuotaExhausted {
+		return nil, ErrAPIKeyQuotaExhausted
+	}
+	if next.Status != "" && !next.IsActive() {
+		return nil, ErrTeamFundingForbidden
+	}
+	if err := s.CheckAPIKeyQuotaAndExpiry(&next); err != nil {
+		return nil, err
+	}
+	if s != nil && s.groupRepo != nil && next.GroupID != nil {
+		group, err := s.groupRepo.GetByID(ctx, *next.GroupID)
+		if err != nil {
+			return nil, err
+		}
+		if group == nil || !group.IsActive() {
+			return nil, ErrFundingUnavailable
+		}
+		next.Group = group
+		if err := s.validateNewFundingGroupAccess(ctx, &next); err != nil {
+			return nil, err
+		}
+	}
+	if next.Funding == nil && s != nil && s.teamFunding != nil {
+		funding, err := s.teamFunding.GetFundingContext(ctx, next.UserID)
+		if err != nil {
+			return nil, err
+		}
+		if funding != nil && funding.Preferences.Configured {
+			source := FundingSourcePersonalBalance
+			if next.Group != nil && next.Group.IsSubscriptionType() {
+				source = FundingSourcePersonalSubscription
+			}
+			permitted := false
+			for _, candidate := range fundingSourceOrder(funding.Preferences) {
+				if candidate == source {
+					permitted = true
+				}
+			}
+			if !permitted {
+				return nil, ErrFundingUnavailable
+			}
+		}
+	}
+
+	return &next, nil
+}
+
+func (s *APIKeyService) FundingResourceSubscription(ctx context.Context, key *APIKey) (*UserSubscription, error) {
+	if key == nil || key.Group == nil || !key.Group.IsSubscriptionType() {
+		return nil, nil
+	}
+	if key.Funding != nil {
+		return key.Funding.Subscription, nil
+	}
+	if s == nil || s.userSubRepo == nil {
+		return nil, ErrFundingUnavailable
+	}
+	sub, err := s.userSubRepo.GetActiveByUserIDAndGroupID(ctx, key.UserID, key.Group.ID)
+	if err != nil {
+		return nil, err
+	}
+	if !activeFundingSubscription(sub, key.Group, time.Now()) {
+		return nil, ErrFundingUnavailable
+	}
+	return sub, nil
+}
+
+func (s *APIKeyService) validateNewFundingGroupAccess(ctx context.Context, key *APIKey) error {
+	group := key.Group
+	if group == nil {
+		return nil
+	}
+	if key.User != nil && !group.IsSubscriptionType() && key.User.CanBindGroup(group.ID, group.IsExclusive) {
+		return nil
+	}
+	if s == nil || s.userSubRepo == nil {
+		return ErrFundingUnavailable
+	}
+	own, err := s.userSubRepo.ListActiveByUserID(ctx, key.UserID)
+	if err != nil {
+		return err
+	}
+	now := time.Now()
+	for i := range own {
+		if activeFundingSubscription(&own[i], group, now) {
+			return nil
+		}
+	}
+	if s.teamFunding == nil {
+		return ErrFundingUnavailable
+	}
+	funding, err := s.teamFunding.GetFundingContext(ctx, key.UserID)
+	if err != nil {
+		return err
+	}
+	if funding == nil || !funding.Preferences.Configured || !fundingAllowsTeam(funding.Preferences) || funding.Team == nil || funding.Team.Status != TeamMemberActive {
+		return ErrFundingUnavailable
+	}
+	shared, err := s.userSubRepo.ListActiveByUserID(ctx, funding.Team.PayerUserID)
+	if err != nil {
+		return err
+	}
+	for i := range shared {
+		if containsFundingID(funding.Team.SubscriptionIDs, shared[i].ID) && activeFundingSubscription(&shared[i], group, now) {
+			return nil
+		}
+	}
+	return ErrFundingUnavailable
 }

@@ -359,6 +359,7 @@ func (l *openAIWSPassthroughTurnLifecycle) finishTerminalWrite(succeeded bool, o
 
 type openAIWSPassthroughFirstOutputFrameConn struct {
 	inner             openaiwsv2.FrameConn
+	beforeWrite       func(context.Context, coderws.MessageType, []byte) (context.Context, error)
 	resolveDeadline   func(payload []byte) openAIWSPassthroughFirstOutputDeadline
 	activeReadTimeout time.Duration
 
@@ -459,6 +460,13 @@ func (c *openAIWSPassthroughFirstOutputFrameConn) ReadFrame(ctx context.Context)
 func (c *openAIWSPassthroughFirstOutputFrameConn) WriteFrame(ctx context.Context, msgType coderws.MessageType, payload []byte) error {
 	if c == nil || c.inner == nil {
 		return errOpenAIWSConnClosed
+	}
+	if c.beforeWrite != nil {
+		var err error
+		ctx, err = c.beforeWrite(ctx, msgType, payload)
+		if err != nil {
+			return err
+		}
 	}
 	generation := uint64(0)
 	if msgType == coderws.MessageText && strings.TrimSpace(gjson.GetBytes(payload, "type").String()) == "response.create" {
@@ -732,6 +740,10 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 	if initialRequestModel == "" {
 		initialRequestModel = openAIWSPassthroughRequestModelForFrame(firstClientMessage)
 	}
+	firstClientMessage, err := prepareOpenAIWSFundingRequest(account, hooks, 1, firstClientMessage, initialRequestModel)
+	if err != nil {
+		return err
+	}
 	if hooks != nil && hooks.MapRequestModel != nil {
 		mappedModel, mapErr := hooks.MapRequestModel(1, initialRequestModel)
 		if mapErr != nil {
@@ -921,8 +933,15 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 	if !ok {
 		return errors.New("openai ws passthrough upstream connection does not support frame relay")
 	}
+	completedTurns := atomic.Int32{}
 	relayUpstreamFrameConn := &openAIWSPassthroughFirstOutputFrameConn{
-		inner:             upstreamFrameConn,
+		inner: upstreamFrameConn,
+		beforeWrite: func(writeCtx context.Context, msgType coderws.MessageType, payload []byte) (context.Context, error) {
+			if (msgType != coderws.MessageText && msgType != coderws.MessageBinary) || strings.TrimSpace(gjson.GetBytes(payload, "type").String()) != "response.create" {
+				return writeCtx, nil
+			}
+			return openAIWSFundingDispatchContext(writeCtx, hooks, int(completedTurns.Load())+1, payload, true)
+		},
 		activeReadTimeout: s.openAIWSPassthroughIdleTimeout(),
 		deadlineChanged:   make(chan struct{}, 1),
 		resolveDeadline: func(payload []byte) openAIWSPassthroughFirstOutputDeadline {
@@ -950,7 +969,6 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 		},
 	}
 
-	completedTurns := atomic.Int32{}
 	turnLifecycle := newOpenAIWSPassthroughTurnLifecycle(true)
 	var acceptedTurnStartedAt atomic.Pointer[time.Time]
 	clientFrameConn := &openAIWSClientFrameConn{
@@ -970,6 +988,7 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 			return restoreCodexToolNamesFromContext(c, payload)
 		},
 	}
+	fundingSession := make(openAIWSFundingSessionState)
 	policyClientConn := &openAIWSPolicyEnforcingFrameConn{
 		inner: clientFrameConn,
 		// 注意线程安全：filter 仅在 runClientToUpstream 这一条
@@ -982,6 +1001,13 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 			}
 			eventType := strings.TrimSpace(gjson.GetBytes(payload, "type").String())
 			isResponseCreate := eventType == "response.create"
+			if isResponseCreate && hooks != nil && hooks.FundingEnabled {
+				var inheritErr error
+				payload, inheritErr = fundingSession.apply(payload)
+				if inheritErr != nil {
+					return payload, nil, inheritErr
+				}
+			}
 			responseCreateAt := time.Time{}
 			acceptedTurn := false
 			if isResponseCreate {
@@ -1059,6 +1085,11 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 						return payload, nil, err
 					}
 				}
+				prepared, fundingErr := prepareOpenAIWSFundingRequest(account, hooks, turnNo, payload, requestModelForThisFrame)
+				if fundingErr != nil {
+					return payload, nil, fundingErr
+				}
+				payload = prepared
 				if hooks != nil && hooks.MapRequestModel != nil {
 					upstreamModel, err := hooks.MapRequestModel(turnNo, requestModelForThisFrame)
 					if err != nil {
@@ -1096,6 +1127,9 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 				payload = s.ReplaceModelInBody(payload, model)
 			}
 			out, blocked, policyErr := s.applyOpenAIFastPolicyToWSResponseCreate(ctx, account, model, payload)
+			if policyErr == nil && blocked == nil && hooks != nil && hooks.FundingEnabled {
+				fundingSession.observe(out)
+			}
 			// 多轮 passthrough usage：仅在成功（non-block / non-err）
 			// 的 response.create 帧上更新 usageMeta，使用
 			// filter 处理后的 payload，与首帧 policy-after-extract 语义

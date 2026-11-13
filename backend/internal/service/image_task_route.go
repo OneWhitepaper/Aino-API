@@ -10,16 +10,17 @@ import (
 // ImageTaskRoute is private creation-time routing metadata, never a current
 // entitlement or a new debit authorization. Ownership is checked separately.
 type ImageTaskRoute struct {
-	Group        *Group            `json:"group"`
-	Platform     string            `json:"platform"`
-	Subscription *UserSubscription `json:"subscription,omitempty"`
+	Funding      *AsyncFundingSnapshot `json:"funding,omitempty"`
+	Group        *Group                `json:"group"`
+	Platform     string                `json:"platform"`
+	Subscription *UserSubscription     `json:"subscription,omitempty"`
 }
 
 func ImageTaskRouteFromRequest(key *APIKey, sub *UserSubscription, platforms ...string) *ImageTaskRoute {
 	if key == nil || key.Group == nil {
 		return nil
 	}
-	route := &ImageTaskRoute{Group: key.Group, Platform: key.Group.Platform}
+	route := &ImageTaskRoute{Group: key.Group, Platform: key.Group.Platform, Funding: AsyncFundingSnapshotFromRequest(key)}
 	if len(platforms) > 0 {
 		route.Platform = platforms[0]
 	}

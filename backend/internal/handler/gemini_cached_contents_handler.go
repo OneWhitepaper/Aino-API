@@ -235,8 +235,30 @@ func (h *GatewayHandler) GeminiCachedContentsCreate(c *gin.Context) {
 			return
 		}
 
+		if apiKey.Funding.HasReservation() {
+			if err = h.apiKeyService.HandoffFundingToAsync(c.Request.Context(), apiKey, service.AsyncFundingProviderGeminiCache, service.GeminiCachedContentNamePrefix+publicID); err != nil {
+				accountReleaseFunc()
+				writeGeminiCachedContentBillingError(c, err)
+				return
+			}
+			defer func() {
+				_ = h.apiKeyService.CancelQueuedAsyncFunding(context.WithoutCancel(c.Request.Context()), apiKey)
+			}()
+			if err = h.apiKeyService.BindAsyncFundingTask(c.Request.Context(), apiKey, service.AsyncFundingProviderGeminiCache, service.GeminiCachedContentNamePrefix+publicID, account.ID, nil); err != nil {
+				accountReleaseFunc()
+				writeGeminiCachedContentBillingError(c, err)
+				return
+			}
+			c.Request = c.Request.WithContext(service.FundingDispatchContext(c.Request.Context(), apiKey))
+
+		}
 		upstream, err := svc.CreateUpstream(c.Request.Context(), account, req, mappedModel, publicID, ttl)
 		accountReleaseFunc()
+		if err != nil && apiKey.Funding.HasReservation() {
+			reqLog.Warn("gemini.cached_content.funded_create_result_unknown", zap.Error(err))
+			googleError(c, http.StatusBadGateway, "Cache creation failed or its result is unknown; retry the same operation instead of creating a new cache")
+			return
+		}
 		if err != nil {
 			var upErr *service.GeminiCachedContentUpstreamError
 			if errors.As(err, &upErr) {
@@ -292,6 +314,7 @@ func (h *GatewayHandler) GeminiCachedContentsCreate(c *gin.Context) {
 
 		expireTime := service.ClampGeminiCachedContentExpire(upstream.ExpireTime, svc.Now().Add(ttl))
 		record := &service.GeminiCachedContent{
+			FundingSnapshot: service.AsyncFundingSnapshotFromRequest(apiKey),
 			PublicID:        publicID,
 			UserID:          authSubject.UserID,
 			APIKeyID:        apiKey.ID,
@@ -305,6 +328,9 @@ func (h *GatewayHandler) GeminiCachedContentsCreate(c *gin.Context) {
 			ExpireTime:      expireTime,
 			ChannelUsage:    usageFields,
 		}
+		if record.FundingSnapshot != nil {
+			record.FundingSnapshot.AccountID = account.ID
+		}
 		persistCtx, cancelPersist := geminiCachedContentPersistContext(c)
 		err = svc.Save(persistCtx, record)
 		cancelPersist()
@@ -315,6 +341,12 @@ func (h *GatewayHandler) GeminiCachedContentsCreate(c *gin.Context) {
 			return
 		}
 
+		if apiKey.Funding.HasReservation() {
+			if err = h.apiKeyService.BindAsyncFundingTask(c.Request.Context(), apiKey, service.AsyncFundingProviderGeminiCache, record.PublicName(), account.ID, nil); err != nil {
+				writeGeminiCachedContentBillingError(c, err)
+				return
+			}
+		}
 		h.submitGeminiCachedContentUsage(c, apiKey, account, subscription, pricingAt,
 			service.GeminiCachedContentCreateUsageRequestID(publicID), modelName, mappedModel, int(tokens), storageTokenHours, usageFields, body)
 		c.JSON(http.StatusOK, service.GeminiCachedContentView(record))
@@ -412,6 +444,15 @@ func (h *GatewayHandler) GeminiCachedContentsPatch(c *gin.Context) {
 	if !ok {
 		return
 	}
+	if record.FundingSnapshot != nil {
+		restored, _, restoreErr := service.RestoreAsyncFundingSnapshot(apiKey, record.FundingSnapshot)
+		if restoreErr != nil {
+			writeGeminiCachedContentBillingError(c, restoreErr)
+			return
+		}
+		apiKey = restored
+		c.Set(string(middleware.ContextKeyAPIKey), apiKey)
+	}
 	account, err := svc.BoundAccount(c.Request.Context(), record)
 	if err != nil {
 		reqLog.Error("gemini.cached_content.load_account_failed", zap.Int64("account_id", record.AccountID), zap.Error(err))
@@ -433,6 +474,43 @@ func (h *GatewayHandler) GeminiCachedContentsPatch(c *gin.Context) {
 
 	subscription, _ := middleware.GetSubscriptionFromContext(c)
 	if extension := svc.Now().Add(ttl).Sub(record.ExpireTime); extension > 0 {
+		c.Request = c.Request.WithContext(service.WithoutFundingFollowup(c.Request.Context()))
+		current, controlErr := h.apiKeyService.ValidateNewFundingOperation(c.Request.Context(), apiKey)
+		if controlErr != nil {
+			writeGeminiCachedContentBillingError(c, controlErr)
+			return
+		}
+		apiKey = current
+		c.Set(string(middleware.ContextKeyAPIKey), apiKey)
+		if record.FundingSnapshot == nil && subscription == nil {
+			subscription, controlErr = h.apiKeyService.FundingResourceSubscription(c.Request.Context(), apiKey)
+			if controlErr != nil {
+				writeGeminiCachedContentBillingError(c, controlErr)
+				return
+			}
+			if subscription != nil {
+				c.Set(string(middleware.ContextKeySubscription), subscription)
+			}
+		}
+
+		if record.FundingSnapshot != nil {
+			plan := &service.FundingRequestPlan{Body: body, ContentType: c.GetHeader("Content-Type"), Endpoint: c.Request.URL.Path, Kind: service.FundingRequestCacheStorage, Model: record.Model, CacheTokenHours: service.GeminiCachedContentStorageTokenHours(record.TotalTokenCount, extension), CacheTTLSeconds: int64(ttl.Seconds()), CachedContentName: record.PublicName(), Count: 1}
+			operation := c.GetHeader("Idempotency-Key")
+			if operation == "" {
+				operation = service.GeminiCachedContentPatchUsageRequestID(record.PublicID)
+			}
+			prepared, preparedSub, _, prepareErr := h.apiKeyService.PrepareFundingRequestForFixedSource(c.Request.Context(), apiKey, plan, record.FundingSnapshot.Funding, operation)
+			if prepareErr != nil {
+				writeGeminiCachedContentBillingError(c, prepareErr)
+				return
+			}
+			apiKey = prepared
+			subscription = preparedSub
+			c.Set(string(middleware.ContextKeyAPIKey), apiKey)
+			c.Request = c.Request.WithContext(service.FundingDispatchContext(c.Request.Context(), apiKey))
+			defer h.apiKeyService.ReleaseUndispatchedFunding(context.WithoutCancel(c.Request.Context()), apiKey)
+		}
+
 		usage := &service.RecordUsageInput{
 			Result: &service.ForwardResult{
 				Model: record.Model, UpstreamModel: record.UpstreamModelID(),
@@ -471,6 +549,21 @@ func (h *GatewayHandler) GeminiCachedContentsPatch(c *gin.Context) {
 			googleError(c, http.StatusInternalServerError, "Failed to update cached content")
 		}
 		return
+	}
+	if record.FundingSnapshot != nil && apiKey.Funding.HasReservation() && apiKey.Funding.RequestID != record.FundingSnapshot.Funding.RequestID {
+		if err = h.apiKeyService.HandoffFundingToAsync(c.Request.Context(), apiKey, service.AsyncFundingProviderGeminiCacheExtension, apiKey.Funding.RequestID); err != nil {
+			writeGeminiCachedContentBillingError(c, err)
+			return
+		}
+		defer func() {
+			_ = h.apiKeyService.CancelQueuedAsyncFunding(context.WithoutCancel(c.Request.Context()), apiKey)
+		}()
+		if err = h.apiKeyService.BindAsyncFundingTask(c.Request.Context(), apiKey, service.AsyncFundingProviderGeminiCacheExtension, record.PublicName()+"@"+apiKey.Funding.RequestID, account.ID, nil); err != nil {
+			writeGeminiCachedContentBillingError(c, err)
+			return
+		}
+		c.Request = c.Request.WithContext(service.FundingDispatchContext(c.Request.Context(), apiKey))
+
 	}
 	upstream, err := svc.PatchUpstream(c.Request.Context(), account, record, ttl)
 	if err != nil {
@@ -574,6 +667,20 @@ func (h *GatewayHandler) resolveGeminiCachedContentOrWrite(c *gin.Context, reqLo
 		googleError(c, http.StatusInternalServerError, "Failed to load cached content")
 		return nil, false
 	}
+	if record.FundingSnapshot != nil && h.apiKeyService != nil {
+		if task, loadErr := h.apiKeyService.LoadAsyncFundingTask(c.Request.Context(), service.AsyncFundingProviderGeminiCache, record.PublicName(), apiKey.UserID, apiKey.ID); loadErr == nil {
+			if replayErr := h.apiKeyService.ReplayGatewayAsyncFundingUsage(c.Request.Context(), apiKey, task, h.gatewayService.RecordUsage); replayErr != nil {
+				writeGeminiCachedContentBillingError(c, replayErr)
+				return nil, false
+			}
+		}
+	}
+	if record.FundingSnapshot != nil && h.apiKeyService != nil {
+		if replayErr := h.apiKeyService.ReplayGatewayFundingResource(c.Request.Context(), apiKey, service.AsyncFundingProviderGeminiCacheExtension, record.PublicName()+"@", h.gatewayService.RecordUsage); replayErr != nil {
+			writeGeminiCachedContentBillingError(c, replayErr)
+			return nil, false
+		}
+	}
 	return record, true
 }
 
@@ -602,6 +709,16 @@ func (h *GatewayHandler) resolveGeminiCachedContentBinding(c *gin.Context, reqLo
 		}
 		reqLog.Error("gemini.cached_content.lookup_failed", zap.Error(err))
 		googleError(c, http.StatusInternalServerError, "Failed to load cached content")
+		return nil, nil, false
+	}
+	if record.FundingSnapshot != nil && h.apiKeyService != nil {
+		if replayErr := h.apiKeyService.ReplayGatewayFundingResource(c.Request.Context(), apiKey, service.AsyncFundingProviderGeminiCacheExtension, record.PublicName()+"@", h.gatewayService.RecordUsage); replayErr != nil {
+			writeGeminiCachedContentBillingError(c, replayErr)
+			return nil, nil, false
+		}
+	}
+	if err = service.EnrichFundingCachedContentPlan(c.Request.Context(), record); err != nil {
+		writeGeminiCachedContentBillingError(c, err)
 		return nil, nil, false
 	}
 	if record.Model != modelName {
@@ -690,29 +807,40 @@ func (h *GatewayHandler) submitGeminiCachedContentUsage(
 	clientIP := ip.GetClientIP(c)
 	requestPayloadHash := service.HashUsageRequestPayload(payload)
 	quotaPlatform := service.QuotaPlatform(c.Request.Context(), apiKey)
+	usageInput := &service.RecordUsageInput{
+		Result:             result,
+		APIKey:             apiKey,
+		User:               apiKey.User,
+		Account:            account,
+		Subscription:       subscription,
+		PricingAt:          pricingAt,
+		InboundEndpoint:    inboundEndpoint,
+		UpstreamEndpoint:   upstreamEndpoint,
+		UserAgent:          userAgent,
+		IPAddress:          clientIP,
+		RequestPayloadHash: requestPayloadHash,
+		APIKeyService:      h.apiKeyService,
+		QuotaPlatform:      quotaPlatform,
+		ChannelUsageFields: usageFields,
+	}
+	if apiKey.Funding.HasReservation() && h.apiKeyService != nil {
+		var persistErr error
+		usageInput, persistErr = h.apiKeyService.PersistGatewayAsyncUsage(c.Request.Context(), usageInput)
+		if persistErr != nil {
+			logger.L().Error("gemini.cached_content.persist_usage_failed", zap.Error(persistErr))
+			return
+		}
+	}
 	h.submitMandatoryUsageRecordTask(c.Request.Context(), func(ctx context.Context) {
-		if err := h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
-			Result:             result,
-			APIKey:             apiKey,
-			User:               apiKey.User,
-			Account:            account,
-			Subscription:       subscription,
-			PricingAt:          pricingAt,
-			InboundEndpoint:    inboundEndpoint,
-			UpstreamEndpoint:   upstreamEndpoint,
-			UserAgent:          userAgent,
-			IPAddress:          clientIP,
-			RequestPayloadHash: requestPayloadHash,
-			APIKeyService:      h.apiKeyService,
-			QuotaPlatform:      quotaPlatform,
-			ChannelUsageFields: usageFields,
-		}); err != nil {
+		if err := h.gatewayService.RecordUsage(ctx, usageInput); err != nil {
 			logger.L().With(
 				zap.String("component", "handler.gemini_v1beta.cached_contents"),
 				zap.Int64("api_key_id", apiKey.ID),
 				zap.Int64("account_id", account.ID),
 				zap.String("request_id", result.RequestID),
 			).Error("gemini.cached_content.record_usage_failed", zap.Error(err))
+		} else if apiKey.Funding.HasReservation() && h.apiKeyService != nil {
+			_ = h.apiKeyService.MarkAsyncFundingSettled(ctx, apiKey)
 		}
 	})
 }
@@ -736,6 +864,13 @@ func (h *GatewayHandler) cleanupGeminiCachedContentUpstream(reqLog *zap.Logger, 
 // 返回的 done 须在 handler 结束时调用；预留随计费任务交接，落库后释放。
 func (h *GatewayHandler) reserveGeminiCachedContentCharge(c *gin.Context, apiKey *service.APIKey, subscription *service.UserSubscription, amount float64) (func(), error) {
 	ctx := c.Request.Context()
+	if apiKey.Funding.HasReservation() {
+		reserved, err := service.ParseTeamFundingAmount(apiKey.Funding.ReservedAmount)
+		if err != nil || reserved.InexactFloat64()+1e-8 < amount {
+			return inflightNoop, service.ErrFundingUnavailable
+		}
+		return inflightNoop, nil
+	}
 	res, err := h.billingCacheService.ReserveFixedCharge(ctx, apiKey.User, apiKey, apiKey.Group, subscription, amount)
 	if err != nil {
 		return inflightNoop, err

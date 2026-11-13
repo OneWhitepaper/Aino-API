@@ -189,8 +189,9 @@ func TestFundingPersonalOAuthTransformPreservesLegacySourceAndDispatchGuard(t *t
 			ctx := context.WithoutCancel(FundingDispatchContext(t.Context(), prepared))
 			req, err := gateway.buildUpstreamRequest(ctx, c, account, transformed, "fixture-token", true, "", false)
 			if source == TeamFundingSourceBalance {
-				require.ErrorIs(t, err, ErrTeamFundingCostUnbounded)
-				require.Nil(t, req, "shared OAuth must fail before any provider dispatch")
+				require.NoError(t, err)
+				require.NotNil(t, req)
+				require.ErrorIs(t, PrepareFundingAccountDispatch(ctx, account), ErrFundingModelLimitsUnavailable, "missing real provider bounds must fail before dispatch")
 				require.Empty(t, repo.claimed)
 				require.Zero(t, repo.releases, "shared escrow remains eligible for ordinary undispatched cleanup")
 				return
@@ -435,7 +436,7 @@ func TestFundingDeepSeekBoundCoversPeakAndUngroupedDefault(t *testing.T) {
 	require.GreaterOrEqual(t, decimal.RequireFromString(boundText).InexactFloat64(), actual.ActualCost)
 }
 
-func TestFundingPersonalImageKeepsLegacyPathButTeamImageRejects(t *testing.T) {
+func TestFundingPersonalImageKeepsLegacyPathWhileSharedRequiresPricing(t *testing.T) {
 	funding := &FundingContext{Preferences: FundingPreferences{Configured: true, Mode: FundingModePersonalOnly, AllowPersonalBalance: true}}
 	svc := &APIKeyService{teamFunding: NewTeamFundingService(&fundingContextRepoStub{context: funding}), userRepo: &fundingUserRepoStub{user: &User{ID: 22, Balance: 1}}, userSubRepo: fundingSubscriptionsStub{}}
 	key := &APIKey{ID: 7, UserID: 22, User: &User{ID: 22}, Group: &Group{ID: 3}, GroupID: ptrInt64ForFundingTest(3)}
@@ -450,7 +451,7 @@ func TestFundingPersonalImageKeepsLegacyPathButTeamImageRejects(t *testing.T) {
 	funding.Preferences.TeamID = ptrInt64ForFundingTest(4)
 	funding.Team = &TeamFundingCandidate{TeamID: 4, PayerUserID: 11, MemberUserID: 22, Status: TeamMemberActive, AvailableBalance: "500", Spent: "0", Reserved: "0"}
 	_, _, _, err = svc.PrepareConfiguredFundingRequest(context.Background(), key, "/v1/images/generations", body, "")
-	require.ErrorIs(t, err, ErrTeamFundingCostUnbounded)
+	require.ErrorContains(t, err, "funding pricing services are not configured")
 }
 
 func TestFundingSharedSubscriptionCanBindOnlyExplicitGrantedGroup(t *testing.T) {

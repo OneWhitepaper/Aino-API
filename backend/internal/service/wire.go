@@ -881,6 +881,7 @@ func ProvideBillingCacheService(
 // ProvideAPIKeyService wires APIKeyService and connects rate-limit cache invalidation.
 func ProvideAPIKeyService(
 	teamFunding *TeamFundingService,
+	fundingAccounts AccountRepository,
 	apiKeyRepo APIKeyRepository,
 	userRepo UserRepository,
 	groupRepo GroupRepository,
@@ -896,14 +897,24 @@ func ProvideAPIKeyService(
 ) *APIKeyService {
 	svc := NewAPIKeyService(apiKeyRepo, userRepo, groupRepo, userSubRepo, userGroupRateRepo, cache, cfg)
 	svc.SetTeamFundingService(teamFunding)
+	svc.SetFundingAccounts(fundingAccounts)
 	svc.SetRateLimitCacheInvalidator(billingCacheService)
 	svc.SetConcurrencyService(concurrencyService)
 	svc.SetDesktopCredentialDependencies(desktopRepo, refreshCache, settings)
 	return svc
 }
 
+// ProvideAsyncFundingRecoveryService retries durable terminal settlement after
+// restart. It never submits or retries provider generation.
+func ProvideAsyncFundingRecoveryService(funding *TeamFundingService, keys *APIKeyService, users UserRepository, gateway *GatewayService, openAI *OpenAIGatewayService, billing UsageBillingRepository, batches BatchImageRepository, logs UsageLogRepository) *AsyncFundingRecoveryService {
+	svc := NewAsyncFundingRecoveryService(funding, keys, users, gateway, openAI, billing, batches, logs)
+	svc.Start()
+	return svc
+}
+
 // ProviderSet is the Wire provider set for all services
 var ProviderSet = wire.NewSet(
+	ProvideAsyncFundingRecoveryService,
 	NewTeamFundingService,
 	NewIQRadarService,
 	NewIQTestService,

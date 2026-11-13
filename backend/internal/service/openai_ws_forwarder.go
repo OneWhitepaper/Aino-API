@@ -263,6 +263,13 @@ type OpenAIWSIngressHooks struct {
 	TurnStarted             func(turn int, startedAt time.Time)
 	BeforeTurn              func(turn int) error
 	BeforeRequest           func(turn int, payload []byte, originalModel string) error
+	// PrepareRequest authorizes one logical turn and may add a bounded output
+	// limit. It runs for the first turn as well as subsequent client frames.
+	PrepareRequest func(turn int, payload []byte, originalModel string) ([]byte, error)
+	FundingEnabled bool
+	// RequestContext supplies the immutable funding snapshot for the final
+	// transformed frame. HTTP bridges defer dispatch marking to HTTPUpstream.
+	RequestContext func(turn int, payload []byte) (context.Context, error)
 	// MapRequestModel resolves the current turn's client model to the model
 	// that must be written into the upstream response.create frame.
 	MapRequestModel func(turn int, originalModel string) (string, error)

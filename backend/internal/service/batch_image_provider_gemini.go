@@ -120,6 +120,9 @@ func (p *GeminiAPIBatchImageProvider) Submit(ctx context.Context, job *BatchImag
 		return nil, geminiProviderError("GEMINI_INVALID_RESPONSE", "Gemini upload response is missing file name", nil)
 	}
 
+	if err := BeginFundingDispatch(ctx); err != nil {
+		return nil, err
+	}
 	batch, err := p.client.CreateBatch(ctx, apiKey, input.Model, uploaded.Name, displayName)
 	if err != nil {
 		return nil, mapGeminiClientError(err)

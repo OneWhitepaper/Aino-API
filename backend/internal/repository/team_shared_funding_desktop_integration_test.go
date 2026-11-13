@@ -153,7 +153,7 @@ func testDesktopTeamSharedZeroPersonalWallet(t *testing.T, sharedSubscription bo
 	billingCache.SetTeamFundingService(funding)
 	t.Cleanup(billingCache.Stop)
 	logs := repository.NewUsageLogRepository(r.client, db)
-	gateway := service.NewOpenAIGatewayService(nil, logs, repository.NewUsageBillingRepository(r.client, db), r.userRepo, r.subs, r.rates, nil, cfg, nil, nil, r.billing, nil, billingCache, repository.NewHTTPUpstream(cfg), &service.DeferredService{}, nil, nil, r.pricing, nil, nil, nil, nil)
+	gateway := service.NewOpenAIGatewayService(nil, logs, repository.NewUsageBillingRepository(r.client, db), r.userRepo, r.subs, r.rates, nil, cfg, nil, nil, r.billing, nil, billingCache, repository.ProvideHTTPUpstream(cfg, repository.NewAccountRepository(r.client, db, nil)), &service.DeferredService{}, nil, nil, r.pricing, nil, nil, nil, nil)
 	subscriptions := service.NewSubscriptionService(r.groups, r.subs, billingCache, r.client, cfg)
 	t.Cleanup(subscriptions.Stop)
 	router := gin.New()

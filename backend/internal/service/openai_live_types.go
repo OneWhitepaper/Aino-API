@@ -47,6 +47,7 @@ type LiveCallIdentity struct {
 	UserAgent       string
 	IPAddress       string
 	InboundEndpoint string
+	Funding         *FundingDecision
 }
 
 type LiveCallRecord struct {
@@ -66,6 +67,9 @@ type LiveCallRecord struct {
 	UserAgent       string
 	IPAddress       string
 	InboundEndpoint string
+	// Free Live calls retain their admission payer for audit and ownership;
+	// this snapshot does not introduce a charge or a funding reservation.
+	Funding *FundingDecision
 	// AttestationCiphertext 仅用于让同一会话的 Sideband 复用创建时的证明。
 	AttestationCiphertext string
 }

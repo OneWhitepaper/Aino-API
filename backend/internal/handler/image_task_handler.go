@@ -119,6 +119,21 @@ func (h *AsyncImageHandler) Submit(c *gin.Context) {
 		return
 	}
 
+	if apiKey.Funding.HasReservation() {
+		if h.openAI == nil || h.openAI.apiKeyService == nil {
+			cancel()
+			h.failTask(task.ID, http.StatusServiceUnavailable, imageTaskErrorPayload("api_error", "funding task storage unavailable"))
+			imageTaskError(c, service.ErrFundingUnavailable)
+			return
+		}
+		if err = h.openAI.apiKeyService.HandoffFundingToAsync(taskCtx.Request.Context(), apiKey, service.AsyncFundingProviderImage, task.ID); err != nil {
+			cancel()
+			h.failTask(task.ID, http.StatusServiceUnavailable, imageTaskErrorPayload("api_error", "funding handoff failed"))
+			imageTaskError(c, err)
+			return
+		}
+		taskCtx.Request = taskCtx.Request.WithContext(service.FundingDispatchContext(taskCtx.Request.Context(), apiKey))
+	}
 	pollURL := imageTaskPollURL(c.Request.URL.Path, task.ID)
 	c.Header("Cache-Control", "no-store")
 	c.Header("Location", pollURL)
@@ -186,10 +201,30 @@ func (h *AsyncImageHandler) Get(c *gin.Context) {
 		imageTaskError(c, service.ErrImageTaskForbidden)
 		return
 	}
+	if h.openAI != nil && h.openAI.apiKeyService != nil {
+		if fundingTask, loadErr := h.openAI.apiKeyService.LoadAsyncFundingTask(c.Request.Context(), service.AsyncFundingProviderImage, c.Param("task_id"), apiKey.UserID, apiKey.ID); loadErr == nil {
+			if replayErr := h.openAI.apiKeyService.ReplayAsyncFundingUsage(c.Request.Context(), apiKey, fundingTask, h.openAI.gatewayService.RecordUsage); replayErr != nil {
+				imageTaskError(c, replayErr)
+				return
+			}
+		}
+	}
 	task, err := h.tasks.Get(c.Request.Context(), service.ImageTaskOwner{UserID: apiKey.UserID, APIKeyID: apiKey.ID}, c.Param("task_id"))
 	if err != nil {
 		imageTaskError(c, err)
 		return
+	}
+	if task.Status == service.ImageTaskStatusProcessing && h.openAI != nil && h.openAI.apiKeyService != nil && time.Now().Unix() > task.CreatedAt+int64(h.tasks.ExecutionTimeout()/time.Second) {
+		if stored, loadErr := h.openAI.apiKeyService.LoadAsyncFundingTask(c.Request.Context(), service.AsyncFundingProviderImage, task.ID, apiKey.UserID, apiKey.ID); loadErr == nil && stored.State == "queued" {
+			if queuedKey, _, restoreErr := service.RestoreAsyncFundingSnapshot(apiKey, stored.Snapshot); restoreErr == nil {
+				if cancelErr := h.openAI.apiKeyService.CancelQueuedAsyncFunding(c.Request.Context(), queuedKey); cancelErr == nil {
+					h.failTask(task.ID, http.StatusGatewayTimeout, imageTaskErrorPayload("timeout_error", "image task expired before upstream dispatch"))
+					if refreshed, refreshErr := h.tasks.Get(c.Request.Context(), service.ImageTaskOwner{UserID: apiKey.UserID, APIKeyID: apiKey.ID}, task.ID); refreshErr == nil {
+						task = refreshed
+					}
+				}
+			}
+		}
 	}
 	c.Header("Cache-Control", "no-store")
 	if task.Status == service.ImageTaskStatusProcessing {
@@ -241,6 +276,9 @@ func (h *AsyncImageHandler) run(taskID, platform string, taskCtx *gin.Context, r
 	}()
 
 	h.execute(platform, taskCtx)
+	if key, ok := middleware2.GetAPIKeyFromContext(taskCtx); ok && key.Funding.HasReservation() && h.openAI != nil && h.openAI.apiKeyService != nil {
+		_ = h.openAI.apiKeyService.CancelQueuedAsyncFunding(context.Background(), key)
+	}
 	body := bytes.TrimSpace(recorder.Body.Bytes())
 	if err := taskCtx.Request.Context().Err(); err != nil && len(body) == 0 {
 		h.failTask(taskID, http.StatusGatewayTimeout, imageTaskErrorPayload("timeout_error", "image generation task timed out"))

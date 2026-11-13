@@ -411,23 +411,32 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 		}
 		sessionID := service.ExtractClientSessionID(c)
 		channelUsageFields := clientRequestedUsageFields(c, channelMapping, requestModel, upstreamModel)
+		usageInput := &service.OpenAIRecordUsageInput{
+			Result:             result,
+			APIKey:             apiKey,
+			User:               apiKey.User,
+			Account:            account,
+			Subscription:       subscription,
+			InboundEndpoint:    inboundEndpoint,
+			UpstreamEndpoint:   upstreamEndpoint,
+			UserAgent:          userAgent,
+			IPAddress:          clientIP,
+			RequestPayloadHash: requestPayloadHash,
+			APIKeyService:      h.apiKeyService,
+			QuotaPlatform:      quotaPlatform,
+			SessionID:          sessionID,
+			ChannelUsageFields: channelUsageFields,
+		}
+		if apiKey.Funding.HasReservation() && h.apiKeyService != nil {
+			var persistErr error
+			usageInput, persistErr = h.apiKeyService.PersistAsyncUsage(c.Request.Context(), usageInput)
+			if persistErr != nil {
+				reqLog.Error("openai.images.persist_async_usage_failed", zap.Error(persistErr))
+				return
+			}
+		}
 		h.submitMandatoryUsageRecordTask(c.Request.Context(), func(ctx context.Context) {
-			if err := h.gatewayService.RecordUsage(ctx, &service.OpenAIRecordUsageInput{
-				Result:             result,
-				APIKey:             apiKey,
-				User:               apiKey.User,
-				Account:            account,
-				Subscription:       subscription,
-				InboundEndpoint:    inboundEndpoint,
-				UpstreamEndpoint:   upstreamEndpoint,
-				UserAgent:          userAgent,
-				IPAddress:          clientIP,
-				RequestPayloadHash: requestPayloadHash,
-				APIKeyService:      h.apiKeyService,
-				QuotaPlatform:      quotaPlatform,
-				SessionID:          sessionID,
-				ChannelUsageFields: channelUsageFields,
-			}); err != nil {
+			if err := h.gatewayService.RecordUsage(ctx, usageInput); err != nil {
 				logger.L().With(
 					zap.String("component", "handler.openai_gateway.images"),
 					zap.Int64("user_id", subject.UserID),
@@ -436,6 +445,8 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 					zap.String("model", clientRequestModel),
 					zap.Int64("account_id", account.ID),
 				).Error("openai.images.record_usage_failed", zap.Error(err))
+			} else if apiKey.Funding.HasReservation() && h.apiKeyService != nil {
+				_ = h.apiKeyService.MarkAsyncFundingSettled(ctx, apiKey)
 			}
 		})
 

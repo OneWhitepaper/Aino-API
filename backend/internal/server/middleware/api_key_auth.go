@@ -174,9 +174,22 @@ func apiKeyAuthWithDeviceRouting(apiKeyService *service.APIKeyService, subscript
 			AbortWithError(c, 401, "USER_INACTIVE", "User account is not active")
 			return
 		}
+		fundingHistory := isFundingHistoryRequest(c)
+		restoredKey, restoredSub, fundingFollowup, restoreErr := restoreAsyncRequestFunding(c, apiKeyService, apiKey)
+		if restoreErr != nil {
+			AbortWithError(c, infraerrors.Code(restoreErr), infraerrors.Reason(restoreErr), infraerrors.Message(restoreErr))
+			return
+		}
+		if fundingFollowup {
+			apiKey = restoredKey
+		}
 		deviceTaskRead := apiKey.DesktopCredentialType == service.DesktopCredentialTypeDevice && isAsyncImageTaskRead(c.Request.Method, c.Request.URL.Path)
 		var routeOK bool
-		apiKey, routeOK = resolveDesktopDeviceRoute(c, apiKey, models, tasks)
+		if fundingFollowup && c.GetBool("funding_async_followup") || fundingHistory {
+			routeOK = true
+		} else {
+			apiKey, routeOK = resolveDesktopDeviceRoute(c, apiKey, models, tasks)
+		}
 		if !routeOK {
 			return
 		}
@@ -186,10 +199,10 @@ func apiKeyAuthWithDeviceRouting(apiKeyService *service.APIKeyService, subscript
 			return
 		}
 		SetOpsFallbackAPIKey(c, apiKey)
-		if !deviceTaskRead && abortIfAPIKeyGroupUnavailable(c, apiKey) {
+		if !fundingFollowup && !fundingHistory && !deviceTaskRead && abortIfAPIKeyGroupUnavailable(c, apiKey) {
 			return
 		}
-		if apiKey.DesktopCredentialType != service.DesktopCredentialTypeDevice && abortIfAPIKeyGroupNotAllowed(c, apiKey) {
+		if !fundingFollowup && !fundingHistory && apiKey.DesktopCredentialType != service.DesktopCredentialTypeDevice && abortIfAPIKeyGroupNotAllowed(c, apiKey) {
 			return
 		}
 		ctx := context.WithValue(c.Request.Context(), ctxkey.UserID, apiKey.User.ID)
@@ -198,8 +211,11 @@ func apiKeyAuthWithDeviceRouting(apiKeyService *service.APIKeyService, subscript
 		// Async image task polling only reads data that already belongs to the
 		// authenticated key and must remain available after the completed
 		// generation consumes the key's remaining balance.
-		skipBilling := c.Request.URL.Path == "/v1/usage" || billingInfoRequest || isAsyncImageTaskRead(c.Request.Method, c.Request.URL.Path)
+		skipBilling := fundingHistory || fundingFollowup || c.Request.URL.Path == "/v1/usage" || billingInfoRequest || isAsyncImageTaskRead(c.Request.Method, c.Request.URL.Path)
 		subscription, _ := GetSubscriptionFromContext(c)
+		if fundingFollowup {
+			subscription = restoredSub
+		}
 
 		if !skipBilling {
 			fundedKey, fundedSub, fundingErr := resolveRequestFunding(c, apiKeyService, apiKey)

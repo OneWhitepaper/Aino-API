@@ -82,6 +82,7 @@ func providePluginHostInfo(buildInfo handler.BuildInfo) service.PluginHostInfo {
 }
 
 func provideCleanup(
+	asyncFundingRecovery *service.AsyncFundingRecoveryService,
 	iqTests *service.IQTestService,
 	diagnosticsCleanup *service.DiagnosticsCleanup,
 	entClient *ent.Client,
@@ -147,6 +148,12 @@ func provideCleanup(
 
 		// 应用层清理步骤可并行执行，基础设施资源（Redis/Ent）最后按顺序关闭。
 		parallelSteps := []cleanupStep{
+			{"AsyncFundingRecoveryService", func() error {
+				if asyncFundingRecovery != nil {
+					asyncFundingRecovery.Stop()
+				}
+				return nil
+			}},
 			{"IQTestService", func() error { iqTests.Stop(); return nil }},
 			{"DiagnosticsCleanup", func() error { diagnosticsCleanup.Stop(); return nil }},
 			{"DigestSessionStore", func() error {

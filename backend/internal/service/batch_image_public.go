@@ -76,9 +76,11 @@ type BatchImageReferenceInput struct {
 }
 
 type BatchImageOwner struct {
-	UserID   int64
-	APIKeyID int64
-	GroupID  *int64
+	APIKey        *APIKey
+	APIKeyService *APIKeyService
+	UserID        int64
+	APIKeyID      int64
+	GroupID       *int64
 }
 
 type BatchImagePublicService struct {
@@ -239,6 +241,17 @@ func (s *BatchImagePublicService) Submit(ctx context.Context, owner BatchImageOw
 	if err != nil {
 		return nil, err
 	}
+	if owner.APIKey != nil && owner.APIKey.Funding.HasReservation() {
+		if owner.APIKeyService == nil {
+			return nil, ErrFundingUnavailable
+		}
+		if err = owner.APIKeyService.EnsureFundingReservation(ctx, owner.APIKey, fmt.Sprintf("%.8f", pricingSnapshot.EstimatedCost)); err != nil {
+			return nil, err
+		}
+		if pricingSnapshot.HoldAmount < pricingSnapshot.EstimatedCost {
+			pricingSnapshot.HoldAmount = pricingSnapshot.EstimatedCost
+		}
+	}
 	parentBatchID := batchImageOptionalStringPtr(normalized.ParentBatchID)
 	if parentBatchID != nil {
 		parent, parentErr := s.Repo.GetBatchImageJobByBatchIDForOwner(ctx, owner.UserID, owner.APIKeyID, *parentBatchID)
@@ -258,6 +271,7 @@ func (s *BatchImagePublicService) Submit(ctx context.Context, owner BatchImageOw
 	holdID := BatchImageHoldRequestID(batchID)
 	holdAmount := pricingSnapshot.HoldAmount
 	job, err := s.Repo.CreateBatchImageJob(ctx, CreateBatchImageJobParams{
+		FundingSnapshot:         AsyncFundingSnapshotFromRequest(owner.APIKey),
 		BatchID:                 batchID,
 		UserID:                  owner.UserID,
 		APIKeyID:                &apiKeyID,
@@ -286,6 +300,20 @@ func (s *BatchImagePublicService) Submit(ctx context.Context, owner BatchImageOw
 	})
 	if err != nil {
 		return nil, err
+	}
+	if job.FundingSnapshot != nil {
+		if owner.APIKeyService == nil {
+			return nil, ErrFundingUnavailable
+		}
+		if err = owner.APIKeyService.HandoffFundingToAsync(ctx, owner.APIKey, AsyncFundingProviderBatchImage, job.BatchID); err != nil {
+			return nil, err
+		}
+		ctx = FundingDispatchContext(ctx, owner.APIKey)
+		defer func() { _ = owner.APIKeyService.CancelQueuedAsyncFunding(context.WithoutCancel(ctx), owner.APIKey) }()
+		if err = owner.APIKeyService.BindAsyncFundingTask(ctx, owner.APIKey, AsyncFundingProviderBatchImage, job.BatchID, account.ID, nil); err != nil {
+			return nil, err
+		}
+
 	}
 	if err := reserveBatchImageBalanceHold(ctx, s.BillingRepo, job, requestHash); err != nil {
 		code := "BILLING_HOLD_FAILED"
@@ -372,6 +400,11 @@ func (s *BatchImagePublicService) Submit(ctx context.Context, owner BatchImageOw
 		return nil, ErrBatchImageProviderSubmitFailed
 	}
 
+	if job.FundingSnapshot != nil {
+		if err = owner.APIKeyService.BindAsyncFundingTask(ctx, owner.APIKey, AsyncFundingProviderBatchImage, job.BatchID, account.ID, nil); err != nil {
+			return nil, err
+		}
+	}
 	if err := s.Repo.UpdateBatchImageJobProviderSubmit(ctx, UpdateBatchImageJobProviderSubmitParams{
 		BatchID:           job.BatchID,
 		ProviderJobName:   providerJob.ProviderJobName,
@@ -521,7 +554,7 @@ func (s *BatchImagePublicService) enqueueBillingRetry(ctx context.Context, batch
 }
 
 func (s *BatchImagePublicService) hidePreUpstreamSubmitFailure(ctx context.Context, owner BatchImageOwner, job *BatchImageJob) {
-	if s == nil || s.Repo == nil || job == nil || job.ProviderJobName != nil {
+	if s == nil || s.Repo == nil || job == nil || job.ProviderJobName != nil || job.FundingSnapshot != nil {
 		return
 	}
 	if err := s.Repo.MarkBatchImageJobUserDeleted(ctx, owner.UserID, owner.APIKeyID, job.BatchID, time.Now()); err != nil {

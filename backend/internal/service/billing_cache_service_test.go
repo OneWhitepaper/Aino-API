@@ -130,3 +130,14 @@ func TestBillingCacheServiceEnqueueAfterStopReturnsFalse(t *testing.T) {
 	})
 	require.False(t, enqueued)
 }
+
+func TestFundingTransportAdmissionDefersWalletUntilPayloadReservation(t *testing.T) {
+	svc := &BillingCacheService{}
+	actor := &User{ID: 22, Balance: 0}
+	key := &APIKey{ID: 7, UserID: 22, User: actor, Funding: &FundingDecision{Source: TeamFundingSourceBalance, PayerUserID: 11}}
+	ctx := WithFundingTransportAdmission(context.Background())
+	require.NoError(t, svc.CheckBillingEligibility(ctx, actor, key, nil, nil, ""))
+	require.False(t, key.Funding.HasReservation(), "handshake admission must not pretend to reserve a paid turn")
+	readOnly, _ := ctx.Value(readOnlyFundingKey{}).(bool)
+	require.False(t, readOnly, "paid transports are not free read adapters")
+}

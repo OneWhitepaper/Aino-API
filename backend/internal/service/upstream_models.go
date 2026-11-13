@@ -40,9 +40,11 @@ type UpstreamModelMetadata struct {
 	DefaultReasoningLevel    string                     `json:"default_reasoning_level,omitempty"`
 	SupportedReasoningLevels []string                   `json:"supported_reasoning_levels,omitempty"`
 	InputModalities          []string                   `json:"input_modalities,omitempty"`
+	OutputModalities         []string                   `json:"output_modalities,omitempty"`
 	ContextWindow            int64                      `json:"context_window,omitempty"`
 	MaxContextWindow         int64                      `json:"max_context_window,omitempty"`
 	MaxOutputTokens          int64                      `json:"max_output_tokens,omitempty"`
+	MaxOutputImages          int64                      `json:"max_output_images,omitempty"`
 	CodexToolCapabilities    map[string]json.RawMessage `json:"codex_tool_capabilities,omitempty"`
 }
 
@@ -523,6 +525,14 @@ func mergeUpstreamModelMetadata(primary, fallback UpstreamModelMetadata) (Upstre
 		merged.InputModalities = append([]string(nil), fallback.InputModalities...)
 		changed = true
 	}
+	if len(merged.OutputModalities) == 0 && len(fallback.OutputModalities) > 0 {
+		merged.OutputModalities = append([]string(nil), fallback.OutputModalities...)
+		changed = true
+	}
+	if merged.MaxOutputImages <= 0 && fallback.MaxOutputImages > 0 {
+		merged.MaxOutputImages = fallback.MaxOutputImages
+		changed = true
+	}
 	if merged.ContextWindow <= 0 && fallback.ContextWindow > 0 {
 		merged.ContextWindow = fallback.ContextWindow
 		// Keep the registry's context limits together. A direct upstream default
@@ -639,6 +649,7 @@ func upstreamMetadataFromModelsDevModel(modelID string, model modelsDevModel) Up
 		Reasoning:                reasoning,
 		SupportedReasoningLevels: levels,
 		InputModalities:          normalizeCodexInputModalities(model.Modalities.Input),
+		OutputModalities:         normalizeCodexInputModalities(model.Modalities.Output),
 		ContextWindow:            model.Limit.Context,
 		MaxContextWindow:         model.Limit.Context,
 		MaxOutputTokens:          model.Limit.Output,
@@ -1491,10 +1502,12 @@ type upstreamModelCapabilityEntry struct {
 	SupportedReasoningLevels []json.RawMessage          `json:"supported_reasoning_levels"`
 	ReasoningOptions         []modelsDevReasoningOption `json:"reasoning_options"`
 	InputModalities          []string                   `json:"input_modalities"`
+	OutputModalities         []string                   `json:"output_modalities"`
 	Modalities               modelsDevModalities        `json:"modalities"`
 	ContextWindow            int64                      `json:"context_window"`
 	MaxContextWindow         int64                      `json:"max_context_window"`
 	MaxOutputTokens          int64                      `json:"max_output_tokens"`
+	MaxOutputImages          int64                      `json:"max_output_images"`
 	Limit                    modelsDevLimit             `json:"limit"`
 	DisplayNameCamel         string                     `json:"displayName"`
 	SupportsImages           *bool                      `json:"supportsImages"`
@@ -1502,6 +1515,7 @@ type upstreamModelCapabilityEntry struct {
 	ThinkingBudget           *int64                     `json:"thinkingBudget"`
 	MaxTokens                int64                      `json:"maxTokens"`
 	MaxOutputTokensCamel     int64                      `json:"maxOutputTokens"`
+	MaxOutputImagesCamel     int64                      `json:"maxOutputImages"`
 }
 
 func extractUpstreamModelIDs(body []byte) ([]string, error) {
@@ -1663,6 +1677,10 @@ func upstreamMetadataFromCapabilityEntry(modelID string, entry upstreamModelCapa
 	if displayName == "" && strings.TrimSpace(entry.Name) != "" && strings.TrimSpace(entry.Name) != modelID {
 		displayName = strings.TrimSpace(entry.Name)
 	}
+	maxOutputImages := entry.MaxOutputImages
+	if entry.MaxOutputImagesCamel > maxOutputImages {
+		maxOutputImages = entry.MaxOutputImagesCamel
+	}
 	return UpstreamModelMetadata{
 		ID:                       modelID,
 		DisplayName:              displayName,
@@ -1671,9 +1689,11 @@ func upstreamMetadataFromCapabilityEntry(modelID string, entry upstreamModelCapa
 		DefaultReasoningLevel:    defaultReasoningLevel,
 		SupportedReasoningLevels: levels,
 		InputModalities:          normalizeCodexInputModalities(modalities),
+		OutputModalities:         normalizeCodexInputModalities(append(entry.OutputModalities, entry.Modalities.Output...)),
 		ContextWindow:            contextWindow,
 		MaxContextWindow:         entry.MaxContextWindow,
 		MaxOutputTokens:          maxOutputTokens,
+		MaxOutputImages:          maxOutputImages,
 	}
 }
 

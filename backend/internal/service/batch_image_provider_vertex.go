@@ -226,6 +226,9 @@ func (p *VertexBatchImageProvider) Submit(ctx context.Context, job *BatchImageJo
 		OutputConfig:   VertexBatchOutputConfig{PredictionsFormat: "jsonl", GCSDestination: VertexBatchGCSDestination{OutputURIPrefix: refs.OutputPrefixURI}},
 		InstanceConfig: &VertexBatchInstanceConfig{KeyField: "key"},
 	}
+	if err := BeginFundingDispatch(ctx); err != nil {
+		return nil, err
+	}
 	created, err := p.client.CreateBatchPredictionJob(ctx, accessToken, req)
 	if err != nil {
 		return nil, mapVertexClientError(err)

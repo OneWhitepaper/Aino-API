@@ -1397,6 +1397,9 @@ func shouldForwardOpenAIResponsesViaRawChatCompletions(account *Account) bool {
 }
 
 func (s *OpenAIGatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Context, account *Account, body []byte, token string, isStream bool, promptCacheKey string, isCodexCLI bool) (*http.Request, error) {
+	// The body is already available here, including large multimodal requests;
+	// do not depend on the transport reparsing it through a smaller JSON limit.
+	SetFundingDispatchModel(ctx, strings.TrimSpace(gjson.GetBytes(body, "model").String()))
 	if account.UsesOpenAICodexProtocol() {
 		if err := prepareFundingForOpenAIOAuth(ctx); err != nil {
 			return nil, err

@@ -56,6 +56,9 @@ func buildBatchImageHoldCommand(job *BatchImageJob, requestID string, actualAmou
 }
 
 func reserveBatchImageBalanceHold(ctx context.Context, repo UsageBillingRepository, job *BatchImageJob, payloadHash string) error {
+	if job != nil && job.FundingSnapshot != nil {
+		return nil
+	}
 	if repo == nil {
 		return ErrBatchImageBillingHoldFailed.WithCause(errors.New("batch image billing repository is not configured"))
 	}
@@ -76,6 +79,25 @@ func reserveBatchImageBalanceHold(ctx context.Context, repo UsageBillingReposito
 }
 
 func captureBatchImageBalanceHold(ctx context.Context, repo UsageBillingRepository, job *BatchImageJob, actualAmount float64, payloadHash string) error {
+	if job != nil && job.FundingSnapshot != nil {
+		d := job.FundingSnapshot.Funding
+		if d == nil || job.APIKeyID == nil || job.AccountID == nil {
+			return ErrFundingUnavailable
+		}
+		cmd := &UsageBillingCommand{RequestID: d.RequestID, APIKeyID: *job.APIKeyID, UserID: job.UserID, PayerUserID: d.PayerUserID, FundingSource: d.Source, FundingCost: actualAmount, SubscriptionID: d.SubscriptionID, AccountID: *job.AccountID, Model: job.Model, MediaType: "image", ImageCount: job.SuccessCount, APIKeyQuotaCost: actualAmount, APIKeyRateLimitCost: actualAmount, AccountQuotaCost: actualAmount * job.AccountRateMultiplier, RequestPayloadHash: payloadHash}
+		if d.IsShared() {
+			cmd.FundingReservationID = d.ReservationID
+		} else {
+			cmd.PersonalFundingReservationID = d.ReservationID
+		}
+		if durable, ok := repo.(interface {
+			ApplyBatchImageFunding(context.Context, *UsageBillingCommand) error
+		}); ok {
+			return durable.ApplyBatchImageFunding(ctx, cmd)
+		}
+		_, err := repo.Apply(ctx, cmd)
+		return err
+	}
 	if repo == nil {
 		return ErrBatchImageSettlementBillingFailed.WithCause(errors.New("batch image billing repository is not configured"))
 	}
@@ -90,6 +112,17 @@ func captureBatchImageBalanceHold(ctx context.Context, repo UsageBillingReposito
 }
 
 func releaseBatchImageBalanceHold(ctx context.Context, repo UsageBillingRepository, job *BatchImageJob, payloadHash string) error {
+	if job != nil && job.FundingSnapshot != nil {
+		releaser, ok := repo.(batchImageFundingReleaser)
+		if !ok {
+			return ErrFundingUnavailable
+		}
+		err := releaser.ReleaseQueuedBatchImageFunding(ctx, job.FundingSnapshot)
+		if errors.Is(err, ErrTeamFundingConflict) {
+			return nil
+		}
+		return err
+	}
 	if repo == nil || job == nil {
 		return nil
 	}
@@ -113,4 +146,10 @@ func releaseBatchImageBalanceHold(ctx context.Context, repo UsageBillingReposito
 		return ErrBatchImageBillingHoldFailed.WithCause(err)
 	}
 	return nil
+}
+
+// Configured asynchronous funding uses escrow rather than the legacy personal
+// frozen wallet. An ambiguous provider failure must retain dispatched escrow.
+type batchImageFundingReleaser interface {
+	ReleaseQueuedBatchImageFunding(context.Context, *AsyncFundingSnapshot) error
 }

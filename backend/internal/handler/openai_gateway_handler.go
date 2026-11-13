@@ -2721,7 +2721,10 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 
 	// 余额模式在途预留（会话级）：按首帧估算一次，会话期间续期；每轮计费任务接管引用，
 	// 会话结束且所有轮次扣减落地后释放。
-	inflightCtx, inflightDone, inflightErr := reserveInflightBalanceCtx(ctx, h.billingCacheService, h.gatewayService, apiKey, subscription, tokenInflightEstimate(reqModel, firstMessage))
+	inflightCtx, inflightDone, inflightErr := ctx, inflightNoop, error(nil)
+	if !apiKey.Funding.IsShared() {
+		inflightCtx, inflightDone, inflightErr = reserveInflightBalanceCtx(ctx, h.billingCacheService, h.gatewayService, apiKey, subscription, tokenInflightEstimate(reqModel, firstMessage))
+	}
 	if inflightErr != nil {
 		reqLog.Info("openai.websocket_inflight_reservation_rejected", zap.Error(inflightErr))
 		closeOpenAIClientWS(wsConn, coderws.StatusPolicyViolation, "billing check failed")
@@ -2835,6 +2838,15 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 	// 建连时刻只用于选号/准入，不作为任何 turn 的计费定价时刻。
 	wsPricingCtx, _ := h.gatewayService.WithOpenAIRequestPricingContext(ctx, apiKey.GroupID)
 	ctx = wsPricingCtx
+	fundingOperation := strings.TrimSpace(c.GetHeader("Idempotency-Key"))
+	if fundingOperation == "" {
+		fundingOperation = uuid.NewString()
+	}
+	turnFunding := &openAIWSTurnFunding{operation: fundingOperation}
+	if h.apiKeyService != nil {
+		turnFunding.keys = h.apiKeyService
+	}
+	defer turnFunding.close()
 
 	for {
 		if ctx.Err() != nil {
@@ -3017,6 +3029,25 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 			MaxReasoningEffortOverLimit: maxReasoningEffortOverLimit,
 			ReasoningEffortMappings:     reasoningEffortMappings,
 			TurnStarted:                 recordTurnStart,
+			FundingEnabled:              apiKey.Funding != nil,
+			PrepareRequest: func(turn int, payload []byte, originalModel string) ([]byte, error) {
+				key := turnBillingAPIKeys.forTurn(turn, apiKey)
+				return turnFunding.prepare(ctx, turn, key, payload, originalModel)
+			},
+			RequestContext: func(turn int, payload []byte) (context.Context, error) {
+				snapshot := turnFunding.snapshot(turn)
+				if snapshot == nil {
+					return ctx, nil
+				}
+				service.SetFundingDispatchModel(snapshot.ctx, strings.TrimSpace(gjson.GetBytes(payload, "model").String()))
+				if err := service.PrepareFundingAccountDispatch(snapshot.ctx, account); err != nil {
+					return nil, err
+				}
+				if err := service.ValidateFundingFrameDispatch(snapshot.ctx, payload); err != nil {
+					return nil, err
+				}
+				return snapshot.ctx, nil
+			},
 			BeforeRequest: func(turn int, payload []byte, originalModel string) error {
 				c.Set(securityAuditWSTurnContextKey, turn)
 				service.BeginOpsStreamTurn(c, turn)
@@ -3132,6 +3163,14 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 				return checkSimpleModeTurnBilling()
 			},
 			AfterTurn: func(turn int, result *service.OpenAIForwardResult, turnErr error) {
+				turnBillingAPIKey := turnBillingAPIKeys.forTurn(turn, apiKey)
+				turnSubscription := subscription
+				if snapshot := turnFunding.snapshot(turn); snapshot != nil && snapshot.key != nil {
+					turnBillingAPIKey = snapshot.key
+					if snapshot.key.Funding != nil {
+						turnSubscription = snapshot.subscription
+					}
+				}
 				turnStart := getTurnStart(turn)
 				cyberBlockBody := takeCyberTurnBody(turn)
 				// 每次 attempt 都清 cyber mark；failover 链结束前保留 recorded guard，
@@ -3162,7 +3201,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 				}
 				turnUsageFields := turnMapping.ToUsageFields(turnRequestedModel, turnUpstreamModel)
 				cyberMarked := service.GetOpsCyberPolicy(c) != nil
-				h.recordCyberPolicyIfMarked(c, apiKey, account, subscription, turnRequestedModel, turnErr != nil, cyberBlockBody, turnUsageFields, requestPayloadHash)
+				h.recordCyberPolicyIfMarked(c, turnBillingAPIKey, account, turnSubscription, turnRequestedModel, turnErr != nil, cyberBlockBody, turnUsageFields, requestPayloadHash)
 				cyberBlockedThisConn, cyberBlockPendingAfterFailover = advanceOpenAIWSCyberBlockState(
 					cyberBlockedThisConn,
 					cyberBlockPendingAfterFailover,
@@ -3208,7 +3247,6 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 				quotaPlatform := service.QuotaPlatform(c.Request.Context(), apiKey)
 				sessionID := service.ExtractClientSessionID(c)
 				turnRecordPricingAt := turnPricing.currentOr(turnStart)
-				turnBillingAPIKey := turnBillingAPIKeys.forTurn(turn, apiKey)
 				cyberBlocked := service.GetOpsCyberPolicy(c) != nil
 				h.submitOpenAIUsageRecordTask(ctx, result, func(taskCtx context.Context) {
 					if err := h.gatewayService.RecordUsage(taskCtx, &service.OpenAIRecordUsageInput{
@@ -3216,7 +3254,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 						APIKey:             turnBillingAPIKey,
 						User:               apiKey.User,
 						Account:            account,
-						Subscription:       subscription,
+						Subscription:       turnSubscription,
 						InboundEndpoint:    inboundEndpoint,
 						UpstreamEndpoint:   upstreamEndpoint,
 						UserAgent:          userAgent,

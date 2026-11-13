@@ -49,6 +49,22 @@ func (h *OpenAIGatewayHandler) GrokRealtime(c *gin.Context) {
 	if strings.TrimSpace(model) == "" {
 		model = "grok-voice-latest"
 	}
+	maxDuration := h.gatewayService.GrokRealtimeMaxSessionDuration()
+	if h.apiKeyService != nil {
+		fundingBody, _ := json.Marshal(map[string]any{"model": model, "max_duration_seconds": int64(maxDuration / time.Second)})
+		preparedKey, preparedSubscription, _, fundingErr := h.apiKeyService.PrepareFundingRequestForTransport(c.Request.Context(), apiKey, "/v1/realtime", "application/json", fundingBody, c.GetHeader("Idempotency-Key"))
+		if fundingErr != nil {
+			status, code, message, _ := billingErrorDetails(fundingErr)
+			h.errorResponse(c, status, code, message)
+			return
+		}
+		apiKey = preparedKey
+		if apiKey.Funding != nil {
+			subscription = preparedSubscription
+		}
+		c.Request = c.Request.WithContext(service.FundingDispatchContext(c.Request.Context(), apiKey))
+		defer h.apiKeyService.ReleaseUndispatchedFunding(c.Request.Context(), apiKey)
+	}
 	// 余额模式在途预留（与计费同口径估算；计费任务扣减余额缓存后才释放）。
 	inflightDone, inflightErr := reserveInflightBalance(c, h.billingCacheService, h.gatewayService, apiKey, subscription, service.InflightEstimateRequest{Model: model, Kind: service.InflightEstimateAudio, AudioMode: "realtime", AudioUnits: 1})
 	if inflightErr != nil {
@@ -141,19 +157,49 @@ func (h *OpenAIGatewayHandler) GrokRealtime(c *gin.Context) {
 	}
 	defer func() { _ = conn.CloseNow() }()
 
+	if err := service.PrepareFundingAccountDispatch(c.Request.Context(), selection.Account); err != nil {
+		_ = conn.Close(coderws.StatusPolicyViolation, "session funding is unavailable")
+		return
+	}
+	if err := service.BeginFundingDispatch(c.Request.Context()); err != nil {
+		_ = conn.Close(coderws.StatusPolicyViolation, "session funding is unavailable")
+		return
+	}
 	started := time.Now()
-	audioObserved, proxyErr := h.gatewayService.ProxyGrokRealtimeConn(c.Request.Context(), c, conn, upstream)
-	elapsed := time.Since(started)
+	sessionCtx, cancelSession := context.WithTimeout(c.Request.Context(), maxDuration)
+	audioObserved, proxyErr := h.gatewayService.ProxyGrokRealtimeConn(sessionCtx, c, conn, upstream)
+	cancelSession()
+	elapsed := min(time.Since(started), maxDuration)
 	if proxyErr != nil {
 		reqLog.Info("grok_realtime.proxy_failed", zap.Error(proxyErr))
 		if !isExpectedGrokRealtimeClose(proxyErr) {
 			_ = conn.Close(coderws.StatusInternalError, "upstream realtime websocket failed")
-			return
 		}
+	}
+	if err := releaseUnusedGrokRealtimeFunding(c.Request.Context(), audioObserved, proxyErr); err != nil {
+		reqLog.Warn("grok_realtime.unused_funding_release_failed", zap.Error(err))
 	}
 	if result := grokRealtimeBillingResult(model, elapsed, audioObserved); result != nil {
 		h.recordGrokVoiceUsage(c, apiKey, selection.Account, subscription, "realtime", nil, result)
 	}
+}
+
+func releaseUnusedGrokRealtimeFunding(ctx context.Context, audioObserved bool, relayErr error) error {
+	if audioObserved {
+		return nil
+	}
+	if relayErr != nil {
+		switch coderws.CloseStatus(relayErr) {
+		case coderws.StatusNormalClosure, coderws.StatusGoingAway:
+		default:
+			return nil
+		}
+	}
+	// A completed clean session with no observed audio has zero cost under the
+	// existing voice billing contract. Unknown or abnormal exits keep the hold.
+	releaseCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+	defer cancel()
+	return service.ReleaseFundingAfterDefinitiveRejection(releaseCtx)
 }
 
 func grokRealtimeBillingResult(model string, elapsed time.Duration, audioObserved bool) *service.OpenAIForwardResult {

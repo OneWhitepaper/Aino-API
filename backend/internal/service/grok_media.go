@@ -327,6 +327,9 @@ func (s *OpenAIGatewayService) ResolveGrokMediaVideoRequestAccount(
 	requestID string,
 	userID, apiKeyID int64,
 ) (int64, error) {
+	if task, err := s.asyncFundingTask(ctx, requestID, userID, apiKeyID); err == nil && task.Snapshot != nil && task.Snapshot.AccountID > 0 {
+		return task.Snapshot.AccountID, nil
+	}
 	if s == nil || s.cache == nil {
 		return 0, fmt.Errorf("grok video request binding cache is unavailable")
 	}
@@ -485,6 +488,13 @@ func (s *OpenAIGatewayService) LoadGrokVideoPendingBilling(
 	requestID string,
 	userID, apiKeyID int64,
 ) (*GrokVideoPendingBilling, error) {
+	if task, err := s.asyncFundingTask(ctx, requestID, userID, apiKeyID); err == nil && task.Snapshot != nil && len(task.Snapshot.PricingSnapshot) > 0 {
+		var pending GrokVideoPendingBilling
+		if err = json.Unmarshal(task.Snapshot.PricingSnapshot, &pending); err != nil {
+			return nil, err
+		}
+		return &pending, nil
+	}
 	if s == nil || s.cache == nil {
 		return nil, fmt.Errorf("grok video pending billing cache is unavailable")
 	}
@@ -510,6 +520,9 @@ func (s *OpenAIGatewayService) ClaimGrokVideoBilling(
 	requestID string,
 	userID, apiKeyID int64,
 ) (bool, error) {
+	if task, err := s.asyncFundingTask(ctx, requestID, userID, apiKeyID); err == nil {
+		return task.State != "settled", nil
+	}
 	if s == nil || s.cache == nil {
 		return false, fmt.Errorf("grok video billing claim cache is unavailable")
 	}
@@ -527,6 +540,9 @@ func (s *OpenAIGatewayService) ReleaseGrokVideoBilling(
 	requestID string,
 	userID, apiKeyID int64,
 ) error {
+	if _, err := s.asyncFundingTask(ctx, requestID, userID, apiKeyID); err == nil {
+		return nil
+	}
 	if s == nil || s.cache == nil {
 		return fmt.Errorf("grok video billing claim cache is unavailable")
 	}
@@ -766,7 +782,10 @@ func (s *OpenAIGatewayService) ForwardGrokMedia(
 			grokMediaContentProxyURL(c, requestID),
 		)
 	}
-	writeGrokMediaResponse(c, resp, respBody, s.responseHeaderFilter)
+	deferVideoResponse := FundingDispatchRequestID(ctx) != "" && (endpoint == GrokMediaEndpointVideosGenerations || endpoint == GrokMediaEndpointVideosEdits || endpoint == GrokMediaEndpointVideosExtensions)
+	if !deferVideoResponse {
+		writeGrokMediaResponse(c, resp, respBody, s.responseHeaderFilter)
+	}
 	usage := grokMediaUsageFromResponse(endpoint, requestInfo, respBody)
 	resultModel := requestModel
 	resultBillingModel := requestModel
@@ -779,7 +798,7 @@ func (s *OpenAIGatewayService) ForwardGrokMedia(
 			resultBillingModel = m
 		}
 	}
-	return &OpenAIForwardResult{
+	result := &OpenAIForwardResult{
 		RequestID:            requestIDHeader,
 		UpstreamHeaders:      resp.Header,
 		ResponseID:           usage.ResponseID,
@@ -797,7 +816,11 @@ func (s *OpenAIGatewayService) ForwardGrokMedia(
 		VideoCount:           usage.VideoCount,
 		VideoResolution:      usage.VideoResolution,
 		VideoDurationSeconds: usage.VideoDurationSeconds,
-	}, nil
+	}
+	if deferVideoResponse {
+		result.VideoCreateResponse = &VideoCreateResponse{StatusCode: resp.StatusCode, Headers: resp.Header.Clone(), Body: respBody}
+	}
+	return result, nil
 }
 
 func (s *OpenAIGatewayService) forwardGrokMediaVideoContent(

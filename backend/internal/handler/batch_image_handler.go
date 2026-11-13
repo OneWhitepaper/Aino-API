@@ -39,6 +39,9 @@ func (h *BatchImageHandler) Submit(c *gin.Context) {
 		batchImageError(c, infraerrors.New(http.StatusUnauthorized, "API_KEY_REQUIRED", "API key is required"))
 		return
 	}
+	if h.openAI != nil {
+		owner.APIKeyService = h.openAI.apiKeyService
+	}
 	if !h.checkSecurityAuditBeforeSubmit(c, &req) {
 		return
 	}
@@ -300,6 +303,7 @@ func batchImageOwnerFromContext(c *gin.Context) (service.BatchImageOwner, bool) 
 		return service.BatchImageOwner{}, false
 	}
 	return service.BatchImageOwner{
+		APIKey:   apiKey,
 		UserID:   apiKey.UserID,
 		APIKeyID: apiKey.ID,
 		GroupID:  apiKey.GroupID,

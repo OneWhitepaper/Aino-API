@@ -90,6 +90,9 @@ func (s *BatchImageSettlementService) Settle(ctx context.Context, batchID string
 		ManifestHash: manifestHash,
 		RequestID:    BatchImageCaptureRequestID(job.BatchID),
 	}
+	if job.FundingSnapshot != nil && job.FundingSnapshot.Funding != nil {
+		result.RequestID = job.FundingSnapshot.Funding.RequestID
+	}
 	if job.ActualCost != nil {
 		result.ActualCost = *job.ActualCost
 	}
@@ -141,7 +144,7 @@ func (s *BatchImageSettlementService) Settle(ctx context.Context, batchID string
 	if job.HoldAmount != nil {
 		holdAmount = *job.HoldAmount
 	}
-	if actualCost-holdAmount > batchImageCostEpsilon {
+	if job.FundingSnapshot == nil && actualCost-holdAmount > batchImageCostEpsilon {
 		msg := fmt.Sprintf("actual cost %.10f exceeds held amount %.10f", actualCost, holdAmount)
 		if failErr := s.recordSettlementFailure(ctx, job, "SETTLEMENT_COST_EXCEEDS_HOLD", msg); failErr != nil {
 			return nil, failErr
@@ -178,7 +181,15 @@ func (s *BatchImageSettlementService) Settle(ctx context.Context, batchID string
 		return nil, err
 	}
 	s.recordUsageLog(ctx, job, actualCost, result.RequestID, now)
-
+	if job.FundingSnapshot != nil {
+		if marker, ok := s.BillingRepo.(interface {
+			MarkBatchImageFundingSettled(context.Context, *AsyncFundingSnapshot) error
+		}); ok {
+			if err = marker.MarkBatchImageFundingSettled(ctx, job.FundingSnapshot); err != nil {
+				return nil, err
+			}
+		}
+	}
 	return result, nil
 }
 

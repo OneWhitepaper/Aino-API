@@ -228,6 +228,7 @@ func (s *OpenAIGatewayService) CreateLiveCall(
 			UserAgent:             identity.UserAgent,
 			IPAddress:             identity.IPAddress,
 			InboundEndpoint:       identity.InboundEndpoint,
+			Funding:               cloneFundingDecision(identity.Funding),
 			AttestationCiphertext: attestationCiphertext,
 		}
 		mappingTTL := s.liveMaxSessionDuration() + 5*time.Minute

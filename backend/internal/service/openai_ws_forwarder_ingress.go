@@ -594,6 +594,12 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 					return err
 				}
 			}
+			prepared, fundingErr := prepareOpenAIWSFundingRequest(account, hooks, turn, currentBridgePayload.payloadRaw, currentBridgePayload.originalModel)
+			if fundingErr != nil {
+				return fundingErr
+			}
+			currentBridgePayload.payloadRaw = prepared
+			currentBridgePayload.payloadBytes = len(prepared)
 			if turnState != "" && c != nil && c.Request != nil {
 				c.Request.Header.Set(openAIWSTurnStateHeader, turnState)
 			}
@@ -676,8 +682,12 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 					return fmt.Errorf("resolve Grok websocket cache identity: %w", err)
 				}
 			}
+			turnCtx, fundingErr := openAIWSFundingDispatchContext(ctx, hooks, turn, bridgePayloadRaw, false)
+			if fundingErr != nil {
+				return fundingErr
+			}
 			result, bridgeErr := s.proxyOpenAIWSHTTPBridgeTurn(
-				ctx,
+				turnCtx,
 				c,
 				account,
 				token,
@@ -963,7 +973,11 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		}
 		turnStart := time.Now()
 		wroteDownstream := false
-		if err := lease.WriteJSONWithContextTimeout(ctx, json.RawMessage(payload), s.openAIWSWriteTimeout()); err != nil {
+		turnCtx, fundingErr := openAIWSFundingDispatchContext(ctx, hooks, turn, payload, true)
+		if fundingErr != nil {
+			return nil, fundingErr
+		}
+		if err := lease.WriteJSONWithContextTimeout(turnCtx, json.RawMessage(payload), s.openAIWSWriteTimeout()); err != nil {
 			return nil, wrapOpenAIWSIngressTurnError(
 				"write_upstream",
 				fmt.Errorf("write upstream websocket request: %w", err),
@@ -1471,6 +1485,14 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			if err := hooks.BeforeTurn(turn); err != nil {
 				return err
 			}
+		}
+		if !skipBeforeTurn {
+			prepared, fundingErr := prepareOpenAIWSFundingRequest(account, hooks, turn, currentPayload, currentOriginalModel)
+			if fundingErr != nil {
+				return fundingErr
+			}
+			currentPayload = prepared
+			currentPayloadBytes = len(prepared)
 		}
 		skipBeforeTurn = false
 		// 剥离本会话已知失效的加密项，阻断同一失效密文随历史反复触发上游拒绝。

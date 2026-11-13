@@ -80,11 +80,12 @@ var (
 
 // GeminiCachedContent 是网关对外暴露的显式缓存与上游资源、账号、归属的绑定。
 type GeminiCachedContent struct {
-	ID       int64
-	PublicID string
-	UserID   int64
-	APIKeyID int64
-	GroupID  int64
+	FundingSnapshot *AsyncFundingSnapshot `json:"-"`
+	ID              int64
+	PublicID        string
+	UserID          int64
+	APIKeyID        int64
+	GroupID         int64
 	// AccountID 是持有上游缓存的账号；引用缓存的请求只能发往该账号。
 	AccountID    int64
 	UpstreamName string
@@ -717,7 +718,7 @@ func (s *GeminiCachedContentService) Resolve(ctx context.Context, apiKeyID int64
 	if err != nil {
 		return nil, err
 	}
-	if groupID == nil || record.GroupID != *groupID || !record.ExpireTime.After(s.now()) {
+	if (groupID == nil || record.GroupID != *groupID) && record.FundingSnapshot == nil || !record.ExpireTime.After(s.now()) {
 		return nil, ErrGeminiCachedContentNotFound
 	}
 	return record, nil

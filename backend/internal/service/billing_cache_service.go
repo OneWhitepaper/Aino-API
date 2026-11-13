@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"github.com/shopspring/decimal"
 	"math"
 	"strconv"
 	"sync"
@@ -743,6 +744,10 @@ func (s *BillingCacheService) IncrementUserPlatformQuotaUsage(userID int64, plat
 // 订阅模式：检查缓存用量未超过限额（Group限额从参数传入）
 // platform 为请求的目标平台（如 "anthropic"），传空串 "" 时跳过 user × platform quota 检查。
 func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user *User, apiKey *APIKey, group *Group, subscription *UserSubscription, platform string) error {
+	if IsFundingFollowup(ctx) && apiKey != nil {
+		return nil
+	}
+
 	// 简易模式默认跳过所有计费检查. An explicit key-window opt-in keeps
 	// balance/subscription/platform checks bypassed while enforcing the three
 	// API-key monetary windows from the database source of truth.
@@ -761,7 +766,8 @@ func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user 
 	// Caller key/rate/platform/concurrency controls remain below.
 	isSubscriptionMode := group != nil && group.IsSubscriptionType() && subscription != nil
 	readOnly, _ := ctx.Value(readOnlyFundingKey{}).(bool)
-	funded := apiKey != nil && (apiKey.Funding.HasReservation() || readOnly && apiKey.Funding.IsShared())
+	transportAdmission, _ := ctx.Value(fundingTransportAdmissionKey{}).(bool)
+	funded := apiKey != nil && (apiKey.Funding.HasReservation() || (readOnly || transportAdmission) && apiKey.Funding.IsShared())
 	if apiKey != nil && apiKey.Funding != nil {
 		isSubscriptionMode = apiKey.Funding.IsSubscription()
 	}
@@ -805,8 +811,18 @@ func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user 
 // 返回的句柄可能为 nil（未登记任何预留）；调用方须在 handler 结束时调用 HandlerDone，预留在计费任务落库后释放。
 // 须在 CheckBillingEligibility 通过后调用；简易模式不校验。
 func (s *BillingCacheService) ReserveFixedCharge(ctx context.Context, user *User, apiKey *APIKey, group *Group, subscription *UserSubscription, amount float64) (*InflightReservation, error) {
+	if apiKey != nil && apiKey.Funding.HasReservation() {
+		if amount <= 0 || math.IsNaN(amount) || math.IsInf(amount, 0) {
+			return nil, nil
+		}
+		keys := &APIKeyService{teamFunding: s.teamFunding}
+		if err := keys.EnsureFundingReservation(ctx, apiKey, decimal.NewFromFloat(amount).RoundCeil(8).StringFixed(8)); err != nil {
+			return nil, err
+		}
+		return nil, nil
+	}
 	if apiKey != nil && apiKey.Funding.IsShared() {
-		return nil, ErrTeamFundingCostUnbounded
+		return nil, ErrFundingUnavailable
 	}
 	if user == nil || amount <= 0 || math.IsNaN(amount) || math.IsInf(amount, 0) {
 		return nil, nil

@@ -4,6 +4,7 @@ package middleware
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -19,11 +20,15 @@ import (
 
 type readOnlyFundingRepo struct {
 	service.TeamFundingRepository
-	holds    int
-	personal bool
+	service.AsyncFundingRepository
+	snapshot     *service.AsyncFundingSnapshot
+	contextReads int
+	holds        int
+	personal     bool
 }
 
 func (r *readOnlyFundingRepo) GetFundingContext(context.Context, int64) (*service.FundingContext, error) {
+	r.contextReads++
 	if r.personal {
 		return &service.FundingContext{Preferences: service.FundingPreferences{Configured: true, Mode: service.FundingModePersonalOnly, AllowPersonalBalance: true}}, nil
 	}
@@ -196,7 +201,7 @@ func TestAPIKeyAuthTeamOnlyModelReadsRetainKeyAndGroupChecks(t *testing.T) {
 }
 
 func TestAPIKeyAuthSharedUnrecognizedReadStillFailsClosed(t *testing.T) {
-	for _, path := range []string{"/v1/live/call-1", "/v1/models/gpt-5/result", "/v1beta/cachedContents/cache-1"} {
+	for _, path := range []string{"/v1/models/gpt-5/result", "/v1/unknown/resource"} {
 		auth, funding := readOnlyFundingAuth(t, false, nil)
 		r := gin.New()
 		r.Use(auth)
@@ -205,8 +210,82 @@ func TestAPIKeyAuthSharedUnrecognizedReadStillFailsClosed(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
 		req.Header.Set("x-api-key", "sk-read-only-funding")
 		r.ServeHTTP(w, req)
-		require.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
-		require.Contains(t, w.Body.String(), "TEAM_FUNDING_COST_UNBOUNDED")
+		require.Equal(t, http.StatusServiceUnavailable, w.Code, w.Body.String())
+		require.Contains(t, w.Body.String(), "FUNDING_PRICING_UNAVAILABLE")
 		require.Zero(t, funding.holds)
+	}
+}
+
+func (r *readOnlyFundingRepo) GetAsyncFunding(_ context.Context, provider, task string, user, key int64) (*service.AsyncFundingTask, error) {
+	if r.snapshot == nil || r.snapshot.ActorUserID != user || r.snapshot.APIKeyID != key {
+		return nil, service.ErrTeamFundingNotFound
+	}
+	return &service.AsyncFundingTask{Provider: provider, TaskID: task, Snapshot: r.snapshot}, nil
+}
+
+func TestFundingFollowupRestoresSnapshotBeforeCurrentGroupAndWalletChecks(t *testing.T) {
+	for _, google := range []bool{false, true} {
+		t.Run(fmt.Sprint(google), func(t *testing.T) {
+			auth, repo := readOnlyFundingAuth(t, google, func(key *service.APIKey) {
+				key.Status = service.StatusAPIKeyQuotaExhausted
+				key.Group.Status = "disabled"
+			})
+			repo.snapshot = &service.AsyncFundingSnapshot{ActorUserID: 22, APIKeyID: 7, Group: &service.Group{ID: 9, Platform: service.PlatformOpenAI, Status: service.StatusActive}, Funding: &service.FundingDecision{Source: service.TeamFundingSourceBalance, PayerUserID: 11, ReservationID: 3, RequestID: "accepted", ReservedAmount: "10"}}
+			r := gin.New()
+			r.Use(auth)
+			r.GET("/v1/images/tasks/:task_id", func(c *gin.Context) {
+				key, ok := GetAPIKeyFromContext(c)
+				require.True(t, ok)
+				require.Equal(t, int64(9), key.Group.ID)
+				require.Equal(t, int64(11), key.Funding.PayerUserID)
+				require.True(t, service.IsFundingFollowup(c.Request.Context()))
+				c.Status(http.StatusOK)
+			})
+			w := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodGet, "/v1/images/tasks/original", nil)
+			req.Header.Set("x-api-key", "fixture")
+			r.ServeHTTP(w, req)
+			require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+			require.Zero(t, repo.contextReads)
+			require.Zero(t, repo.holds)
+		})
+	}
+}
+
+func TestFundingHistoryNeedsNoCurrentSharedResources(t *testing.T) {
+	for _, path := range []string{"/v1/images/batches", "/v1beta/cachedContents"} {
+		google := strings.Contains(path, "v1beta")
+		auth, repo := readOnlyFundingAuth(t, google, func(key *service.APIKey) {
+			key.Status = service.StatusAPIKeyQuotaExhausted
+			key.Group.Status = "disabled"
+		})
+		r := gin.New()
+		r.Use(auth)
+		r.GET(path, func(c *gin.Context) { c.Status(http.StatusOK) })
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Header.Set("x-api-key", "fixture")
+		r.ServeHTTP(w, req)
+		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+		require.Zero(t, repo.contextReads)
+		require.Zero(t, repo.holds)
+	}
+}
+
+func TestFundingUpgradeHeaderCannotBypassPaidPOSTAdmission(t *testing.T) {
+	for _, path := range []string{"/v1/responses", "/v1/images/generations"} {
+		auth, _ := readOnlyFundingAuth(t, false, nil)
+		r := gin.New()
+		r.Use(auth)
+		r.POST(path, func(c *gin.Context) { t.Fatal("paid POST reached upstream without funding admission") })
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{"model":"gpt-image-2","input":"hello","prompt":"test"}`))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("x-api-key", "fixture")
+		req.Header.Set("Upgrade", "websocket")
+		req.Header.Set("Connection", "Upgrade")
+		r.ServeHTTP(w, req)
+		require.Equal(t, http.StatusServiceUnavailable, w.Code, w.Body.String())
+		require.Contains(t, w.Body.String(), "FUNDING_PRICING_UNAVAILABLE")
 	}
 }

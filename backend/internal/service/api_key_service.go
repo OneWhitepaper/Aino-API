@@ -293,6 +293,7 @@ type APIKeyService struct {
 	teamFunding               *TeamFundingService
 	fundingBilling            *BillingService
 	fundingPricing            *ModelPricingResolver
+	fundingAccounts           AccountRepository
 	desktopRepo               DesktopCredentialRepository
 	desktopRefreshCache       RefreshTokenCache
 	desktopSettings           *SettingService

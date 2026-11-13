@@ -126,25 +126,37 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 			abortWithGoogleError(c, 401, "User account is not active")
 			return
 		}
-		if code, message, ok := validateAPIKeyGroupAvailable(apiKey); !ok {
-			service.MarkOpsClientBusinessLimited(c, service.OpsClientBusinessLimitedReasonAPIKeyGroupUnavailable)
-			if code == "GROUP_DELETED" {
-				MarkIngressRejected(c, IngressRejectGroupDeleted)
-			} else {
-				MarkIngressRejected(c, IngressRejectGroupDisabled)
+		restoredKey, restoredSub, fundingFollowup, restoreErr := restoreAsyncRequestFunding(c, apiKeyService, apiKey)
+		if restoreErr != nil {
+			abortWithGoogleError(c, infraerrors.Code(restoreErr), infraerrors.Message(restoreErr))
+			return
+		}
+		var fundedKey *service.APIKey
+		var fundedSub *service.UserSubscription
+		var fundingErr error
+		fundingHistory := isFundingHistoryRequest(c)
+		if fundingHistory {
+			fundedKey = apiKey
+		} else if fundingFollowup {
+			fundedKey, fundedSub = restoredKey, restoredSub
+		} else {
+			if code, message, ok := validateAPIKeyGroupAvailable(apiKey); !ok {
+				service.MarkOpsClientBusinessLimited(c, service.OpsClientBusinessLimitedReasonAPIKeyGroupUnavailable)
+				if code == "GROUP_DELETED" {
+					MarkIngressRejected(c, IngressRejectGroupDeleted)
+				} else {
+					MarkIngressRejected(c, IngressRejectGroupDisabled)
+				}
+				abortWithGoogleError(c, 403, message)
+				return
 			}
-			abortWithGoogleError(c, 403, message)
-			return
+			if !validateAPIKeyGroupAllowed(apiKey) {
+				MarkIngressRejected(c, IngressRejectGroupNotAllowed)
+				abortWithGoogleError(c, 403, "API Key 所属专属分组不再允许当前用户使用")
+				return
+			}
+			fundedKey, fundedSub, fundingErr = resolveRequestFunding(c, apiKeyService, apiKey)
 		}
-		// 专属分组授权校验：用户对该专属分组的授权被撤销后应拒绝（与主中间件一致，防止越权）。
-		if !validateAPIKeyGroupAllowed(apiKey) {
-			service.MarkOpsClientBusinessLimited(c, service.OpsClientBusinessLimitedReasonAPIKeyGroupUnavailable)
-			MarkIngressRejected(c, IngressRejectGroupNotAllowed)
-			abortWithGoogleError(c, 403, "API Key 所属专属分组不再允许当前用户使用")
-			return
-		}
-
-		fundedKey, fundedSub, fundingErr := resolveRequestFunding(c, apiKeyService, apiKey)
 		if fundingErr != nil {
 			abortWithGoogleError(c, infraerrors.Code(fundingErr), infraerrors.Message(fundingErr))
 			return
@@ -169,68 +181,70 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 			return
 		}
 
-		// Key 状态检查（状态字段可能因后台异步刷新而滞后，故显式拦截）。
-		switch apiKey.Status {
-		case service.StatusAPIKeyQuotaExhausted:
-			abortWithGoogleError(c, 429, "API key 额度已用完")
-			return
-		case service.StatusAPIKeyExpired:
-			abortWithGoogleError(c, 403, "API key 已过期")
-			return
-		}
-
-		// 运行时过期/配额检查（即使状态是 active，也要检查时间和用量，与主中间件一致）。
-		if apiKey.IsExpired() {
-			abortWithGoogleError(c, 403, "API key 已过期")
-			return
-		}
-		if apiKey.IsQuotaExhausted() {
-			abortWithGoogleError(c, 429, "API key 额度已用完")
-			return
-		}
-
-		isSubscriptionType := apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
-		if apiKey.Funding != nil {
-			// Configured selection already enforces consent. Unsupported shared
-			// Gemini/media requests fail before reaching this point.
-		} else if isSubscriptionType && subscriptionService != nil {
-			subscription, err := subscriptionService.GetActiveSubscription(
-				c.Request.Context(),
-				apiKey.User.ID,
-				apiKey.Group.ID,
-			)
-			if err != nil {
-				abortWithGoogleError(c, 403, "No active subscription found for this group")
+		if !fundingFollowup && !fundingHistory {
+			// Key 状态检查（状态字段可能因后台异步刷新而滞后，故显式拦截）。
+			switch apiKey.Status {
+			case service.StatusAPIKeyQuotaExhausted:
+				abortWithGoogleError(c, 429, "API key 额度已用完")
+				return
+			case service.StatusAPIKeyExpired:
+				abortWithGoogleError(c, 403, "API key 已过期")
 				return
 			}
 
-			needsMaintenance, err := subscriptionService.ValidateAndCheckLimits(subscription, apiKey.Group)
-			if needsMaintenance {
-				refreshed, maintenanceErr := subscriptionService.EnsureWindowMaintenance(c.Request.Context(), subscription)
-				if maintenanceErr != nil {
-					abortWithGoogleError(c, 500, "Failed to maintain subscription usage windows")
+			// 运行时过期/配额检查（即使状态是 active，也要检查时间和用量，与主中间件一致）。
+			if apiKey.IsExpired() {
+				abortWithGoogleError(c, 403, "API key 已过期")
+				return
+			}
+			if apiKey.IsQuotaExhausted() {
+				abortWithGoogleError(c, 429, "API key 额度已用完")
+				return
+			}
+
+			isSubscriptionType := apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
+			if apiKey.Funding != nil {
+				// Configured selection and durable reservations enforce consent and payer limits.
+			} else if isSubscriptionType && subscriptionService != nil {
+				subscription, err := subscriptionService.GetActiveSubscription(
+					c.Request.Context(),
+					apiKey.User.ID,
+					apiKey.Group.ID,
+				)
+				if err != nil {
+					abortWithGoogleError(c, 403, "No active subscription found for this group")
 					return
 				}
-				subscription = refreshed
-				_, err = subscriptionService.ValidateAndCheckLimits(subscription, apiKey.Group)
-			}
-			if err != nil {
-				status := 403
-				if errors.Is(err, service.ErrDailyLimitExceeded) ||
-					errors.Is(err, service.ErrWeeklyLimitExceeded) ||
-					errors.Is(err, service.ErrMonthlyLimitExceeded) {
-					status = 429
+
+				needsMaintenance, err := subscriptionService.ValidateAndCheckLimits(subscription, apiKey.Group)
+				if needsMaintenance {
+					refreshed, maintenanceErr := subscriptionService.EnsureWindowMaintenance(c.Request.Context(), subscription)
+					if maintenanceErr != nil {
+						abortWithGoogleError(c, 500, "Failed to maintain subscription usage windows")
+						return
+					}
+					subscription = refreshed
+					_, err = subscriptionService.ValidateAndCheckLimits(subscription, apiKey.Group)
 				}
-				abortWithGoogleError(c, status, err.Error())
-				return
+				if err != nil {
+					status := 403
+					if errors.Is(err, service.ErrDailyLimitExceeded) ||
+						errors.Is(err, service.ErrWeeklyLimitExceeded) ||
+						errors.Is(err, service.ErrMonthlyLimitExceeded) {
+						status = 429
+					}
+					abortWithGoogleError(c, status, err.Error())
+					return
+				}
+
+				c.Set(string(ContextKeySubscription), subscription)
+			} else {
+				if apiKeyBalanceBelowAuthThreshold(apiKey.User.Balance, cfg) {
+					abortWithGoogleError(c, 403, "Insufficient account balance")
+					return
+				}
 			}
 
-			c.Set(string(ContextKeySubscription), subscription)
-		} else {
-			if apiKeyBalanceBelowAuthThreshold(apiKey.User.Balance, cfg) {
-				abortWithGoogleError(c, 403, "Insufficient account balance")
-				return
-			}
 		}
 
 		c.Set(string(ContextKeyAPIKey), apiKey)

@@ -18,7 +18,7 @@ func TestFundingMigrationsCanRepeatWithoutChangingEscrow(t *testing.T) {
 	hold, err := teamFundingReserve(funding, owner, member, team, key, "25")
 	require.NoError(t, err)
 	for range 2 {
-		for _, name := range []string{"257_team_shared_billing.sql", "258_personal_funding_reservations.sql", "259_funding_billing_shortfalls.sql"} {
+		for _, name := range []string{"257_team_shared_billing.sql", "258_personal_funding_reservations.sql", "259_funding_billing_shortfalls.sql", "260_async_funding_snapshots.sql", "261_gemini_cache_funding_snapshots.sql"} {
 			body, readErr := migrations.FS.ReadFile(name)
 			require.NoError(t, readErr)
 			_, execErr := integrationDB.ExecContext(ctx, string(body))

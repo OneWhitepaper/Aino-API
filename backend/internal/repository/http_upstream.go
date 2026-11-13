@@ -163,9 +163,10 @@ type openAIHTTP2FallbackState struct {
 // 7. 代理变更时清空旧连接池，避免复用错误代理
 // 8. 账号并发数与连接池上限对应（账号隔离策略下）
 type httpUpstreamService struct {
-	cfg     *config.Config                  // 全局配置
-	mu      sync.RWMutex                    // 保护 clients map 的读写锁
-	clients map[string]*upstreamClientEntry // 客户端缓存池，key 由隔离策略决定
+	cfg         *config.Config // 全局配置
+	accountRepo service.AccountRepository
+	mu          sync.RWMutex                    // 保护 clients map 的读写锁
+	clients     map[string]*upstreamClientEntry // 客户端缓存池，key 由隔离策略决定
 	// OpenAI 走 HTTP/HTTPS 代理时的 H2->H1 回退状态（key=标准化 proxyKey）
 	openAIHTTP2Fallbacks sync.Map
 }
@@ -183,6 +184,39 @@ func NewHTTPUpstream(cfg *config.Config) service.HTTPUpstream {
 		cfg:     cfg,
 		clients: make(map[string]*upstreamClientEntry),
 	}
+}
+
+// ProvideHTTPUpstream keeps the lightweight constructor available to transport
+// tests while production can load the exact account for funding authorization.
+func ProvideHTTPUpstream(cfg *config.Config, accounts service.AccountRepository) service.HTTPUpstream {
+	upstream := NewHTTPUpstream(cfg).(*httpUpstreamService)
+	upstream.accountRepo = accounts
+	return upstream
+}
+
+func (s *httpUpstreamService) prepareFundingAccount(req *http.Request, accountID int64) error {
+	if req == nil || !service.FundingAccountDispatchRequired(req.Context()) {
+		return nil
+	}
+	if s.accountRepo == nil || accountID <= 0 {
+		return service.ErrFundingModelLimitsUnavailable
+	}
+	if req.GetBody != nil && strings.Contains(strings.ToLower(req.Header.Get("Content-Type")), "json") {
+		if body, err := req.GetBody(); err == nil {
+			var fields struct {
+				Model string `json:"model"`
+			}
+			if json.NewDecoder(io.LimitReader(body, service.ConfiguredFundingBodyReadLimit+1)).Decode(&fields) == nil && fields.Model != "" {
+				service.SetFundingDispatchModel(req.Context(), fields.Model)
+			}
+			_ = body.Close()
+		}
+	}
+	account, err := s.accountRepo.GetByID(req.Context(), accountID)
+	if err != nil {
+		return service.ErrFundingModelLimitsUnavailable.WithCause(err)
+	}
+	return service.PrepareFundingAccountDispatch(req.Context(), account)
 }
 
 // Do 执行 HTTP 请求
@@ -204,6 +238,9 @@ func NewHTTPUpstream(cfg *config.Config) service.HTTPUpstream {
 func (s *httpUpstreamService) Do(req *http.Request, proxyURL string, accountID int64, accountConcurrency int) (*http.Response, error) {
 	applyGrokCLIProxyHeaders(req)
 	if err := s.validateRequestHost(req); err != nil {
+		return nil, err
+	}
+	if err := s.prepareFundingAccount(req, accountID); err != nil {
 		return nil, err
 	}
 	profile := service.HTTPUpstreamProfileDefault
@@ -270,6 +307,9 @@ func (s *httpUpstreamService) DoWithTLS(req *http.Request, proxyURL string, acco
 	slog.Debug("tls_fingerprint_enabled", "account_id", accountID, "target", targetHost, "proxy", proxyInfo, "profile", profile.Name)
 
 	if err := s.validateRequestHost(req); err != nil {
+		return nil, err
+	}
+	if err := s.prepareFundingAccount(req, accountID); err != nil {
 		return nil, err
 	}
 

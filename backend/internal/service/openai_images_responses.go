@@ -424,6 +424,9 @@ func buildOpenAIImagesResponsesRequest(parsed *OpenAIImagesRequest, toolModel st
 
 	req := []byte(`{"instructions":"","stream":true,"reasoning":{"effort":"medium","summary":"auto"},"parallel_tool_calls":true,"include":["reasoning.encrypted_content"],"model":"","store":false,"tool_choice":{"type":"image_generation"}}`)
 	req, _ = sjson.SetBytes(req, "model", openAIImagesResponsesMainModelValue())
+	// This bridge implements one Images API invocation. Bound the driver to one
+	// tool call so it cannot turn an accepted image count into repeated calls.
+	req, _ = sjson.SetBytes(req, "max_tool_calls", 1)
 	req, _ = sjson.SetBytes(req, "instructions", openAIImagesVerbatimPromptInstructions)
 
 	input := []byte(`[{"type":"message","role":"user","content":[{"type":"input_text","text":""}]}]`)
@@ -442,8 +445,8 @@ func buildOpenAIImagesResponsesRequest(parsed *OpenAIImagesRequest, toolModel st
 	tool := []byte(`{"type":"image_generation","action":"","model":""}`)
 	tool, _ = sjson.SetBytes(tool, "action", action)
 	tool, _ = sjson.SetBytes(tool, "model", strings.TrimSpace(toolModel))
-	if shouldPassOpenAIImagesN(toolModel, parsed.N) {
-		tool, _ = sjson.SetBytes(tool, "n", parsed.N)
+	if shouldPassOpenAIImagesN(toolModel, max(2, parsed.N)) {
+		tool, _ = sjson.SetBytes(tool, "n", max(1, parsed.N))
 	}
 
 	for _, field := range []struct {

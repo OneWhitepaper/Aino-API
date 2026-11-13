@@ -150,6 +150,10 @@ func (s *OpenAIGatewayService) ForwardSeedance(ctx context.Context, c *gin.Conte
 			result.Usage.OutputTokens = max(0, int(gjson.GetBytes(responseBody, "usage.completion_tokens").Int()))
 		}
 	}
-	writeGrokMediaResponse(c, resp, responseBody, s.responseHeaderFilter)
+	if endpoint == SeedanceEndpointCreate && FundingDispatchRequestID(ctx) != "" {
+		result.VideoCreateResponse = &VideoCreateResponse{StatusCode: resp.StatusCode, Headers: resp.Header.Clone(), Body: responseBody}
+	} else {
+		writeGrokMediaResponse(c, resp, responseBody, s.responseHeaderFilter)
+	}
 	return result, nil
 }

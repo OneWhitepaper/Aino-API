@@ -227,6 +227,8 @@ var (
 // LiteLLMModelPricing LiteLLM价格数据结构
 // 只保留我们需要的字段，使用指针来处理可能缺失的值
 type LiteLLMModelPricing struct {
+	MaxInputTokens                      int64   `json:"max_input_tokens,omitempty"`
+	MaxOutputTokens                     int64   `json:"max_output_tokens,omitempty"`
 	CacheCreationInputTokenCostExplicit bool    `json:"-"`
 	InputCostPerToken                   float64 `json:"input_cost_per_token"`
 	InputCostPerTokenPriority           float64 `json:"input_cost_per_token_priority"`
@@ -266,6 +268,8 @@ type PricingRemoteClient interface {
 
 // LiteLLMRawEntry 用于解析原始JSON数据
 type LiteLLMRawEntry struct {
+	MaxInputTokens                      *int64   `json:"max_input_tokens"`
+	MaxOutputTokens                     *int64   `json:"max_output_tokens"`
 	InputCostPerToken                   *float64 `json:"input_cost_per_token"`
 	InputCostPerTokenPriority           *float64 `json:"input_cost_per_token_priority"`
 	OutputCostPerToken                  *float64 `json:"output_cost_per_token"`
@@ -708,6 +712,12 @@ func (s *PricingService) parsePricingData(body []byte) (map[string]*LiteLLMModel
 			SupportsPromptCaching: entry.SupportsPromptCaching,
 			SupportsServiceTier:   entry.SupportsServiceTier,
 			TokenPricingAbsent:    entry.InputCostPerToken == nil && entry.OutputCostPerToken == nil,
+		}
+		if entry.MaxInputTokens != nil && *entry.MaxInputTokens > 0 {
+			pricing.MaxInputTokens = *entry.MaxInputTokens
+		}
+		if entry.MaxOutputTokens != nil && *entry.MaxOutputTokens > 0 {
+			pricing.MaxOutputTokens = *entry.MaxOutputTokens
 		}
 
 		if entry.InputCostPerToken != nil {

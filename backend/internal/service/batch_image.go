@@ -99,6 +99,7 @@ var (
 )
 
 type BatchImageJob struct {
+	FundingSnapshot   *AsyncFundingSnapshot
 	ID                int64
 	BatchID           string
 	UserID            int64
@@ -160,6 +161,7 @@ type BatchImageJob struct {
 }
 
 type CreateBatchImageJobParams struct {
+	FundingSnapshot   *AsyncFundingSnapshot
 	BatchID           string
 	UserID            int64
 	APIKeyID          *int64

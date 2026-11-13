@@ -174,6 +174,7 @@ SET status = 'failed',
 WHERE batch_id = $1
   AND status IN ('created', 'uploading')
   AND provider_job_name IS NULL
+  AND (funding_snapshot IS NULL OR NOT EXISTS(SELECT 1 FROM funding_dispatch_operations d WHERE d.request_id=batch_image_jobs.funding_snapshot->'funding'->>'RequestID' AND d.api_key_id=batch_image_jobs.api_key_id))
   AND updated_at <= $5`, batchID, code, message, now, cutoff)
 	if err != nil {
 		return false, err
@@ -750,7 +751,7 @@ INSERT INTO batch_image_jobs (
     batch_discount_multiplier, hold_multiplier, billable_unit_price, hold_unit_price,
     pricing_snapshot_version,
     currency, hold_id,
-    idempotency_key, request_hash, manifest_hash, retry_count, session_id, output_expires_at
+    idempotency_key, request_hash, manifest_hash, retry_count, session_id, output_expires_at, funding_snapshot
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9,
     $10, $11, $12, $13, $14,
@@ -760,7 +761,7 @@ INSERT INTO batch_image_jobs (
     $25, $26, $27, $28,
     $29,
     $30, $31,
-    $32, $33, $34, $35, $36, $37
+    $32, $33, $34, $35, $36, $37, $38::jsonb
 )
 RETURNING `+batchImageJobColumns,
 		params.BatchID, params.UserID, params.APIKeyID, params.AccountID, params.Provider, params.Model, params.TaskName, params.ParentBatchID, params.Status,
@@ -771,7 +772,7 @@ RETURNING `+batchImageJobColumns,
 		params.BatchDiscountMultiplier, params.HoldMultiplier, params.BillableUnitPrice, params.HoldUnitPrice,
 		params.PricingSnapshotVersion,
 		params.Currency, params.HoldID,
-		params.IdempotencyKey, params.RequestHash, params.ManifestHash, params.RetryCount, params.SessionID, params.OutputExpiresAt,
+		params.IdempotencyKey, params.RequestHash, params.ManifestHash, params.RetryCount, params.SessionID, params.OutputExpiresAt, batchImageFundingJSON(params.FundingSnapshot),
 	))
 }
 
@@ -827,12 +828,13 @@ currency, hold_id,
 idempotency_key, request_hash, manifest_hash,
 retry_count, version, session_id, output_expires_at, input_deleted_at, output_deleted_at, downloaded_at, user_deleted_at,
 last_error_code, last_error_message,
-created_at, updated_at, submitted_at, started_at, finished_at, settled_at`
+created_at, updated_at, submitted_at, started_at, finished_at, settled_at, funding_snapshot`
 
 const batchImageJobSelectSQL = `SELECT ` + batchImageJobColumns + ` FROM batch_image_jobs`
 
 func scanBatchImageJob(row rowScanner) (*service.BatchImageJob, error) {
 	var job service.BatchImageJob
+	var fundingJSON []byte
 	var apiKeyID, accountID sql.NullInt64
 	var providerJobName, providerInputRef, providerOutputRef, gcsInputURI, gcsOutputURI sql.NullString
 	var parentBatchID sql.NullString
@@ -855,12 +857,17 @@ func scanBatchImageJob(row rowScanner) (*service.BatchImageJob, error) {
 		&idempotencyKey, &requestHash, &manifestHash,
 		&job.RetryCount, &job.Version, &sessionID, &outputExpiresAt, &inputDeletedAt, &outputDeletedAt, &downloadedAt, &userDeletedAt,
 		&lastErrorCode, &lastErrorMessage,
-		&job.CreatedAt, &job.UpdatedAt, &submittedAt, &startedAt, &finishedAt, &settledAt,
+		&job.CreatedAt, &job.UpdatedAt, &submittedAt, &startedAt, &finishedAt, &settledAt, &fundingJSON,
 	)
 	if err != nil {
 		return nil, err
 	}
 
+	if len(fundingJSON) > 0 {
+		if err = json.Unmarshal(fundingJSON, &job.FundingSnapshot); err != nil {
+			return nil, err
+		}
+	}
 	job.APIKeyID = batchImageNullInt64Ptr(apiKeyID)
 	job.AccountID = batchImageNullInt64Ptr(accountID)
 	job.ProviderJobName = batchImageNullStringPtr(providerJobName)
@@ -986,3 +993,14 @@ func batchImageNullTimePtr(v sql.NullTime) *time.Time {
 }
 
 var _ service.BatchImageRepository = (*batchImageRepository)(nil)
+
+func batchImageFundingJSON(snapshot *service.AsyncFundingSnapshot) any {
+	if snapshot == nil {
+		return nil
+	}
+	payload, err := json.Marshal(snapshot)
+	if err != nil {
+		return nil
+	}
+	return string(payload)
+}

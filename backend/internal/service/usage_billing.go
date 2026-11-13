@@ -22,20 +22,26 @@ type UsageBillingCommand struct {
 	RequestFingerprint string
 	RequestPayloadHash string
 
-	UserID              int64
-	AccountID           int64
-	SubscriptionID      *int64
-	AccountType         string
-	Model               string
-	ServiceTier         string
-	ReasoningEffort     string
-	BillingType         int8
-	InputTokens         int
-	OutputTokens        int
-	CacheCreationTokens int
-	CacheReadTokens     int
-	ImageCount          int
-	MediaType           string
+	// UserID always identifies the actor. PayerUserID is optional for legacy commands.
+	PayerUserID                  int64
+	FundingReservationID         int64
+	PersonalFundingReservationID int64
+	FundingSource                string
+	FundingCost                  float64
+	UserID                       int64
+	AccountID                    int64
+	SubscriptionID               *int64
+	AccountType                  string
+	Model                        string
+	ServiceTier                  string
+	ReasoningEffort              string
+	BillingType                  int8
+	InputTokens                  int
+	OutputTokens                 int
+	CacheCreationTokens          int
+	CacheReadTokens              int
+	ImageCount                   int
+	MediaType                    string
 
 	BalanceCost         float64
 	SubscriptionCost    float64
@@ -86,6 +92,7 @@ const UsageBillingMonetaryScale = 8
 // 在参数进入 SQL 之前量化一次，两条语句就都拿到已经落在 8 位刻度上的同一个金额，
 // 存储阶段不再发生任何舍入，delta 精确相等。
 func (c *UsageBillingCommand) quantizeMonetaryFields() {
+	c.FundingCost = QuantizeUsageBillingAmount(c.FundingCost)
 	c.BalanceCost = QuantizeUsageBillingAmount(c.BalanceCost)
 	c.SubscriptionCost = QuantizeUsageBillingAmount(c.SubscriptionCost)
 	c.APIKeyQuotaCost = QuantizeUsageBillingAmount(c.APIKeyQuotaCost)
@@ -134,6 +141,12 @@ func buildUsageBillingFingerprint(c *UsageBillingCommand) string {
 		c.APIKeyRateLimitCost,
 		c.AccountQuotaCost,
 	)
+	if c.FundingReservationID != 0 || c.PersonalFundingReservationID != 0 || c.PayerUserID != 0 {
+		raw += fmt.Sprintf("|payer:%d|reservation:%d|source:%s|funding:%0.10f", c.PayerUserID, c.FundingReservationID, c.FundingSource, c.FundingCost)
+		if c.PersonalFundingReservationID > 0 {
+			raw += fmt.Sprintf("|personal_reservation:%d", c.PersonalFundingReservationID)
+		}
+	}
 	if payloadHash := strings.TrimSpace(c.RequestPayloadHash); payloadHash != "" {
 		raw += "|" + payloadHash
 	}
@@ -168,11 +181,13 @@ type AccountQuotaState struct {
 }
 
 type UsageBillingApplyResult struct {
-	Applied              bool
-	APIKeyQuotaExhausted bool
-	NewBalance           *float64           // post-deduction balance (nil = no balance deduction)
-	BalanceOverdrafted   bool               // true when the sufficient-balance guard missed and debt was still recorded
-	QuotaState           *AccountQuotaState // post-increment quota state (nil = no quota increment)
+	Applied                   bool
+	FundingChargedAmount      string
+	FundingUnauthorizedAmount string
+	APIKeyQuotaExhausted      bool
+	NewBalance                *float64           // post-deduction balance (nil = no balance deduction)
+	BalanceOverdrafted        bool               // true when the sufficient-balance guard missed and debt was still recorded
+	QuotaState                *AccountQuotaState // post-increment quota state (nil = no quota increment)
 }
 
 // BatchImageBalanceHoldCommand describes an idempotent balance hold operation.

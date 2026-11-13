@@ -290,6 +290,9 @@ type RateLimitCacheInvalidator interface {
 }
 
 type APIKeyService struct {
+	teamFunding               *TeamFundingService
+	fundingBilling            *BillingService
+	fundingPricing            *ModelPricingResolver
 	desktopRepo               DesktopCredentialRepository
 	desktopRefreshCache       RefreshTokenCache
 	desktopSettings           *SettingService
@@ -489,7 +492,14 @@ func (s *APIKeyService) canUserBindGroup(ctx context.Context, user *User, group 
 	// 订阅类型分组：需要有效订阅
 	if group.IsSubscriptionType() {
 		_, err := s.userSubRepo.GetActiveByUserIDAndGroupID(ctx, user.ID, group.ID)
-		return err == nil // 有有效订阅则允许
+		if err == nil {
+			return true
+		}
+		shared := make(map[int64]bool)
+		if s.addSharedSubscriptionGroups(ctx, user.ID, shared) != nil {
+			return false
+		}
+		return shared[group.ID]
 	}
 	// 标准类型分组：使用原有逻辑
 	return user.CanBindGroup(group.ID, group.IsExclusive)
@@ -1093,6 +1103,10 @@ func (s *APIKeyService) GetAvailableGroups(ctx context.Context, userID int64) ([
 		subscribedGroupIDs[sub.GroupID] = true
 	}
 
+	if err := s.addSharedSubscriptionGroups(ctx, userID, subscribedGroupIDs); err != nil {
+		return nil, err
+	}
+
 	// 过滤出用户有权限的分组
 	availableGroups := make([]Group, 0)
 	for _, group := range allGroups {
@@ -1142,6 +1156,13 @@ func (s *APIKeyService) GetUserGroupVisibility(ctx context.Context, userID int64
 	}
 	for _, sub := range subscriptions {
 		allowed[sub.GroupID] = struct{}{}
+	}
+	shared := make(map[int64]bool)
+	if err := s.addSharedSubscriptionGroups(ctx, userID, shared); err != nil {
+		return nil, false, err
+	}
+	for id := range shared {
+		allowed[id] = struct{}{}
 	}
 	return allowed, user.RestrictPublicGroups, nil
 }

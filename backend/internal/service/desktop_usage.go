@@ -60,7 +60,7 @@ func settleDesktopUsage(log *UsageLog, cmd *UsageBillingCommand) {
 	if log == nil || log.DesktopCallID == nil {
 		return
 	}
-	log.ActualCost = QuantizeUsageBillingAmount(cmd.BalanceCost + cmd.SubscriptionCost)
+	log.ActualCost = QuantizeUsageBillingAmount(cmd.BalanceCost + cmd.SubscriptionCost + cmd.FundingCost)
 	log.SettlementStatus = "settled"
 	if log.ActualCost == 0 {
 		log.SettlementStatus = "not_charged"

@@ -105,6 +105,7 @@ type subscriptionCacheInvalidationPubSub interface {
 // BillingCacheService 计费缓存服务
 // 负责余额和订阅数据的缓存管理，提供高性能的计费资格检查
 type BillingCacheService struct {
+	teamFunding           *TeamFundingService
 	cache                 BillingCache
 	userRepo              UserRepository
 	subRepo               UserSubscriptionRepository
@@ -755,17 +756,24 @@ func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user 
 		return ErrBillingServiceUnavailable
 	}
 
-	// 判断计费模式
+	// A shared decision already escrowed money and quota in PostgreSQL. Reading
+	// the actor wallet (or the now-depleted payer wallet) would reject an admitted
+	// request. Caller key/rate/platform/concurrency controls remain below.
 	isSubscriptionMode := group != nil && group.IsSubscriptionType() && subscription != nil
-
-	if isSubscriptionMode {
+	shared := apiKey != nil && apiKey.Funding.HasReservation()
+	if apiKey != nil && apiKey.Funding != nil {
+		isSubscriptionMode = apiKey.Funding.IsSubscription()
+	}
+	if shared {
+		if apiKey.Funding.ReservationID <= 0 {
+			return ErrFundingUnavailable
+		}
+	} else if isSubscriptionMode {
 		if err := s.checkSubscriptionEligibility(ctx, user.ID, group, subscription); err != nil {
 			return err
 		}
-	} else {
-		if err := s.checkBalanceEligibility(ctx, user.ID); err != nil {
-			return err
-		}
+	} else if err := s.checkBalanceEligibility(ctx, user.ID); err != nil {
+		return err
 	}
 
 	// user × platform quota 仅在 standard（余额）模式生效；订阅模式豁免
@@ -798,6 +806,9 @@ func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user 
 // 返回的句柄可能为 nil（未登记任何预留）；调用方须在 handler 结束时调用 HandlerDone，预留在计费任务落库后释放。
 // 须在 CheckBillingEligibility 通过后调用；简易模式不校验。
 func (s *BillingCacheService) ReserveFixedCharge(ctx context.Context, user *User, apiKey *APIKey, group *Group, subscription *UserSubscription, amount float64) (*InflightReservation, error) {
+	if apiKey != nil && apiKey.Funding.IsShared() {
+		return nil, ErrTeamFundingCostUnbounded
+	}
 	if user == nil || amount <= 0 || math.IsNaN(amount) || math.IsInf(amount, 0) {
 		return nil, nil
 	}

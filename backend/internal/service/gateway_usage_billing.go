@@ -338,6 +338,22 @@ func buildUsageBillingCommand(requestID string, usageLog *UsageLog, p *postUsage
 		cmd.BalanceCost = p.Cost.ActualCost
 	}
 
+	if d := p.APIKey.Funding; d != nil {
+		cmd.PayerUserID = d.PayerUserID
+		if d.HasReservation() {
+			cmd.RequestID = d.RequestID
+			cmd.FundingSource = d.Source
+			if d.IsShared() {
+				cmd.FundingReservationID = d.ReservationID
+			} else {
+				cmd.PersonalFundingReservationID = d.ReservationID
+			}
+			cmd.FundingCost = p.Cost.ActualCost
+			cmd.BalanceCost, cmd.SubscriptionCost = 0, 0
+			cmd.SubscriptionID = d.SubscriptionID
+		}
+	}
+
 	if p.shouldDeductAPIKeyQuota() {
 		cmd.APIKeyQuotaCost = p.Cost.ActualCost
 	}
@@ -361,6 +377,9 @@ func applyUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog
 
 	cmd := buildUsageBillingCommand(requestID, usageLog, p)
 	if cmd == nil || cmd.RequestID == "" || repo == nil {
+		if p.APIKey != nil && p.APIKey.Funding.HasReservation() {
+			return false, ErrFundingUnavailable
+		}
 		if p.SimpleModeKeyRateLimitOnly {
 			return false, ErrSimpleModeKeyRateLimitBillingUnavailable
 		}
@@ -415,7 +434,18 @@ func finalizePostUsageBilling(ctx context.Context, p *postUsageBillingParams, de
 		return
 	}
 
-	if p.IsSubscriptionBill {
+	if p.APIKey != nil && p.APIKey.Funding.HasReservation() {
+		// Escrow already debited the payer at admission. Settlement may refund
+		// unused money, so invalidate the payer snapshot rather than deduct twice.
+		if deps.billingCacheService != nil {
+			d := p.APIKey.Funding
+			if d.IsSubscription() && p.APIKey.GroupID != nil {
+				_ = deps.billingCacheService.InvalidateSubscription(ctx, d.PayerUserID, *p.APIKey.GroupID)
+			} else {
+				_ = deps.billingCacheService.InvalidateUserBalance(ctx, d.PayerUserID)
+			}
+		}
+	} else if p.IsSubscriptionBill {
 		if p.Cost.ActualCost > 0 && p.User != nil && p.APIKey != nil && p.APIKey.GroupID != nil {
 			deps.billingCacheService.QueueUpdateSubscriptionUsage(p.User.ID, *p.APIKey.GroupID, p.Cost.ActualCost)
 		}
@@ -506,6 +536,9 @@ func notifyBalanceLow(ctx context.Context, p *postUsageBillingParams, deps *bill
 			slog.Error("panic in notifyBalanceLow", "recover", r)
 		}
 	}()
+	if p.APIKey != nil && p.APIKey.Funding.IsShared() {
+		return
+	}
 	if p.IsSubscriptionBill || p.Cost.ActualCost <= 0 || p.User == nil || deps.balanceNotifyService == nil {
 		slog.Debug("notifyBalanceLow: skipped",
 			"is_subscription", p.IsSubscriptionBill,
@@ -835,6 +868,10 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 
 	// 判断计费方式：订阅模式 vs 余额模式
 	isSubscriptionBilling := subscription != nil && apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
+	if apiKey.Funding != nil {
+		subscription = apiKey.Funding.Subscription
+		isSubscriptionBilling = apiKey.Funding.IsSubscription()
+	}
 	billingType := BillingTypeBalance
 	if isSubscriptionBilling {
 		billingType = BillingTypeSubscription

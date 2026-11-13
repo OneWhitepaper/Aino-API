@@ -102,6 +102,9 @@ type DesktopModelService struct {
 }
 
 func NewDesktopModelService(settings *SettingService, keys *APIKeyService, billing *BillingService, pricing *ModelPricingResolver, eligibility *BillingCacheService, routes *CompositeRouteResolver) *DesktopModelService {
+	if keys != nil {
+		keys.SetFundingPricing(billing, pricing)
+	}
 	return &DesktopModelService{settings: settings, keys: keys, billing: billing, pricing: pricing, eligibility: eligibility, routes: routes}
 }
 
@@ -260,6 +263,44 @@ func (s *DesktopModelService) applyEligibility(ctx context.Context, user *User, 
 		return
 	}
 	var err error
+	if s.keys != nil && s.keys.teamFunding != nil {
+		actor, readErr := s.keys.userRepo.GetByID(ctx, user.ID)
+		if readErr != nil {
+			setPlatformModelState(model, "unavailable", "DESKTOP_BILLING_UNAVAILABLE")
+			return
+		}
+		decision, fundingErr := s.keys.resolveFundingDecision(ctx, &APIKey{UserID: user.ID, User: actor, GroupID: &group.ID, Group: group})
+		if fundingErr != nil {
+			setPlatformModelState(model, "unavailable", "FUNDING_UNAVAILABLE")
+			return
+		}
+		if decision != nil {
+			model.BillingSource = "balance"
+			if decision.IsSubscription() {
+				model.BillingSource = "subscription"
+			}
+			if decision.IsShared() {
+				if !decision.IsSubscription() {
+					err = s.eligibility.checkUserPlatformQuotaEligibility(ctx, user.ID, platform)
+				}
+				if err == nil {
+					return
+				}
+			} else if decision.IsSubscription() {
+				err = s.eligibility.checkSubscriptionEligibility(ctx, user.ID, group, decision.Subscription)
+			} else {
+				err = s.eligibility.checkBalanceEligibility(ctx, user.ID)
+				if err == nil {
+					err = s.eligibility.checkUserPlatformQuotaEligibility(ctx, user.ID, platform)
+				}
+			}
+			if err == nil {
+				return
+			}
+			setPlatformModelState(model, "unavailable", "DESKTOP_BILLING_UNAVAILABLE")
+			return
+		}
+	}
 	if group.IsSubscriptionType() {
 		err = s.eligibility.checkSubscriptionEligibility(ctx, user.ID, group, nil)
 	} else {

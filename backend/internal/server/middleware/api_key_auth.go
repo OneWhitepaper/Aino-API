@@ -9,6 +9,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -198,6 +199,20 @@ func apiKeyAuthWithDeviceRouting(apiKeyService *service.APIKeyService, subscript
 		// authenticated key and must remain available after the completed
 		// generation consumes the key's remaining balance.
 		skipBilling := c.Request.URL.Path == "/v1/usage" || billingInfoRequest || isAsyncImageTaskRead(c.Request.Method, c.Request.URL.Path)
+		subscription, _ := GetSubscriptionFromContext(c)
+
+		if !skipBilling {
+			fundedKey, fundedSub, fundingErr := resolveRequestFunding(c, apiKeyService, apiKey)
+			if fundingErr != nil {
+				AbortWithError(c, infraerrors.Code(fundingErr), infraerrors.Reason(fundingErr), infraerrors.Message(fundingErr))
+				return
+			}
+			apiKey = fundedKey
+			if apiKey.Funding != nil {
+				subscription = fundedSub
+			}
+			defer releaseUndispatchedRequestFunding(c)
+		}
 
 		// ── 4. SimpleMode → early return ─────────────────────────────
 
@@ -218,11 +233,10 @@ func apiKeyAuthWithDeviceRouting(apiKeyService *service.APIKeyService, subscript
 
 		// ── 5. 按端点需要加载订阅 ───────────────────────────────────
 
-		subscription, _ := GetSubscriptionFromContext(c)
 		isSubscriptionType := apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
 
 		// 倍率自省不需要订阅数据；/v1/usage 仍保留原有订阅读取行为。
-		if isSubscriptionType && subscriptionService != nil && !billingInfoRequest && !deviceTaskRead {
+		if apiKey.Funding == nil && isSubscriptionType && subscriptionService != nil && !billingInfoRequest && !deviceTaskRead {
 			sub, subErr := subscriptionService.GetActiveSubscription(
 				c.Request.Context(),
 				apiKey.User.ID,
@@ -239,7 +253,7 @@ func apiKeyAuthWithDeviceRouting(apiKeyService *service.APIKeyService, subscript
 			}
 		}
 
-		if apiKey.DesktopCredentialType == service.DesktopCredentialTypeDevice && isSubscriptionType && subscriptionService == nil && !skipBilling {
+		if apiKey.Funding == nil && apiKey.DesktopCredentialType == service.DesktopCredentialTypeDevice && isSubscriptionType && subscriptionService == nil && !skipBilling {
 			AbortWithError(c, http.StatusServiceUnavailable, "DESKTOP_BILLING_UNAVAILABLE", "Subscription billing is unavailable")
 			return
 		}
@@ -267,7 +281,9 @@ func apiKeyAuthWithDeviceRouting(apiKeyService *service.APIKeyService, subscript
 			}
 
 			// 订阅模式：验证订阅限额
-			if subscription != nil {
+			if apiKey.Funding.HasReservation() {
+				// PostgreSQL reservation already validated payer resources.
+			} else if subscription != nil && subscriptionService != nil {
 				needsMaintenance, validateErr := subscriptionService.ValidateAndCheckLimits(subscription, apiKey.Group)
 				if needsMaintenance {
 					refreshed, maintenanceErr := subscriptionService.EnsureWindowMaintenance(c.Request.Context(), subscription)
@@ -290,7 +306,7 @@ func apiKeyAuthWithDeviceRouting(apiKeyService *service.APIKeyService, subscript
 					AbortWithError(c, status, code, validateErr.Error())
 					return
 				}
-			} else {
+			} else if apiKey.Funding == nil {
 				// 非订阅模式 或 订阅模式但 subscriptionService 未注入：回退到余额检查
 				if apiKeyBalanceBelowAuthThreshold(apiKey.User.Balance, cfg) {
 					AbortWithError(c, 403, "INSUFFICIENT_BALANCE", "Insufficient account balance")

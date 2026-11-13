@@ -9,6 +9,7 @@ import (
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/shopspring/decimal"
 )
 
 type usageBillingRepository struct {
@@ -172,19 +173,45 @@ func (r *usageBillingRepository) applyBatchImageBalanceHold(
 }
 
 func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, tx *sql.Tx, cmd *service.UsageBillingCommand, result *service.UsageBillingApplyResult) error {
-	if cmd.SubscriptionCost > 0 && cmd.SubscriptionID != nil {
-		if err := incrementUsageBillingSubscription(ctx, tx, *cmd.SubscriptionID, cmd.SubscriptionCost); err != nil {
+	if cmd.FundingReservationID > 0 {
+		// Payer debit, member budget and ledger settle inside the same transaction
+		// as the existing request claim and caller key/account quota effects.
+		settled, err := SettleTeamFundingReservationTx(ctx, tx, cmd.FundingReservationID, cmd.RequestID, cmd.APIKeyID, decimal.NewFromFloat(cmd.FundingCost).StringFixed(8))
+		if err != nil {
 			return err
+		}
+		result.NewBalance = settled.NewBalance
+		result.FundingChargedAmount, result.FundingUnauthorizedAmount = settled.ChargedAmount, settled.UnauthorizedAmount
+	}
+	if cmd.PersonalFundingReservationID > 0 {
+		settled, err := SettlePersonalFundingReservationTx(ctx, tx, cmd.PersonalFundingReservationID, cmd.RequestID, cmd.APIKeyID, decimal.NewFromFloat(cmd.FundingCost).StringFixed(8))
+		if err != nil {
+			return err
+		}
+		result.NewBalance = settled.NewBalance
+		result.FundingChargedAmount = settled.ChargedAmount
+		result.FundingUnauthorizedAmount = settled.UnauthorizedAmount
+	}
+	if cmd.PersonalFundingReservationID == 0 && cmd.FundingReservationID == 0 && cmd.SubscriptionCost > 0 && cmd.SubscriptionID != nil {
+		charged, unpaid, err := incrementUsageBillingSubscriptionProtected(ctx, tx, cmd)
+		if err != nil {
+			return err
+		}
+		if charged != "" {
+			result.FundingChargedAmount, result.FundingUnauthorizedAmount = charged, unpaid
 		}
 	}
 
-	if cmd.BalanceCost > 0 {
-		newBalance, sufficient, err := deductUsageBillingBalance(ctx, tx, cmd.UserID, cmd.BalanceCost)
+	if cmd.PersonalFundingReservationID == 0 && cmd.FundingReservationID == 0 && cmd.BalanceCost > 0 {
+		newBalance, sufficient, charged, unpaid, err := deductUsageBillingBalanceProtected(ctx, tx, cmd)
 		if err != nil {
 			return err
 		}
 		result.NewBalance = &newBalance
 		result.BalanceOverdrafted = !sufficient
+		if charged != "" {
+			result.FundingChargedAmount, result.FundingUnauthorizedAmount = charged, unpaid
+		}
 	}
 
 	// Key 已不存在时跳过其自身的额度/限速计数，其余结算项不受影响。
@@ -637,4 +664,11 @@ func execAccountQuotaIncrement(ctx context.Context, tx *sql.Tx, query string, ac
 		return nil, err
 	}
 	return state, nil
+}
+
+func usageBillingPayerID(cmd *service.UsageBillingCommand) int64 {
+	if cmd.PayerUserID > 0 {
+		return cmd.PayerUserID
+	}
+	return cmd.UserID
 }

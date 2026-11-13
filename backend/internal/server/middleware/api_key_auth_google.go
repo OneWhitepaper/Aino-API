@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/googleapi"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -143,6 +144,17 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 			return
 		}
 
+		fundedKey, fundedSub, fundingErr := resolveRequestFunding(c, apiKeyService, apiKey)
+		if fundingErr != nil {
+			abortWithGoogleError(c, infraerrors.Code(fundingErr), infraerrors.Message(fundingErr))
+			return
+		}
+		apiKey = fundedKey
+		defer releaseUndispatchedRequestFunding(c)
+		if fundedSub != nil {
+			c.Set(string(ContextKeySubscription), fundedSub)
+		}
+
 		// 简易模式：跳过余额和订阅检查
 		if cfg.RunMode == config.RunModeSimple {
 			c.Set(string(ContextKeyAPIKey), apiKey)
@@ -178,7 +190,10 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 		}
 
 		isSubscriptionType := apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
-		if isSubscriptionType && subscriptionService != nil {
+		if apiKey.Funding != nil {
+			// Configured selection already enforces consent. Unsupported shared
+			// Gemini/media requests fail before reaching this point.
+		} else if isSubscriptionType && subscriptionService != nil {
 			subscription, err := subscriptionService.GetActiveSubscription(
 				c.Request.Context(),
 				apiKey.User.ID,

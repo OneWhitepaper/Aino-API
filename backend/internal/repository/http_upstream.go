@@ -308,6 +308,12 @@ func (s *httpUpstreamService) upstreamDrainTimeout() time.Duration {
 // caller's context (which may be detached for billing or reused for retries).
 func doUpstreamRequest(client *http.Client, req *http.Request, drainTimeouts ...time.Duration) (*http.Response, error) {
 	if req.Method != http.MethodGet && req.Method != http.MethodHead {
+		if err := service.ValidateFundingDispatchRequest(req); err != nil {
+			return nil, err
+		}
+		if err := service.BeginFundingDispatch(req.Context()); err != nil {
+			return nil, err
+		}
 		if err := service.BeginDesktopInferenceDispatch(req.Context()); err != nil {
 			return nil, err
 		}
@@ -318,7 +324,7 @@ func doUpstreamRequest(client *http.Client, req *http.Request, drainTimeouts ...
 	}
 	ctx, cancel := pkghttputil.NewUpstreamAttemptContext(req.Context(), drainTimeout)
 	attempt := req.WithContext(ctx)
-	if service.DesktopInferenceOperationID(ctx) != "" && req.Method != http.MethodGet && req.Method != http.MethodHead {
+	if (service.DesktopInferenceOperationID(ctx) != "" || service.FundingDispatchRequestID(ctx) != "") && req.Method != http.MethodGet && req.Method != http.MethodHead {
 		// Redirects and transparent body replay must not create a second paid call.
 		copy := *client
 		copy.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
@@ -331,6 +337,11 @@ func doUpstreamRequest(client *http.Client, req *http.Request, drainTimeouts ...
 		return resp, err
 	}
 	decompressResponseBody(resp)
+	if service.FundingDispatchRequestID(req.Context()) != "" && fundingResponseProvesNoCharge(resp) {
+		if releaseErr := service.ReleaseFundingAfterDefinitiveRejection(req.Context()); releaseErr != nil {
+			slog.Error("team_funding.provider_rejection_release_failed", "status", resp.StatusCode, "error", releaseErr)
+		}
+	}
 	resp.Body = &cancelOnCloseBody{ReadCloser: resp.Body, cancel: cancel}
 	return resp, nil
 }
@@ -1633,4 +1644,56 @@ func (d *decompressedBody) Close() error {
 		_ = rc.Close()
 	}
 	return d.closer.Close()
+}
+
+// A status alone is insufficient: content-policy rejections may include paid
+// usage. Refund only complete, structured pre-generation errors with no usage.
+func fundingResponseProvesNoCharge(resp *http.Response) bool {
+	if resp == nil || !service.IsDefinitiveNoChargeResponse(resp.StatusCode) {
+		return false
+	}
+	body, complete := bufferSmallResponseBody(resp, 64<<10)
+	if !complete {
+		return false
+	}
+	var parsed map[string]any
+	if json.Unmarshal(body, &parsed) != nil {
+		return false
+	}
+	var hasUsage func(any) bool
+	hasUsage = func(value any) bool {
+		switch x := value.(type) {
+		case map[string]any:
+			for key, v := range x {
+				if key == "usage" || key == "input_tokens" || key == "output_tokens" || key == "total_tokens" {
+					return true
+				}
+				if hasUsage(v) {
+					return true
+				}
+			}
+		case []any:
+			for _, v := range x {
+				if hasUsage(v) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	if hasUsage(parsed) {
+		return false
+	}
+	errorObject, ok := parsed["error"].(map[string]any)
+	if !ok {
+		return false
+	}
+	for _, field := range []string{"type", "code"} {
+		kind, _ := errorObject[field].(string)
+		switch kind {
+		case "invalid_request_error", "authentication_error", "permission_error", "not_found_error", "invalid_api_key", "context_length_exceeded", "request_too_large", "payload_too_large":
+			return true
+		}
+	}
+	return false
 }

@@ -71,6 +71,14 @@ func reserveInflightBalanceCtx(
 	subscription *service.UserSubscription,
 	req service.InflightEstimateRequest,
 ) (context.Context, func(), error) {
+	// Shared holds are durable and mandatory even when Redis inflight estimates
+	// are disabled. Never reserve the actor's personal wallet for a shared call.
+	if apiKey != nil && apiKey.Funding.HasReservation() {
+		if apiKey.Funding.ReservationID <= 0 || service.FundingDispatchRequestID(ctx) == "" {
+			return ctx, inflightNoop, service.ErrFundingUnavailable
+		}
+		return ctx, inflightNoop, nil
+	}
 	if billing == nil || estimator == nil || apiKey == nil || apiKey.User == nil || !billing.InflightReservationEnabled() {
 		return ctx, inflightNoop, nil
 	}

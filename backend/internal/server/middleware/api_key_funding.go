@@ -118,7 +118,9 @@ func isReadOnlyFundingRequest(c *gin.Context) bool {
 
 func releaseUndispatchedRequestFunding(c *gin.Context) {
 	if release, ok := c.Get("funding_release_undispatched"); ok {
-		release.(func())()
+		if releaseFn, valid := release.(func()); valid {
+			releaseFn()
+		}
 	}
 }
 

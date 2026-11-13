@@ -31,7 +31,7 @@ func probeFundingAudioDuration(ctx context.Context, data []byte) (float64, error
 	if err != nil {
 		return 0, fmt.Errorf("create audio probe input: %w", err)
 	}
-	defer os.Remove(file.Name())
+	defer func() { _ = os.Remove(file.Name()) }()
 	if _, err = file.Write(data); err != nil {
 		_ = file.Close()
 		return 0, fmt.Errorf("write audio probe input: %w", err)

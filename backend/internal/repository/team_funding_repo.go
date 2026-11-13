@@ -28,7 +28,7 @@ func teamFundingTx(ctx context.Context, db *sql.DB, fn func(*sql.Tx) error) erro
 	if e != nil {
 		return e
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	if e = fn(tx); e != nil {
 		return e
 	}
@@ -128,7 +128,7 @@ func (r *teamFundingRepository) ListTeams(ctx context.Context, user int64) (*ser
 	if e != nil {
 		return nil, e
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		v, e := scanTeamSummary(rows)
 		if e != nil {
@@ -170,13 +170,13 @@ func (r *teamFundingRepository) GetTeam(ctx context.Context, user, team int64) (
 	for rows.Next() {
 		var id int64
 		if e = rows.Scan(&id); e != nil {
-			rows.Close()
+			_ = rows.Close()
 			return nil, e
 		}
 		v.SharedSubscriptionIDs = append(v.SharedSubscriptionIDs, id)
 	}
 	e = rows.Err()
-	rows.Close()
+	_ = rows.Close()
 	if e != nil {
 		return nil, e
 	}
@@ -200,7 +200,7 @@ func teamMembers(ctx context.Context, q teamFundingQuery, team, user int64) ([]s
 	if e != nil {
 		return nil, e
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := []service.TeamMember{}
 	for rows.Next() {
 		var m service.TeamMember
@@ -216,7 +216,7 @@ func teamSubscriptions(ctx context.Context, q teamFundingQuery, user int64, team
 	if e != nil {
 		return nil, e
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := []service.FundingSubscription{}
 	for rows.Next() {
 		var s service.FundingSubscription
@@ -284,7 +284,7 @@ func teamInvitations(ctx context.Context, q teamFundingQuery, team, user int64, 
 	if e != nil {
 		return nil, e
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := []service.Invitation{}
 	for rows.Next() {
 		v, e := scanInvitation(rows)
@@ -475,7 +475,7 @@ func (r *teamFundingRepository) ListLedger(ctx context.Context, user, team int64
 	if e != nil {
 		return nil, e
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var v service.TeamLedgerEntry
 		if e := rows.Scan(&v.ID, &v.RequestID, &v.UserID, &v.PayerUserID, &v.TeamID, &v.Source, &v.SubscriptionID, &v.Amount, &v.UnauthorizedAmount, &v.CreatedAt); e != nil {

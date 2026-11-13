@@ -282,10 +282,10 @@ func TestFundingBudgetAndSubscriptionScope(t *testing.T) {
 	require.True(t, teamFundingBudgetAvailable(team))
 	now := time.Now()
 	sub := UserSubscription{GroupID: 5, Status: SubscriptionStatusActive, StartsAt: now.Add(-time.Hour), ExpiresAt: now.Add(time.Hour)}
-	require.True(t, fundingSubscriptionAvailable(&sub, &Group{ID: 5}, now))
-	require.False(t, fundingSubscriptionAvailable(&sub, &Group{ID: 6}, now))
+	require.True(t, fundingSubscriptionCovers(&sub, &Group{ID: 5}, now, nil))
+	require.False(t, fundingSubscriptionCovers(&sub, &Group{ID: 6}, now, nil))
 	sub.StartsAt = now.Add(time.Minute)
-	require.False(t, fundingSubscriptionAvailable(&sub, &Group{ID: 5}, now))
+	require.False(t, fundingSubscriptionCovers(&sub, &Group{ID: 5}, now, nil))
 }
 
 func TestFundingDispatchGuardPersistsOnceAndRejectsReplay(t *testing.T) {
@@ -306,12 +306,12 @@ func TestConfiguredFundingIsRejectedInSimpleMode(t *testing.T) {
 
 func TestFundingOperationIDIsStableAndScoped(t *testing.T) {
 	key := &APIKey{ID: 7, UserID: 22}
-	a := fundingOperationRequestID(key, "retry-token")
-	require.Equal(t, a, fundingOperationRequestID(key, "retry-token"))
-	require.NotEqual(t, a, fundingOperationRequestID(key, "different-token"))
-	require.NotEqual(t, a, fundingOperationRequestID(&APIKey{ID: 8, UserID: 22}, "retry-token"))
+	a := fundingOperationRequestIDForContext(context.Background(), key, "retry-token")
+	require.Equal(t, a, fundingOperationRequestIDForContext(context.Background(), key, "retry-token"))
+	require.NotEqual(t, a, fundingOperationRequestIDForContext(context.Background(), key, "different-token"))
+	require.NotEqual(t, a, fundingOperationRequestIDForContext(context.Background(), &APIKey{ID: 8, UserID: 22}, "retry-token"))
 	key.DesktopUsage = &DesktopUsage{CallID: "8b6b417d-5a94-44da-a9bb-0b9608193ba4"}
-	require.Equal(t, fundingOperationRequestID(key, ""), fundingOperationRequestID(key, "different-token"))
+	require.Equal(t, fundingOperationRequestIDForContext(context.Background(), key, ""), fundingOperationRequestIDForContext(context.Background(), key, "different-token"))
 }
 
 func TestFundingSubscriptionCostAwareEligibility(t *testing.T) {

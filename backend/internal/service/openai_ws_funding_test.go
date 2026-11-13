@@ -75,7 +75,7 @@ func TestPassthroughFundingPreparesAndDispatchesEveryTurnOnce(t *testing.T) {
 	server, _ := startPassthroughHookRecordingServer(t, controlCtx, newPassthroughLifecycleService(passthroughLifecycleConfig(), upstream), passthroughLifecycleAccount(), hooks)
 	defer server.Close()
 	client := dialPassthroughLifecycleClient(t, server)
-	defer client.CloseNow()
+	defer func() { _ = client.CloseNow() }()
 	require.Equal(t, int64(10), gjson.GetBytes(requirePassthroughUpstreamWrite(t, upstream, time.Second), "max_output_tokens").Int())
 	_, err := readPassthroughLifecycleFrame(t, client, 3*time.Second)
 	require.NoError(t, err)
@@ -108,7 +108,7 @@ func TestGrokRealtimeAbnormalCloseRetainsObservedUsage(t *testing.T) {
 			finished <- outcome{err: err}
 			return
 		}
-		defer client.CloseNow()
+		defer func() { _ = client.CloseNow() }()
 		ctx, cancel := context.WithTimeout(r.Context(), time.Second)
 		defer cancel()
 		audio, err := (&OpenAIGatewayService{}).ProxyGrokRealtimeConn(ctx, nil, client, &GrokRealtimeUpstream{conn: upstream})
@@ -117,7 +117,7 @@ func TestGrokRealtimeAbnormalCloseRetainsObservedUsage(t *testing.T) {
 	defer server.Close()
 	client, _, err := coderws.Dial(t.Context(), "ws"+strings.TrimPrefix(server.URL, "http"), nil)
 	require.NoError(t, err)
-	defer client.CloseNow()
+	defer func() { _ = client.CloseNow() }()
 	select {
 	case result := <-finished:
 		require.True(t, result.audio, "abnormal termination must not erase already-observed billable audio")
@@ -136,7 +136,7 @@ func TestGrokRealtimeRelayStopsAtReservedDeadline(t *testing.T) {
 			finished <- err
 			return
 		}
-		defer client.CloseNow()
+		defer func() { _ = client.CloseNow() }()
 		ctx, cancel := context.WithTimeout(r.Context(), 25*time.Millisecond)
 		defer cancel()
 		_, err = (&OpenAIGatewayService{}).ProxyGrokRealtimeConn(ctx, nil, client, &GrokRealtimeUpstream{conn: upstream})
@@ -146,7 +146,7 @@ func TestGrokRealtimeRelayStopsAtReservedDeadline(t *testing.T) {
 	started := time.Now()
 	client, _, err := coderws.Dial(t.Context(), "ws"+strings.TrimPrefix(server.URL, "http"), nil)
 	require.NoError(t, err)
-	defer client.CloseNow()
+	defer func() { _ = client.CloseNow() }()
 	select {
 	case err := <-finished:
 		require.True(t, errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled), "deadline must terminate both relay directions: %v", err)

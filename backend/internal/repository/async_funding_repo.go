@@ -259,7 +259,7 @@ func (r *teamFundingRepository) ListAsyncFundingForResource(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var tasks []*service.AsyncFundingTask
 	for rows.Next() {
 		task := &service.AsyncFundingTask{}
@@ -284,7 +284,7 @@ func (r *teamFundingRepository) ListPendingAsyncFundingUsage(ctx context.Context
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var tasks []*service.AsyncFundingTask
 	for rows.Next() {
 		task := &service.AsyncFundingTask{}

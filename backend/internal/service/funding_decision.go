@@ -129,9 +129,6 @@ func teamFundingBudgetAvailable(t *TeamFundingCandidate) bool {
 	}
 	return limit.GreaterThan(spent.Add(reserved))
 }
-func fundingSubscriptionAvailable(sub *UserSubscription, g *Group, now time.Time) bool {
-	return fundingSubscriptionCovers(sub, g, now, nil)
-}
 func fundingSubscriptionCovers(sub *UserSubscription, g *Group, now time.Time, required *decimal.Decimal) bool {
 	if sub == nil || g == nil || sub.GroupID != g.ID || sub.Status != SubscriptionStatusActive || sub.StartsAt.After(now) || !sub.ExpiresAt.After(now) || sub.DeletedAt != nil {
 		return false
@@ -579,9 +576,6 @@ func fundingCandidateKey(d *FundingDecision) string {
 	return d.Source
 }
 
-func fundingOperationRequestID(key *APIKey, idempotencyKey string) string {
-	return fundingOperationRequestIDForContext(context.Background(), key, idempotencyKey)
-}
 func fundingOperationRequestIDForContext(ctx context.Context, key *APIKey, idempotencyKey string) string {
 	token := ""
 	if operation := DesktopInferenceOperationID(ctx); operation != "" {
@@ -644,7 +638,7 @@ func prepareFundingTextRequest(path string, body []byte) (prepared []byte, model
 				return fail()
 			}
 			kind, _ := t["type"].(string)
-			if kind != "function" && !(kind == "" && t["input_schema"] != nil && t["name"] != nil) {
+			if kind != "function" && (kind != "" || t["input_schema"] == nil || t["name"] == nil) {
 				return fail()
 			}
 		}
@@ -895,29 +889,6 @@ func (s *APIKeyService) addSharedSubscriptionGroups(ctx context.Context, userID 
 	return nil
 }
 
-func (s *APIKeyService) strictFundingTextCost(ctx context.Context, key *APIKey, model string, input, output, count int) (string, error) {
-	candidates := []string{model}
-	if s.fundingPricing != nil && s.fundingPricing.channelService != nil && key.GroupID != nil {
-		m := s.fundingPricing.channelService.ResolveChannelMapping(ctx, *key.GroupID, model)
-		if m.MappedModel != "" && m.MappedModel != model && m.BillingModelSource != BillingModelSourceRequested {
-			candidates = append(candidates, m.MappedModel)
-		}
-	}
-	best := decimal.Zero
-	for _, candidate := range candidates {
-		v, err := s.strictFundingTextCostOne(ctx, key, candidate, input, output, count)
-		if err != nil {
-			return "", err
-		}
-		amount, err := decimal.NewFromString(v)
-		if err != nil {
-			return "", err
-		}
-		best = decimal.Max(best, amount)
-	}
-	return best.StringFixed(8), nil
-}
-
 type fundingDispatchKey struct{}
 type readOnlyFundingKey struct{}
 
@@ -1068,7 +1039,7 @@ func ValidateFundingDispatchRequest(req *http.Request) error {
 	if err != nil {
 		return ErrTeamFundingCostUnbounded.WithCause(err)
 	}
-	defer body.Close()
+	defer func() { _ = body.Close() }()
 	data, err := io.ReadAll(io.LimitReader(body, int64(g.maxInputBytes)+1))
 	if err != nil || len(data) > g.maxInputBytes {
 		return ErrTeamFundingCostUnbounded
@@ -1108,7 +1079,7 @@ func ValidateFundingDispatchRequest(req *http.Request) error {
 				return ErrTeamFundingCostUnbounded
 			}
 			kind, _ := tool["type"].(string)
-			if kind != "function" && !(kind == "" && tool["input_schema"] != nil && tool["name"] != nil) {
+			if kind != "function" && (kind != "" || tool["input_schema"] == nil || tool["name"] == nil) {
 				return ErrTeamFundingCostUnbounded
 			}
 		}

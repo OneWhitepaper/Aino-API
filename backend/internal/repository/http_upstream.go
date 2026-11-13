@@ -180,6 +180,10 @@ type httpUpstreamService struct {
 // 返回:
 //   - service.HTTPUpstream 接口实现
 func NewHTTPUpstream(cfg *config.Config) service.HTTPUpstream {
+	return newHTTPUpstream(cfg)
+}
+
+func newHTTPUpstream(cfg *config.Config) *httpUpstreamService {
 	return &httpUpstreamService{
 		cfg:     cfg,
 		clients: make(map[string]*upstreamClientEntry),
@@ -189,7 +193,7 @@ func NewHTTPUpstream(cfg *config.Config) service.HTTPUpstream {
 // ProvideHTTPUpstream keeps the lightweight constructor available to transport
 // tests while production can load the exact account for funding authorization.
 func ProvideHTTPUpstream(cfg *config.Config, accounts service.AccountRepository) service.HTTPUpstream {
-	upstream := NewHTTPUpstream(cfg).(*httpUpstreamService)
+	upstream := newHTTPUpstream(cfg)
 	upstream.accountRepo = accounts
 	return upstream
 }

@@ -225,7 +225,7 @@ func reserveTeamSubscription(ctx context.Context, tx *sql.Tx, c *service.TeamFun
 	return windows, e
 }
 func (r *teamFundingRepository) MarkDispatched(ctx context.Context, id, user int64) error {
-	res, e := r.db.ExecContext(ctx, "UPDATE team_funding_reservations SET status='dispatched',updated_at=NOW() WHERE id=$1 AND member_user_id=$2 AND status IN ('reserved','dispatched')", id, user)
+	res, e := r.db.ExecContext(ctx, "UPDATE team_funding_reservations SET status='dispatched',updated_at=NOW() WHERE id=$1 AND member_user_id=$2 AND status='reserved'", id, user)
 	if e != nil {
 		return e
 	}

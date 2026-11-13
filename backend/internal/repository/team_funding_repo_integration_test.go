@@ -375,3 +375,39 @@ func TestTeamFundingZeroCapRejectsEvenZeroCostSharedReservation(t *testing.T) {
 	_, e := teamFundingReserve(repo, owner, member, team, key, "0")
 	require.ErrorIs(t, e, service.ErrTeamFundingConflict)
 }
+
+func TestTeamFundingMarkDispatchedConcurrentCallersOnlyDispatchOnce(t *testing.T) {
+	ctx := context.Background()
+	repo, owner, member, team, key := teamFundingFixture(t)
+	reservation, err := teamFundingReserve(repo, owner, member, team, key, "10")
+	require.NoError(t, err)
+	const callers = 20
+	start := make(chan struct{})
+	outcomes := make(chan error, callers)
+	for range callers {
+		go func() {
+			<-start
+			outcomes <- repo.MarkDispatched(ctx, reservation.ID, member)
+		}()
+	}
+	close(start)
+	dispatched := 0
+	for range callers {
+		err := <-outcomes
+		if err == nil {
+			dispatched++
+		} else {
+			require.ErrorIs(t, err, service.ErrTeamFundingConflict)
+		}
+	}
+	require.Equal(t, 1, dispatched, "a persisted reservation authorizes exactly one upstream dispatch")
+	require.ErrorIs(t, repo.MarkDispatched(ctx, reservation.ID, member), service.ErrTeamFundingConflict)
+	var status, amount, balance, reserved string
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT status,amount::text FROM team_funding_reservations WHERE id=$1", reservation.ID).Scan(&status, &amount))
+	require.Equal(t, "dispatched", status)
+	require.Equal(t, "10.00000000", amount)
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT balance::text FROM users WHERE id=$1", owner).Scan(&balance))
+	require.Equal(t, "490.00000000", balance)
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT reserved::text FROM team_members WHERE team_id=$1 AND user_id=$2", team, member).Scan(&reserved))
+	require.Equal(t, "10.00000000", reserved)
+}

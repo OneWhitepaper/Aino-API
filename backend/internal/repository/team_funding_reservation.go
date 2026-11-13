@@ -20,6 +20,7 @@ func (r *teamFundingRepository) GetFundingContext(ctx context.Context, user int6
 		if e != nil {
 			return nil, e
 		}
+		out.ImplicitOwner = p.Configured
 		return out, nil
 	}
 	if e != nil {

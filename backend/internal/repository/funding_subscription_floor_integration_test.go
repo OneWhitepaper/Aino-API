@@ -78,6 +78,10 @@ func TestTeamFundingOwnerWithoutPreferencesUsesProtectedPersonalContext(t *testi
 	funding, err := repo.GetFundingContext(ctx, owner)
 	require.NoError(t, err)
 	require.True(t, funding.Preferences.Configured)
+	require.True(t, funding.ImplicitOwner)
+	var preferenceRows int
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM funding_preferences WHERE user_id=$1", owner).Scan(&preferenceRows))
+	require.Zero(t, preferenceRows)
 	require.Equal(t, service.FundingModePersonalFirst, funding.Preferences.Mode)
 	require.True(t, funding.Preferences.AllowPersonalBalance)
 	require.True(t, funding.Preferences.AllowPersonalSubscription)
@@ -86,6 +90,12 @@ func TestTeamFundingOwnerWithoutPreferencesUsesProtectedPersonalContext(t *testi
 	funding, err = repo.GetFundingContext(ctx, legacy.ID)
 	require.NoError(t, err)
 	require.False(t, funding.Preferences.Configured)
+	require.False(t, funding.ImplicitOwner)
+	_, err = repo.UpdateFunding(ctx, owner, &service.FundingUpdateCommand{Mode: service.FundingModePersonalFirst, AllowPersonalBalance: true, AllowPersonalSubscription: true})
+	require.NoError(t, err)
+	funding, err = repo.GetFundingContext(ctx, owner)
+	require.NoError(t, err)
+	require.False(t, funding.ImplicitOwner)
 }
 
 func TestFundingSubscriptionFloorUsesEachWindowAndPreservesFractionalUsage(t *testing.T) {

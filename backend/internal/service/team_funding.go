@@ -193,8 +193,9 @@ type FundingUpdateCommand struct {
 	AllowPersonalSubscription bool   `json:"allow_personal_subscription"`
 }
 type FundingContext struct {
-	Preferences FundingPreferences
-	Team        *TeamFundingCandidate
+	ImplicitOwner bool
+	Preferences   FundingPreferences
+	Team          *TeamFundingCandidate
 }
 type TeamFundingCandidate struct {
 	TeamID                            int64

@@ -143,6 +143,7 @@ func TestBatchImageSharedFundingSettlementChargesActorCapAndOriginalPayerOnce(t 
 	ctx := context.Background()
 	repo, funding, key, owner := asyncFundingFixture(t)
 	account := mustCreateAccount(t, testEntClient(t), &service.Account{Name: "batch-shared-" + uuid.NewString(), Platform: service.PlatformGemini, Type: service.AccountTypeAPIKey, Credentials: map[string]any{"api_key": "fixture"}})
+	t.Cleanup(func() { require.NoError(t, testEntClient(t).Account.DeleteOneID(account.ID).Exec(ctx)) })
 	batchID := "imgbatch_" + strings.ReplaceAll(uuid.NewString(), "-", "")
 	require.NoError(t, funding.HandoffFundingToAsync(ctx, key, service.AsyncFundingProviderBatchImage, batchID))
 	require.NoError(t, service.BeginFundingDispatch(service.FundingDispatchContext(ctx, key)))

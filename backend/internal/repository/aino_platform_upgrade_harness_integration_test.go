@@ -56,6 +56,8 @@ func TestAinoV028UpgradePreservesManagedCredentialsAndClientOrders(t *testing.T)
 		"244_gemini_cached_contents_channel_usage.sql":  true,
 		"245_gemini_cached_contents_mutation_lease.sql": true,
 		"246_enable_gemini_image_generation_groups.sql": true,
+		// This later migration depends on the cache table created during upgrade.
+		"261_gemini_cache_funding_snapshots.sql": true,
 	}
 	db := newAinoHistoricalDatabase(t, func(name string) bool { return !upstreamAdditions[name] })
 	ctx := context.Background()

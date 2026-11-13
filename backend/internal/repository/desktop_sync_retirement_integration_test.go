@@ -77,8 +77,16 @@ func TestDesktopSyncRetirementDeletesOnlyCloudData(t *testing.T) {
 		return result
 	}
 	before := snapshot()
-	var oldChecksums string
-	require.NoError(t, db.QueryRowContext(ctx, `SELECT string_agg(filename||':'||checksum,',' ORDER BY filename) FROM schema_migrations`).Scan(&oldChecksums))
+	oldChecksums := map[string]string{}
+	rows, err := db.QueryContext(ctx, "SELECT filename,checksum FROM schema_migrations")
+	require.NoError(t, err)
+	for rows.Next() {
+		var name, checksum string
+		require.NoError(t, rows.Scan(&name, &checksum))
+		oldChecksums[name] = checksum
+	}
+	require.NoError(t, rows.Err())
+	require.NoError(t, rows.Close())
 	for range 2 {
 		require.NoError(t, ApplyMigrations(ctx, db))
 	}
@@ -93,8 +101,9 @@ func TestDesktopSyncRetirementDeletesOnlyCloudData(t *testing.T) {
 		require.False(t, exists, table)
 	}
 	require.Equal(t, before, snapshot(), "all account, key, metadata, model and billing rows must remain byte-for-byte identical")
-	var afterChecksums string
-	require.NoError(t, db.QueryRowContext(ctx, `SELECT string_agg(filename||':'||checksum,',' ORDER BY filename)
-		FROM schema_migrations WHERE filename <> '256_remove_desktop_cloud_sync.sql'`).Scan(&afterChecksums))
-	require.Equal(t, oldChecksums, afterChecksums, "historical migration checksums must remain valid")
+	for name, checksum := range oldChecksums {
+		var got string
+		require.NoError(t, db.QueryRowContext(ctx, "SELECT checksum FROM schema_migrations WHERE filename=$1", name).Scan(&got))
+		require.Equal(t, checksum, got, "historical migration checksum must remain valid: %s", name)
+	}
 }

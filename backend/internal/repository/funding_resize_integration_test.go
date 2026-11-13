@@ -91,7 +91,7 @@ func TestFundingResizeSubscriptionFailureRollsBackRefundAndAnchors(t *testing.T)
 	ctx := context.Background()
 	r, user, key := personalFundingFixture(t, 0)
 	limit := 50.0
-	group := mustCreateGroup(t, testEntClient(t), &service.Group{Name: "resize-sub-" + uuid.NewString(), Platform: service.PlatformOpenAI, SubscriptionType: service.SubscriptionTypeSubscription, DailyLimitUSD: &limit, WeeklyLimitUSD: &limit, MonthlyLimitUSD: &limit})
+	group := teamFundingGroup(t, &service.Group{Name: "resize-sub-" + uuid.NewString(), Platform: service.PlatformOpenAI, SubscriptionType: service.SubscriptionTypeSubscription, DailyLimitUSD: &limit, WeeklyLimitUSD: &limit, MonthlyLimitUSD: &limit})
 	sub := mustCreateSubscription(t, testEntClient(t), &service.UserSubscription{UserID: user, GroupID: group.ID})
 	_, err := r.UpdateFunding(ctx, user, &service.FundingUpdateCommand{Mode: service.FundingModeSubscriptionOnly, AllowPersonalSubscription: true})
 	require.NoError(t, err)

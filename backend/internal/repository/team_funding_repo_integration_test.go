@@ -18,7 +18,9 @@ import (
 
 func teamFundingUser(t *testing.T, balance float64) *service.User {
 	t.Helper()
-	return mustCreateUser(t, testEntClient(t), &service.User{Email: fmt.Sprintf("team-%s@example.com", uuid.NewString()), PasswordHash: "hash", Balance: balance})
+	u := mustCreateUser(t, testEntClient(t), &service.User{Email: fmt.Sprintf("team-%s@example.com", uuid.NewString()), PasswordHash: "hash", Balance: balance})
+	t.Cleanup(func() { CleanupFundingIntegrationUsers(t, u.ID) })
+	return u
 }
 func teamFundingFixture(t *testing.T) (service.TeamFundingRepository, int64, int64, int64, int64) {
 	t.Helper()
@@ -249,7 +251,7 @@ func TestTeamFundingSubscriptionSelectionWindowsAndAtomicRefund(t *testing.T) {
 	ctx := context.Background()
 	repo, owner, member, team, key := teamFundingFixture(t)
 	limit := 100.0
-	g := mustCreateGroup(t, testEntClient(t), &service.Group{Name: "team-sub-" + uuid.NewString(), Platform: service.PlatformOpenAI, SubscriptionType: service.SubscriptionTypeSubscription, DailyLimitUSD: &limit, WeeklyLimitUSD: &limit, MonthlyLimitUSD: &limit})
+	g := teamFundingGroup(t, &service.Group{Name: "team-sub-" + uuid.NewString(), Platform: service.PlatformOpenAI, SubscriptionType: service.SubscriptionTypeSubscription, DailyLimitUSD: &limit, WeeklyLimitUSD: &limit, MonthlyLimitUSD: &limit})
 	sub := mustCreateSubscription(t, testEntClient(t), &service.UserSubscription{UserID: owner, GroupID: g.ID})
 	ids := []int64{sub.ID}
 	mode := "subscription_only"
@@ -309,7 +311,7 @@ func TestTeamFundingReservationIdempotenceAndCrossSourceMemberCap(t *testing.T) 
 	conflict.Amount = "61"
 	_, e = repo.Reserve(ctx, &conflict)
 	require.ErrorIs(t, e, service.ErrUsageBillingRequestConflict)
-	g := mustCreateGroup(t, testEntClient(t), &service.Group{Name: "mixed-sub-" + uuid.NewString(), Platform: service.PlatformOpenAI, SubscriptionType: service.SubscriptionTypeSubscription})
+	g := teamFundingGroup(t, &service.Group{Name: "mixed-sub-" + uuid.NewString(), Platform: service.PlatformOpenAI, SubscriptionType: service.SubscriptionTypeSubscription})
 	sub := mustCreateSubscription(t, testEntClient(t), &service.UserSubscription{UserID: owner, GroupID: g.ID})
 	ids := []int64{sub.ID}
 	_, e = repo.UpdateTeam(ctx, owner, team, &service.TeamUpdateCommand{SharedSubscriptionIDs: &ids})
@@ -345,7 +347,7 @@ func TestTeamFundingManagementPermissionsAndMissingPreferencesKeepLegacy(t *test
 	_, e = repo.UpdateFunding(ctx, owner, &service.FundingUpdateCommand{Mode: "team_only", TeamID: &team})
 	require.ErrorIs(t, e, service.ErrTeamFundingForbidden)
 	other := teamFundingUser(t, 0)
-	g := mustCreateGroup(t, testEntClient(t), &service.Group{Name: "foreign-sub-" + uuid.NewString(), Platform: service.PlatformOpenAI, SubscriptionType: service.SubscriptionTypeSubscription})
+	g := teamFundingGroup(t, &service.Group{Name: "foreign-sub-" + uuid.NewString(), Platform: service.PlatformOpenAI, SubscriptionType: service.SubscriptionTypeSubscription})
 	sub := mustCreateSubscription(t, testEntClient(t), &service.UserSubscription{UserID: other.ID, GroupID: g.ID})
 	ids := []int64{sub.ID}
 	_, e = repo.UpdateTeam(ctx, owner, team, &service.TeamUpdateCommand{SharedSubscriptionIDs: &ids})

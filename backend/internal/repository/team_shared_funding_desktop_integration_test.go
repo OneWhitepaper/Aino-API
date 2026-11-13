@@ -27,6 +27,7 @@ import (
 func TestTeamFundingManagementHTTPUsesJWTActor(t *testing.T) {
 	r := newDesktopModelRig(t)
 	owner, member, outsider := r.user(t, service.StatusActive, false), r.user(t, service.StatusActive, false), r.user(t, service.StatusActive, false)
+	defer repository.CleanupFundingIntegrationUsers(t, owner.ID, member.ID, outsider.ID)
 	funding := service.NewTeamFundingService(repository.NewTeamFundingRepository(r.client, repository.GetIntegrationDB()))
 	h := handler.NewTeamFundingHandler(funding)
 	user := r.router.Group("/api/v1/user")
@@ -91,6 +92,7 @@ func testDesktopTeamSharedZeroPersonalWallet(t *testing.T, sharedSubscription bo
 	t.Helper()
 	r := newDesktopModelRig(t)
 	owner, member := r.user(t, service.StatusActive, false), r.user(t, service.StatusActive, false)
+	defer repository.CleanupFundingIntegrationUsers(t, owner.ID, member.ID)
 	_, err := r.userRepo.SetBalance(r.ctx, owner.ID, 500)
 	require.NoError(t, err)
 	_, err = r.userRepo.SetBalance(r.ctx, member.ID, 0)

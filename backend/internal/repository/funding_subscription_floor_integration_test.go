@@ -15,7 +15,7 @@ func TestFundingSubscriptionFloorProtectsEscrowAndRecordsShortfall(t *testing.T)
 	ctx := context.Background()
 	funding, owner, member, team, key := teamFundingFixture(t)
 	limit := 100.0
-	group := mustCreateGroup(t, testEntClient(t), &service.Group{Name: "floor-sub-" + uuid.NewString(), Platform: service.PlatformOpenAI, SubscriptionType: service.SubscriptionTypeSubscription, DailyLimitUSD: &limit, WeeklyLimitUSD: &limit, MonthlyLimitUSD: &limit})
+	group := teamFundingGroup(t, &service.Group{Name: "floor-sub-" + uuid.NewString(), Platform: service.PlatformOpenAI, SubscriptionType: service.SubscriptionTypeSubscription, DailyLimitUSD: &limit, WeeklyLimitUSD: &limit, MonthlyLimitUSD: &limit})
 	sub := mustCreateSubscription(t, testEntClient(t), &service.UserSubscription{UserID: owner, GroupID: group.ID})
 	ids := []int64{sub.ID}
 	_, err := funding.UpdateTeam(ctx, owner, team, &service.TeamUpdateCommand{SharedSubscriptionIDs: &ids})
@@ -58,7 +58,7 @@ func TestFundingSubscriptionFloorPreservesUnsharedLegacyBehavior(t *testing.T) {
 	ctx := context.Background()
 	owner := teamFundingUser(t, 0)
 	limit := 10.0
-	group := mustCreateGroup(t, testEntClient(t), &service.Group{Name: "unshared-floor-" + uuid.NewString(), Platform: service.PlatformOpenAI, SubscriptionType: service.SubscriptionTypeSubscription, DailyLimitUSD: &limit})
+	group := teamFundingGroup(t, &service.Group{Name: "unshared-floor-" + uuid.NewString(), Platform: service.PlatformOpenAI, SubscriptionType: service.SubscriptionTypeSubscription, DailyLimitUSD: &limit})
 	sub := mustCreateSubscription(t, testEntClient(t), &service.UserSubscription{UserID: owner.ID, GroupID: group.ID})
 	tx, err := integrationDB.BeginTx(ctx, nil)
 	require.NoError(t, err)
@@ -105,7 +105,7 @@ func TestFundingSubscriptionFloorUsesEachWindowAndPreservesFractionalUsage(t *te
 	for _, window := range []string{"daily_usage_usd", "weekly_usage_usd", "monthly_usage_usd"} {
 		t.Run(window, func(t *testing.T) {
 			limit := 10.0
-			group := mustCreateGroup(t, testEntClient(t), &service.Group{Name: "window-floor-" + uuid.NewString(), Platform: service.PlatformOpenAI, SubscriptionType: service.SubscriptionTypeSubscription, DailyLimitUSD: &limit, WeeklyLimitUSD: &limit, MonthlyLimitUSD: &limit})
+			group := teamFundingGroup(t, &service.Group{Name: "window-floor-" + uuid.NewString(), Platform: service.PlatformOpenAI, SubscriptionType: service.SubscriptionTypeSubscription, DailyLimitUSD: &limit, WeeklyLimitUSD: &limit, MonthlyLimitUSD: &limit})
 			sub := mustCreateSubscription(t, testEntClient(t), &service.UserSubscription{UserID: owner, GroupID: group.ID})
 			ids := []int64{sub.ID}
 			_, err := repo.UpdateTeam(ctx, owner, team, &service.TeamUpdateCommand{SharedSubscriptionIDs: &ids})

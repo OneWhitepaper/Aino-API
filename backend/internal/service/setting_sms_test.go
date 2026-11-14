@@ -124,3 +124,95 @@ func TestSMSSettingsConfiguredBooleansRejectWhitespaceSecrets(t *testing.T) {
 	require.False(t, settings.HMACConfigured)
 	require.False(t, settings.Ready)
 }
+
+func TestSMSSettingsTemplateParamsReplaceDeploymentMapping(t *testing.T) {
+	cfg := smsSettingsFixture()
+	cfg.SMS.Enabled = true
+	cfg.SMS.TemplateParams = map[string]string{"code": "code", "ttl": "ttl_minutes"}
+	repo := &settingRepoStub{values: map[string]string{
+		"sms.template_params": `{"code":"code","time":"ttl_minutes"}`,
+	}}
+	s := NewSettingService(repo, cfg)
+
+	settings, err := s.GetSMSSettings(context.Background())
+
+	require.NoError(t, err)
+	require.True(t, settings.Ready)
+	require.Equal(t, map[string]string{"code": "code", "time": "ttl_minutes"}, settings.TemplateParams)
+	require.Equal(t, map[string]string{"code": "code", "ttl": "ttl_minutes"}, cfg.SMS.TemplateParams)
+}
+
+func TestSMSSettingsTemplateParamRenamesRemovePreviousVariables(t *testing.T) {
+	cfg := smsSettingsFixture()
+	cfg.SMS.Enabled = true
+	cfg.SMS.TemplateParams = map[string]string{"code": "code", "ttl": "ttl_minutes"}
+	repo := &settingRepoStub{values: map[string]string{}}
+	s := NewSettingService(repo, cfg)
+
+	for _, mapping := range []struct {
+		stored string
+		want   map[string]string
+	}{
+		{`{"code":"code","time":"ttl_minutes"}`, map[string]string{"code": "code", "time": "ttl_minutes"}},
+		{`{"otp":"code","minutes":"ttl_minutes"}`, map[string]string{"otp": "code", "minutes": "ttl_minutes"}},
+		{`{"code":"code","time":"ttl_minutes"}`, map[string]string{"code": "code", "time": "ttl_minutes"}},
+	} {
+		repo.values["sms.template_params"] = mapping.stored
+		runtime, err := s.smsRuntimeConfig(context.Background())
+		require.NoError(t, err)
+		require.Equal(t, mapping.want, runtime.TemplateParams)
+	}
+	require.Equal(t, map[string]string{"code": "code", "ttl": "ttl_minutes"}, cfg.SMS.TemplateParams)
+}
+
+func TestSMSSettingsMissingTemplateParamsUseUnmodifiedDeploymentMapping(t *testing.T) {
+	cfg := smsSettingsFixture()
+	cfg.SMS.Enabled = true
+	cfg.SMS.TemplateParams = map[string]string{"code": "code", "ttl": "ttl_minutes"}
+	repo := &settingRepoStub{values: map[string]string{
+		"sms.template_params": `{"code":"code","time":"ttl_minutes"}`,
+	}}
+	s := NewSettingService(repo, cfg)
+	_, err := s.GetSMSSettings(context.Background())
+	require.NoError(t, err)
+	delete(repo.values, "sms.template_params")
+
+	runtime, err := s.smsRuntimeConfig(context.Background())
+
+	require.NoError(t, err)
+	require.Equal(t, map[string]string{"code": "code", "ttl": "ttl_minutes"}, runtime.TemplateParams)
+}
+
+func TestSMSSettingsEmptyTemplateParamsDoNotUseDeploymentVariables(t *testing.T) {
+	cfg := smsSettingsFixture()
+	cfg.SMS.Enabled = true
+	s := NewSettingService(&settingRepoStub{values: map[string]string{"sms.template_params": `{}`}}, cfg)
+
+	settings, err := s.GetSMSSettings(context.Background())
+
+	require.NoError(t, err)
+	require.False(t, settings.Ready)
+	require.Empty(t, settings.TemplateParams)
+	_, err = s.smsRuntimeConfig(context.Background())
+	require.ErrorIs(t, err, ErrSMSNotConfigured)
+}
+
+func TestSMSRequestCodeUsesOnlyStoredTemplateVariables(t *testing.T) {
+	cfg := smsSettingsFixture()
+	cfg.SMS.Enabled = true
+	cfg.SMS.TemplateParams = map[string]string{"code": "code", "ttl": "ttl_minutes"}
+	settings := NewSettingService(&settingRepoStub{values: map[string]string{
+		"sms.template_params": `{"code":"code","time":"ttl_minutes"}`,
+	}}, cfg)
+	sender := &smsTestSender{result: SMSSendResult{Code: "OK"}}
+	sms := newSMSTestService(sender, &smsTestCache{})
+	sms.settings = settings
+
+	challenge, err := sms.RequestCode(context.Background(), PhoneCodeInput{
+		Phone: "13900000000", Purpose: "login", ClientIP: "192.0.2.10",
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, challenge)
+	require.Equal(t, map[string]string{"code": "123456", "time": "5"}, sender.message.Params)
+}

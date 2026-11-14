@@ -126,6 +126,11 @@ func (s *SettingService) smsSettingsFromValues(values map[string]string) (*SMSSe
 	if err != nil {
 		return nil, ErrSMSNotConfigured
 	}
+	if _, ok := stored["template_params"]; ok {
+		// Template variables are an exact replacement. Unmarshaling into the
+		// deployment map would retain removed keys and mutate shared config.
+		e.TemplateParams = nil
+	}
 	if err := json.Unmarshal(encoded, &e); err != nil {
 		return nil, ErrSMSNotConfigured
 	}

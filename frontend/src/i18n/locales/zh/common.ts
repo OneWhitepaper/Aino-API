@@ -265,6 +265,12 @@ export default {
     errors: {
       USER_NOT_ACTIVE: '账号已被禁用',
       EMAIL_BLOCKED: '该邮箱不允许注册，请更换其他邮箱。',
+      SMS_DELIVERY_FAILED: '短信验证码发送失败，请稍后重试，或使用邮箱登录。',
+      SMS_DELIVERY_UNKNOWN: '短信发送状态暂时无法确认，请稍候查收，避免重复发送。',
+      SMS_NOT_CONFIGURED: '短信登录暂不可用，请使用邮箱登录或联系管理员。',
+      SMS_DISABLED: '短信登录暂未开启，请使用邮箱登录。',
+      SMS_UNAVAILABLE: '短信服务暂不可用，请稍后重试，或使用邮箱登录。',
+      SMS_RATE_LIMITED: '验证码请求过于频繁，请稍后重试。',
     },
     registrationFailed: '注册失败，请重试。',
     emailDomainRegistrationLimit:

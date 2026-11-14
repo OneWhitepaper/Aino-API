@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/util/logredact"
 	openapi "github.com/alibabacloud-go/darabonba-openapi/v2/client"
 	dysmsapi "github.com/alibabacloud-go/dysmsapi-20170525/v4/client"
 	"github.com/alibabacloud-go/tea/tea"
@@ -130,4 +131,45 @@ func TestAliyunSMSSenderBuildsClientFromCurrentDeliveryOptions(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "cn-shanghai", gotRegion)
 	require.Equal(t, 9*time.Second, gotTimeout)
+}
+
+func TestAliyunSMSSenderRetainsSafeProviderStatusAfterLogRedaction(t *testing.T) {
+	sender, server := newAliyunSMSBoundarySender(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"Code":"isv.SMS_TEMPLATE_ILLEGAL","Message":"fixture-private-provider-message 13900000000 654321","RequestId":"request-id"}`))
+	}), time.Second)
+	defer server.Close()
+
+	_, err := sender.Send(context.Background(), SMSMessage{
+		Phone: "+8613900000000", SignName: "test-sign", TemplateCode: "SMS_FIXTURE", Params: map[string]string{"code": "654321"},
+	})
+
+	require.Error(t, err)
+	logged := logredact.RedactText(err.Error() + " code=654321 authorization_code=fixture-auth-secret")
+	require.Contains(t, logged, "provider_status=isv.SMS_TEMPLATE_ILLEGAL")
+	for _, private := range []string{"fixture-private-provider-message", "13900000000", "654321", "fixture-auth-secret"} {
+		require.NotContains(t, logged, private)
+	}
+	require.Contains(t, logged, "code=***")
+	require.Contains(t, logged, "authorization_code=***")
+}
+
+func TestAliyunSMSSenderDoesNotLogMalformedProviderStatus(t *testing.T) {
+	for _, status := range []string{"", "654321", "isv.BAD\nprivate-value", "isv.BAD code=654321", "isv.BAD?secret", "isv.错误", "A" + strings.Repeat("x", 128)} {
+		t.Run(status, func(t *testing.T) {
+			sender, server := newAliyunSMSBoundarySender(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(map[string]string{"Code": status, "Message": "fixture-private-provider-message", "RequestId": "request-id"})
+			}), time.Second)
+			defer server.Close()
+
+			_, err := sender.Send(context.Background(), SMSMessage{
+				Phone: "+8613900000000", SignName: "test-sign", TemplateCode: "SMS_FIXTURE", Params: map[string]string{"code": "654321"},
+			})
+
+			require.Error(t, err)
+			require.Contains(t, logredact.RedactText(err.Error()), "provider_status=unknown")
+			require.NotContains(t, err.Error(), "fixture-private-provider-message")
+		})
+	}
 }

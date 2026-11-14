@@ -265,6 +265,12 @@ export default {
     errors: {
       USER_NOT_ACTIVE: 'Account has been disabled.',
       EMAIL_BLOCKED: 'This email address is not allowed. Please use a different one.',
+      SMS_DELIVERY_FAILED: 'The verification SMS could not be sent. Please try again later or sign in with email.',
+      SMS_DELIVERY_UNKNOWN: 'The SMS delivery status could not be confirmed. Please wait for the message before sending another.',
+      SMS_NOT_CONFIGURED: 'SMS sign-in is currently unavailable. Please sign in with email or contact an administrator.',
+      SMS_DISABLED: 'SMS sign-in is not enabled. Please sign in with email.',
+      SMS_UNAVAILABLE: 'The SMS service is temporarily unavailable. Please try again later or sign in with email.',
+      SMS_RATE_LIMITED: 'You have requested verification codes too frequently. Please try again later.',
     },
     registrationFailed: 'Registration failed. Please try again.',
     emailDomainRegistrationLimit:

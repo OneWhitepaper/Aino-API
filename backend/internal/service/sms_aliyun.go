@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -16,6 +17,8 @@ import (
 )
 
 const defaultAliyunSMSRequestTimeout = 5 * time.Second
+
+var aliyunSMSProviderStatusPattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_.-]{0,127}$`)
 
 // AliyunSMSSender implements SMSSender using Aliyun Dysmsapi
 type AliyunSMSSender struct {
@@ -167,7 +170,12 @@ func (s *AliyunSMSSender) sendWithClient(ctx context.Context, message SMSMessage
 	}
 
 	if result.Code != "OK" {
-		return result, fmt.Errorf("sms provider rejected request: code=%s", result.Code)
+		status := "unknown"
+		if aliyunSMSProviderStatusPattern.MatchString(result.Code) {
+			status = result.Code
+		}
+		// Keep provider diagnostics distinct from secret verification codes.
+		return result, fmt.Errorf("sms provider rejected request: provider_status=%s", status)
 	}
 
 	return result, nil

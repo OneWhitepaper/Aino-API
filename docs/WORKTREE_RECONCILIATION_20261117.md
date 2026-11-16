@@ -29,3 +29,11 @@ device authorization and revocation behavior. Final local validation passed:
 423 frontend test files / 3,357 tests, ESLint, locale completeness, Vue TypeScript
 build checking and the production Vite build. This reconciliation does not deploy
 the API or publish desktop installation packages.
+
+The integration CI also exposed interference in the existing escaped-content
+allocation regression. `testing.AllocsPerRun` counts allocations across the test
+process, including background workers started by unrelated service tests. The
+same large-input contract now runs in a fresh instance of the test binary with
+the original exact zero-allocation assertion, a bounded timeout and the same
+compiled production scanner. Thirty repeated precheck test runs passed locally;
+the scanner and its allocation limit are unchanged.

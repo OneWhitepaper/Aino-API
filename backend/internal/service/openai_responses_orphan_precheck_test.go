@@ -137,7 +137,9 @@ func TestOpenAIResponsesOrphanPrecheckLargeEscapedContent(t *testing.T) {
 		// contract in a fresh test process rather than counting their work.
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^"+t.Name()+"$", "-test.count=1")
+		executable, err := os.Executable()
+		require.NoError(t, err)
+		cmd := exec.CommandContext(ctx, executable, "-test.run=^"+t.Name()+"$", "-test.count=1")
 		cmd.Env = append(os.Environ(), isolated+"=1")
 		output, err := cmd.CombinedOutput()
 		require.NoError(t, err, "%s", output)

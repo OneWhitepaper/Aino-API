@@ -117,6 +117,7 @@ type APIKeyMutation struct {
 	updated_at                       *time.Time
 	deleted_at                       *time.Time
 	desktop_managed                  *bool
+	billing_policy                   *string
 	desktop_credential_type          *string
 	desktop_device_id                *string
 	desktop_key_version              *int
@@ -419,6 +420,42 @@ func (m *APIKeyMutation) OldDesktopManaged(ctx context.Context) (v bool, err err
 // ResetDesktopManaged resets all changes to the "desktop_managed" field.
 func (m *APIKeyMutation) ResetDesktopManaged() {
 	m.desktop_managed = nil
+}
+
+// SetBillingPolicy sets the "billing_policy" field.
+func (m *APIKeyMutation) SetBillingPolicy(s string) {
+	m.billing_policy = &s
+}
+
+// BillingPolicy returns the value of the "billing_policy" field in the mutation.
+func (m *APIKeyMutation) BillingPolicy() (r string, exists bool) {
+	v := m.billing_policy
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBillingPolicy returns the old "billing_policy" field's value of the APIKey entity.
+// If the APIKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *APIKeyMutation) OldBillingPolicy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBillingPolicy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBillingPolicy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBillingPolicy: %w", err)
+	}
+	return oldValue.BillingPolicy, nil
+}
+
+// ResetBillingPolicy resets all changes to the "billing_policy" field.
+func (m *APIKeyMutation) ResetBillingPolicy() {
+	m.billing_policy = nil
 }
 
 // SetDesktopCredentialType sets the "desktop_credential_type" field.
@@ -1797,7 +1834,7 @@ func (m *APIKeyMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *APIKeyMutation) Fields() []string {
-	fields := make([]string, 0, 28)
+	fields := make([]string, 0, 29)
 	if m.created_at != nil {
 		fields = append(fields, apikey.FieldCreatedAt)
 	}
@@ -1809,6 +1846,9 @@ func (m *APIKeyMutation) Fields() []string {
 	}
 	if m.desktop_managed != nil {
 		fields = append(fields, apikey.FieldDesktopManaged)
+	}
+	if m.billing_policy != nil {
+		fields = append(fields, apikey.FieldBillingPolicy)
 	}
 	if m.desktop_credential_type != nil {
 		fields = append(fields, apikey.FieldDesktopCredentialType)
@@ -1898,6 +1938,8 @@ func (m *APIKeyMutation) Field(name string) (ent.Value, bool) {
 		return m.DeletedAt()
 	case apikey.FieldDesktopManaged:
 		return m.DesktopManaged()
+	case apikey.FieldBillingPolicy:
+		return m.BillingPolicy()
 	case apikey.FieldDesktopCredentialType:
 		return m.DesktopCredentialType()
 	case apikey.FieldDesktopDeviceID:
@@ -1963,6 +2005,8 @@ func (m *APIKeyMutation) OldField(ctx context.Context, name string) (ent.Value, 
 		return m.OldDeletedAt(ctx)
 	case apikey.FieldDesktopManaged:
 		return m.OldDesktopManaged(ctx)
+	case apikey.FieldBillingPolicy:
+		return m.OldBillingPolicy(ctx)
 	case apikey.FieldDesktopCredentialType:
 		return m.OldDesktopCredentialType(ctx)
 	case apikey.FieldDesktopDeviceID:
@@ -2047,6 +2091,13 @@ func (m *APIKeyMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetDesktopManaged(v)
+		return nil
+	case apikey.FieldBillingPolicy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBillingPolicy(v)
 		return nil
 	case apikey.FieldDesktopCredentialType:
 		v, ok := value.(string)
@@ -2444,6 +2495,9 @@ func (m *APIKeyMutation) ResetField(name string) error {
 		return nil
 	case apikey.FieldDesktopManaged:
 		m.ResetDesktopManaged()
+		return nil
+	case apikey.FieldBillingPolicy:
+		m.ResetBillingPolicy()
 		return nil
 	case apikey.FieldDesktopCredentialType:
 		m.ResetDesktopCredentialType()

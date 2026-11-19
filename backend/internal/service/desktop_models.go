@@ -212,6 +212,9 @@ func (s *DesktopModelService) buildConfiguredModelsProjection(ctx context.Contex
 		if group == nil || !group.ModelAllowlist.Allows(entry.Model) {
 			continue
 		}
+		if desktopBillingPolicy(ctx) == BillingPolicyBalanceOnly && (group.IsSubscriptionType() || !user.CanBindGroup(group.ID, group.IsExclusive)) {
+			continue
+		}
 		model := PlatformModel{Purpose: desktopModelPurpose(entry), ID: entry.ID, Model: entry.Model, DisplayName: entry.DisplayName, ProviderLabel: entry.ProviderLabel, APIMode: entry.APIMode, State: "available", ContextWindow: entry.ContextWindow, MaxOutputTokens: entry.MaxOutputTokens, Capabilities: entry.Capabilities, BillingSource: "balance"}
 		if group.IsSubscriptionType() {
 			model.BillingSource = "subscription"
@@ -259,7 +262,15 @@ func setPlatformModelState(model *PlatformModel, state, reason string) {
 }
 
 func (s *DesktopModelService) applyEligibility(ctx context.Context, user *User, group *Group, platform string, model *PlatformModel) {
+	policy := desktopBillingPolicy(ctx)
+	if policy == BillingPolicyBalanceOnly && (s.keys == nil || s.keys.teamFunding == nil) {
+		setPlatformModelState(model, "unavailable", "DESKTOP_BILLING_UNAVAILABLE")
+		return
+	}
 	if s.eligibility.cfg.RunMode == config.RunModeSimple {
+		if policy == BillingPolicyBalanceOnly {
+			setPlatformModelState(model, "unavailable", "FUNDING_UNAVAILABLE")
+		}
 		return
 	}
 	var err error
@@ -269,7 +280,7 @@ func (s *DesktopModelService) applyEligibility(ctx context.Context, user *User, 
 			setPlatformModelState(model, "unavailable", "DESKTOP_BILLING_UNAVAILABLE")
 			return
 		}
-		decision, fundingErr := s.keys.resolveFundingDecision(ctx, &APIKey{UserID: user.ID, User: actor, GroupID: &group.ID, Group: group})
+		decision, fundingErr := s.keys.resolveFundingDecision(ctx, &APIKey{BillingPolicy: policy, DesktopManaged: policy != "", UserID: user.ID, User: actor, GroupID: &group.ID, Group: group})
 		if fundingErr != nil {
 			setPlatformModelState(model, "unavailable", "FUNDING_UNAVAILABLE")
 			return

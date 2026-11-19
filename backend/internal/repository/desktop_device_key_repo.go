@@ -116,6 +116,9 @@ func (r *apiKeyRepository) EnsureDeviceKey(ctx context.Context, candidate *servi
 		return nil, false, err
 	}
 	active := row.Status == service.StatusActive && row.DeletedAt == nil
+	if candidate.BillingPolicy != "" && candidate.BillingPolicy != row.BillingPolicy {
+		return nil, false, service.ErrDesktopBillingPolicyConflict
+	}
 	if !rotate && !reauthorize {
 		if !active {
 			return nil, false, service.ErrDesktopDeviceKeyRevoked

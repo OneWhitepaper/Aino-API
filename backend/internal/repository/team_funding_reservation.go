@@ -126,7 +126,8 @@ func (r *teamFundingRepository) Reserve(ctx context.Context, c *service.TeamFund
 			return service.ErrTeamFundingForbidden
 		}
 		var keyUser int64
-		if e := tx.QueryRowContext(ctx, "SELECT user_id FROM api_keys WHERE id=$1 AND deleted_at IS NULL", c.APIKeyID).Scan(&keyUser); e != nil || keyUser != c.MemberUserID {
+		var keyPolicy string
+		if e := tx.QueryRowContext(ctx, "SELECT user_id,billing_policy FROM api_keys WHERE id=$1 AND deleted_at IS NULL", c.APIKeyID).Scan(&keyUser, &keyPolicy); e != nil || keyUser != c.MemberUserID || keyPolicy != "" {
 			return service.ErrTeamFundingForbidden
 		}
 		var payerState string

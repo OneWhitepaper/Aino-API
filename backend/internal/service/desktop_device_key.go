@@ -32,6 +32,7 @@ type DesktopDeviceKeyRepository interface {
 }
 
 type DesktopDeviceKeyRequest struct {
+	BillingPolicy   string `json:"billing_policy,omitempty"`
 	DeviceID        string `json:"device_id"`
 	Rotate          bool   `json:"rotate,omitempty"`
 	ExpectedVersion *int   `json:"expected_version,omitempty"`
@@ -39,12 +40,13 @@ type DesktopDeviceKeyRequest struct {
 }
 
 type DesktopDeviceKeyResponse struct {
-	KeyID     string     `json:"key_id"`
-	DeviceID  string     `json:"device_id"`
-	Version   int        `json:"version"`
-	Status    string     `json:"status"`
-	ExpiresAt *time.Time `json:"expires_at"`
-	APIKey    string     `json:"api_key,omitempty"`
+	BillingPolicy string     `json:"billing_policy"`
+	KeyID         string     `json:"key_id"`
+	DeviceID      string     `json:"device_id"`
+	Version       int        `json:"version"`
+	Status        string     `json:"status"`
+	ExpiresAt     *time.Time `json:"expires_at"`
+	APIKey        string     `json:"api_key,omitempty"`
 }
 
 type DesktopDeviceKeyService struct {
@@ -83,10 +85,13 @@ func deviceKeyResponse(key *APIKey) *DesktopDeviceKeyResponse {
 	if !key.IsActive() || key.DeletedAt != nil {
 		status = "revoked"
 	}
-	return &DesktopDeviceKeyResponse{KeyID: strconv.FormatInt(key.ID, 10), DeviceID: key.DesktopDeviceID, Version: key.DesktopKeyVersion, Status: status}
+	return &DesktopDeviceKeyResponse{BillingPolicy: key.BillingPolicy, KeyID: strconv.FormatInt(key.ID, 10), DeviceID: key.DesktopDeviceID, Version: key.DesktopKeyVersion, Status: status}
 }
 
 func (s *DesktopDeviceKeyService) Ensure(ctx context.Context, userID int64, req DesktopDeviceKeyRequest) (*DesktopDeviceKeyResponse, error) {
+	if err := ValidateDesktopBillingPolicy(req.BillingPolicy); err != nil {
+		return nil, err
+	}
 	if err := validateDesktopDeviceID(req.DeviceID); err != nil {
 		return nil, err
 	}
@@ -105,7 +110,7 @@ func (s *DesktopDeviceKeyService) Ensure(ctx context.Context, userID int64, req 
 		return nil, err
 	}
 	secret := "sk-aino-device-" + base64.RawURLEncoding.EncodeToString(secretBytes)
-	candidate := &APIKey{UserID: userID, Key: HashDesktopDeviceSecret(secret), Name: "Aino desktop", Status: StatusActive, DesktopManaged: true, DesktopCredentialType: DesktopCredentialTypeDevice, DesktopDeviceID: req.DeviceID, DesktopKeyVersion: 1, KeyHashType: "sha256"}
+	candidate := &APIKey{BillingPolicy: req.BillingPolicy, UserID: userID, Key: HashDesktopDeviceSecret(secret), Name: "Aino desktop", Status: StatusActive, DesktopManaged: true, DesktopCredentialType: DesktopCredentialTypeDevice, DesktopDeviceID: req.DeviceID, DesktopKeyVersion: 1, KeyHashType: "sha256"}
 	var previous *APIKey
 	if req.Rotate || req.Reauthorize {
 		previous, err = s.repo.GetDeviceKey(ctx, userID, req.DeviceID)

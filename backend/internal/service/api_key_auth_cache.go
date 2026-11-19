@@ -4,6 +4,7 @@ import "time"
 
 // APIKeyAuthSnapshot API Key 认证缓存快照（仅包含认证所需字段）
 type APIKeyAuthSnapshot struct {
+	BillingPolicy         string                   `json:"billing_policy,omitempty"`
 	AuthorityVerifiedAt   time.Time                `json:"authority_verified_at,omitempty"`
 	DesktopCredentialType string                   `json:"desktop_credential_type,omitempty"`
 	DesktopDeviceID       string                   `json:"desktop_device_id,omitempty"`

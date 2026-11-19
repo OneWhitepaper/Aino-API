@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 )
 
 // DesktopUsage belongs to one HTTP dispatch, never to the cached API key.
@@ -47,20 +48,31 @@ func WithDesktopUsageContext(ctx context.Context, usage *DesktopUsage) context.C
 }
 
 func attachDesktopUsage(log *UsageLog, key *APIKey) {
-	if key == nil || !key.DesktopManaged || key.DesktopUsage == nil {
+	if key == nil || !key.DesktopManaged {
+		return
+	}
+	log.SettlementStatus = "unknown"
+	if key.DesktopUsage == nil {
 		return
 	}
 	u := key.DesktopUsage
 	log.SessionID, log.DesktopTurnID, log.DesktopCallID, log.DesktopPurpose = &u.SessionID, &u.TurnID, &u.CallID, &u.Purpose
-	log.SettlementStatus = "unknown"
 }
 
 // Only the transactional billing path can attest that a charge was settled.
-func settleDesktopUsage(log *UsageLog, cmd *UsageBillingCommand) {
-	if log == nil || log.DesktopCallID == nil {
+func settleDesktopUsage(log *UsageLog, cmd *UsageBillingCommand, result *UsageBillingApplyResult) {
+	if log == nil || log.SettlementStatus != "unknown" || cmd == nil || result == nil || !result.Applied {
 		return
 	}
-	log.ActualCost = QuantizeUsageBillingAmount(cmd.BalanceCost + cmd.SubscriptionCost + cmd.FundingCost)
+	actualCost := cmd.BalanceCost + cmd.SubscriptionCost + cmd.FundingCost
+	if result.FundingChargedAmount != "" {
+		charged, err := decimal.NewFromString(result.FundingChargedAmount)
+		if err != nil || charged.IsNegative() {
+			return
+		}
+		actualCost = charged.InexactFloat64()
+	}
+	log.ActualCost = QuantizeUsageBillingAmount(actualCost)
 	log.SettlementStatus = "settled"
 	if log.ActualCost == 0 {
 		log.SettlementStatus = "not_charged"

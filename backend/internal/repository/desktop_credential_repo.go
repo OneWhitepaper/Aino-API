@@ -67,6 +67,9 @@ func (r *desktopCredentialRepository) IssueOrReuse(ctx context.Context, candidat
 		if !existing.DesktopManaged || !existing.IsActive() || existing.GroupID == nil || *existing.GroupID != candidate.GroupID || existing.UserID != candidate.UserID {
 			return nil, nil, service.ErrDesktopCredentialRevoked
 		}
+		if key.BillingPolicy != "" && key.BillingPolicy != existing.BillingPolicy {
+			return nil, nil, service.ErrDesktopBillingPolicyConflict
+		}
 		if previous.ExpiresAt.After(now) && existing.ExpiresAt != nil && existing.ExpiresAt.After(now) {
 			// Reuse initially; renew after one third of the configured lifetime.
 			if time.Until(previous.ExpiresAt) <= ttl*2/3 || candidate.ExpiresAt.Before(previous.ExpiresAt) {

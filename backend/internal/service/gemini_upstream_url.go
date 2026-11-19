@@ -58,7 +58,7 @@ func IsSafeGeminiModelPathSegment(model string) bool {
 	for _, r := range model {
 		// 中转上游的模型别名可能带中文及 [次] 后缀；仍使用闭集允许清单，
 		// 不接受路径分隔符、百分号或可改变 URL 结构的字符。
-		if !(r < utf8.RuneSelf && isSafeUpstreamPathSegmentByte(byte(r))) &&
+		if (r >= utf8.RuneSelf || !isSafeUpstreamPathSegmentByte(byte(r))) &&
 			r != '[' && r != ']' && !unicode.Is(unicode.Han, r) {
 			return false
 		}

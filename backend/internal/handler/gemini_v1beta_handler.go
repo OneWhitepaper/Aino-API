@@ -260,7 +260,7 @@ func (h *GatewayHandler) GeminiV1BetaGetModel(c *gin.Context) {
 		return
 	}
 	// 模型名会被拼进上游 URL 的 path，先在入口校验片段合规性，
-	// 见 service/upstream_path_guard.go。
+	// 见 service/gemini_upstream_url.go。
 	if !service.IsSafeGeminiModelPathSegment(modelName) {
 		googleError(c, http.StatusBadRequest, "Invalid model in URL")
 		return
@@ -355,7 +355,7 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 		return
 	}
 	// URL 里的模型名最终会被拼进上游 /v1beta/models/{model}:{action}，
-	// 先在入口校验片段合规性，见 service/upstream_path_guard.go。
+	// 先在入口校验片段合规性，见 service/gemini_upstream_url.go。
 	if !service.IsSafeGeminiModelPathSegment(modelName) {
 		googleError(c, http.StatusBadRequest, "Invalid model in URL")
 		return

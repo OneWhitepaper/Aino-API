@@ -931,6 +931,10 @@ func (s *GeminiCachedContentService) boundAccount(ctx context.Context, record *G
 
 // GeminiCachedContentUpstreamModelResource 返回创建缓存时发往上游的模型资源名。
 func GeminiCachedContentUpstreamModelResource(account *Account, mappedModel string) (string, error) {
+	mappedModel = strings.TrimSpace(mappedModel)
+	if err := validateGeminiModelPathSegment(mappedModel); err != nil {
+		return "", err
+	}
 	switch account.Type {
 	case AccountTypeAPIKey:
 		return "models/" + mappedModel, nil

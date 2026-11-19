@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"slices"
 	"sort"
 	"strings"
@@ -193,6 +194,10 @@ func (s *GeminiMessagesCompatService) ForwardGetModel(ctx context.Context, accou
 	if account == nil {
 		return nil, errors.New("account is nil")
 	}
+	model = strings.TrimSpace(model)
+	if err := validateGeminiModelPathSegment(model); err != nil {
+		return nil, err
+	}
 	if !account.IsVertexServiceAccount() {
 		return s.forwardGeminiModelsGET(ctx, account, "/v1beta/models/"+model)
 	}
@@ -220,13 +225,17 @@ func (s *GeminiMessagesCompatService) ForwardGetModel(ctx context.Context, accou
 }
 
 // forwardGeminiModelsGET 向 AI Studio 兼容上游转发模型接口的 GET 请求。
-// path 会被直接拼到上游 base URL 后面，因此按路径护栏逐片段校验，见 upstream_path_guard.go。
+// 只接受固定的模型列表路径或包含一个已校验模型名的详情路径。
 func (s *GeminiMessagesCompatService) forwardGeminiModelsGET(ctx context.Context, account *Account, path string) (*UpstreamHTTPResult, error) {
-	sanitizedPath, ok := sanitizedUpstreamPathSuffix(path)
-	if !ok || sanitizedPath == "" {
-		return nil, errors.New("invalid path")
+	const collectionPath = "/v1beta/models"
+	sanitizedPath := collectionPath
+	if path != collectionPath {
+		model, ok := strings.CutPrefix(path, collectionPath+"/")
+		if !ok || !IsSafeGeminiModelPathSegment(model) || strings.TrimSpace(model) != model {
+			return nil, errors.New("invalid path")
+		}
+		sanitizedPath += "/" + url.PathEscape(model)
 	}
-
 	baseURL := account.GetGeminiBaseURL(geminicli.AIStudioBaseURL)
 	normalizedBaseURL, err := s.validateUpstreamBaseURL(baseURL)
 	if err != nil {

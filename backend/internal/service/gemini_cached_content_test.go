@@ -142,6 +142,29 @@ func TestParseGeminiCachedContentCreateRequest(t *testing.T) {
 	}
 }
 
+func TestGeminiCachedContentResellerModelResource(t *testing.T) {
+	account := &Account{Type: AccountTypeAPIKey}
+	for _, model := range []string{"gemini-4-argon[次]", "gemini-4-carbon[次]", "gemini-3.8-flash-high[次]", "[次]gemini-4-neon"} {
+		t.Run(model, func(t *testing.T) {
+			body, err := json.Marshal(map[string]string{"model": "models/" + model})
+			require.NoError(t, err)
+			req, err := ParseGeminiCachedContentCreateRequest(body, time.Now(), 24*time.Hour)
+			require.NoError(t, err)
+			require.Equal(t, model, req.Model)
+			resource, err := GeminiCachedContentUpstreamModelResource(account, req.Model)
+			require.NoError(t, err)
+			// The model is a JSON resource name, not a URL, so it stays unescaped.
+			require.Equal(t, "models/"+model, resource)
+		})
+	}
+	for _, model := range []string{"gemini[次]/../x", "gemini[次]?key=x", "gemini%5B%E6%AC%A1%5D", "gemini[次]\u200b"} {
+		t.Run("reject_"+model, func(t *testing.T) {
+			_, err := GeminiCachedContentUpstreamModelResource(account, model)
+			require.Error(t, err)
+		})
+	}
+}
+
 func TestParseGeminiCachedContentPatchRequest(t *testing.T) {
 	now := time.Date(2026, 10, 9, 8, 0, 0, 0, time.UTC)
 	ttl, err := ParseGeminiCachedContentPatchRequest([]byte(`{"ttl":"7200s"}`), "ttl", now, 24*time.Hour)

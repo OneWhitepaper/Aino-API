@@ -666,6 +666,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/desktop-models',
+    name: 'AdminDesktopModels',
+    component: () => import('@/views/admin/DesktopModelsView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Built-in Models',
+      titleKey: 'admin.desktopModels.title',
+      descriptionKey: 'admin.desktopModels.description'
+    }
+  },
+  {
     path: '/admin/settings',
     name: 'AdminSettings',
     component: () => import('@/views/admin/SettingsView.vue'),

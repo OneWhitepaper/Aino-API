@@ -1381,7 +1381,13 @@
         </div>
         <!-- /Tab: Gateway -->
 
-        <DesktopModelsSection v-if="form.desktop" v-show="activeTab === 'gateway'" v-model="form.desktop" />
+        <section v-show="activeTab === 'gateway'" class="card flex flex-wrap items-center justify-between gap-4 p-6">
+          <div>
+            <h2 class="text-lg font-semibold">{{ t('admin.desktopModels.title') }}</h2>
+            <p class="mt-1 text-sm text-gray-500">{{ t('admin.desktopModels.movedHint') }}</p>
+          </div>
+          <router-link to="/admin/desktop-models" class="btn btn-secondary">{{ t('admin.desktopModels.manage') }}</router-link>
+        </section>
 
         <!-- Tab: Security — Registration, Turnstile, LinuxDo -->
         <div v-show="activeTab === 'security'" class="space-y-6">
@@ -9000,7 +9006,6 @@ import ImageUpload from "@/components/common/ImageUpload.vue";
 import BackupSettings from "@/views/admin/BackupView.vue";
 import EmailTemplateEditor from "@/views/admin/settings/EmailTemplateEditor.vue";
 import SmsSettingsSection from "@/components/admin/settings/SmsSettingsSection.vue";
-import DesktopModelsSection from "@/components/admin/settings/DesktopModelsSection.vue";
 import RechargeBonusTierEditor from "@/components/admin/settings/RechargeBonusTierEditor.vue";
 import {
   normalizeRechargeBonusMode,
@@ -11475,7 +11480,6 @@ async function saveSettings() {
     }
 
     const payload: UpdateSettingsRequest = {
-      desktop: form.desktop,
       sms: form.sms
         ? (({
             enabled,

@@ -578,6 +578,8 @@ func registerSettingsRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpA
 	{
 		adminSettings.GET("", h.Admin.Setting.GetSettings)
 		adminSettings.PUT("", h.Admin.Setting.UpdateSettings)
+		adminSettings.GET("/desktop", h.Admin.Setting.GetDesktopSettings)
+		adminSettings.PUT("/desktop", h.Admin.Setting.UpdateDesktopSettings)
 		adminSettings.PUT("/site-cache-rate", h.Admin.Setting.UpdateSiteCacheRateVisibility)
 		adminSettings.GET("/contact", h.Admin.Setting.GetContactPage)
 		adminSettings.PUT("/contact", h.Admin.Setting.UpdateContactPage)

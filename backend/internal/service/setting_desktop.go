@@ -61,6 +61,31 @@ func (s *SettingService) GetDesktopSettings(ctx context.Context) (*DesktopSettin
 	return &settings, nil
 }
 
+// UpdateDesktopSettings writes only the desktop catalog. It shares validation
+// and storage with system settings, without refreshing unrelated runtime policy.
+func (s *SettingService) UpdateDesktopSettings(ctx context.Context, settings DesktopSettings) (*DesktopSettings, error) {
+	if settings.CredentialTTLSeconds == 0 {
+		settings.CredentialTTLSeconds = 3600
+	}
+	updates, err := s.buildDesktopSettingsUpdates(settings)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.validateDesktopGroupReferences(ctx, settings); err != nil {
+		return nil, err
+	}
+	if err := s.settingRepo.SetMultiple(ctx, updates); err != nil {
+		return nil, err
+	}
+	// Return the normalized document that was written, without a second read that
+	// could fail after a successful save.
+	normalized, err := desktopSettingsFromValues(updates)
+	if err != nil {
+		return nil, err
+	}
+	return &normalized, nil
+}
+
 func desktopSettingsFromValues(values map[string]string) (DesktopSettings, error) {
 	settings := DesktopSettings{Models: []DesktopModelEntry{}, CredentialTTLSeconds: 3600}
 	var err error

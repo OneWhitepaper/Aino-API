@@ -1,0 +1,54 @@
+
+perf /127.0.0.1:4177/ @ 1440px
+  PASS  host CPU load (before/after)               14/14 %
+  PASS  total transfer                             199.8 KiB      html 1K  css 11.1K  js 56.6K  font 64.9K  img 55.9K  other 10.3K
+  PASS  requests                                   13             14 by load
+  PASS  images bytes                               55.9 KiB       5 files
+  PASS  largest image                              43.1 KiB       127.0.0.1:4177/aino-app-icon.png
+  PASS  JS parsed                                  149.6 KiB      2 files, 56.6K gz
+  PASS  CSS                                        11.1 KiB       1 files
+  PASS  font families                              2              Instrument Sans, DM Mono
+  PASS  font files                                 2              64.9K
+  PASS  font bytes                                 64.9 KiB
+  PASS  images without width+height                0
+  PASS  below-fold images not lazy                 0
+  PASS  oversized images (natural > 2.2x shown)    0
+  PASS  WebGL live at load                         0
+  PASS  WebGL live at bottom                       0
+  PASS  WebGL peak live                            0              0 contexts made in all
+  PASS  long tasks                                 0              runs 3, 0..0, max 0ms
+  PASS  blocking time                              0 ms           runs 3, 0..0 ms; at load 0ms
+  PASS  FCP (CPU, relative)                        52 ms          runs 3, 48..76
+  PASS  LCP (CPU, relative)                        64 ms          runs 3, 56..92, p.page-description
+  PASS  layout shift                               0.000          runs 3, 0.000..0.000; at load 0.000
+  PASS  modules loaded, never mounted              0
+  PASS  broken requests                            0
+  PASS  page height                                1.4 screens    DOM 592 nodes
+
+perf /127.0.0.1:4177/ @ 390px
+  PASS  host CPU load (before/after)               14/14 %
+  PASS  total transfer                             190.6 KiB      html 1K  css 11.1K  js 56.6K  font 64.9K  img 55.9K  other 1K
+  PASS  requests                                   12             13 by load
+  PASS  images bytes                               55.9 KiB       5 files
+  PASS  largest image                              43.1 KiB       127.0.0.1:4177/aino-app-icon.png
+  PASS  JS parsed                                  149.6 KiB      2 files, 56.6K gz
+  PASS  CSS                                        11.1 KiB       1 files
+  PASS  font families                              2              Instrument Sans, DM Mono
+  PASS  font files                                 2              64.9K
+  PASS  font bytes                                 64.9 KiB
+  PASS  images without width+height                0
+  PASS  below-fold images not lazy                 0
+  PASS  oversized images (natural > 2.2x shown)    0
+  PASS  WebGL live at load                         0
+  PASS  WebGL live at bottom                       0
+  PASS  WebGL peak live                            0              0 contexts made in all
+  PASS  long tasks                                 0              runs 3, 0..0, max 0ms
+  PASS  blocking time                              0 ms           runs 3, 0..0 ms; at load 0ms
+  PASS  FCP (CPU, relative)                        48 ms          runs 3, 48..48
+  PASS  LCP (CPU, relative)                        48 ms          runs 3, 48..48, p
+  PASS  layout shift                               0.000          runs 3, 0.000..0.000; at load 0.000
+  PASS  modules loaded, never mounted              0
+  PASS  broken requests                            0
+  PASS  page height                                1.8 screens    DOM 592 nodes
+
+SUMMARY /127.0.0.1:4177/: 0 FAIL, 0 WARN  -> PASS

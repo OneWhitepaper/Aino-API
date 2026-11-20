@@ -46,7 +46,7 @@
     </button>
 
     <!-- Teleport dropdown to body to escape stacking context -->
-    <Teleport to="body">
+    <Teleport :to="dropdownTarget">
       <Transition name="select-dropdown">
         <div
           v-if="isOpen"
@@ -187,6 +187,9 @@ const searchQuery = ref('')
 const focusedIndex = ref(-1)
 const containerRef = ref<HTMLElement | null>(null)
 const triggerRef = ref<HTMLButtonElement | null>(null)
+// Native modal dialogs make everything outside their top layer inert. Keep the
+// dropdown in that layer while retaining viewport positioning and search focus.
+const dropdownTarget = ref<HTMLElement | string>('body')
 const searchInputRef = ref<HTMLInputElement | null>(null)
 const dropdownRef = ref<HTMLElement | null>(null)
 const optionsListRef = ref<HTMLElement | null>(null)
@@ -381,6 +384,7 @@ watch(() => props.disabled, (disabled) => {
 
 watch(isOpen, (open) => {
   if (open) {
+    dropdownTarget.value = triggerRef.value?.closest('dialog') ?? 'body'
     calculateDropdownPosition()
     // Reset focused index to current selection or first item
     if (filteredOptions.value.length === 0) {

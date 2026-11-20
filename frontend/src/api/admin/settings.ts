@@ -1134,6 +1134,17 @@ export async function getSettings(): Promise<SystemSettings> {
   return data;
 }
 
+/** Independent catalog persistence: never resubmit a stale system settings form. */
+export async function getDesktopSettings(): Promise<DesktopSettings> {
+  const { data } = await apiClient.get<DesktopSettings>("/admin/settings/desktop");
+  return data;
+}
+
+export async function updateDesktopSettings(settings: DesktopSettings): Promise<DesktopSettings> {
+  const { data } = await apiClient.put<DesktopSettings>("/admin/settings/desktop", settings);
+  return data;
+}
+
 /**
  * Update system settings
  * @param settings - Partial settings to update

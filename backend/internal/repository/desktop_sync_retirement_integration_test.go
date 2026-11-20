@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/migrations"
+	"github.com/lib/pq"
 	"github.com/stretchr/testify/require"
 )
 
@@ -64,12 +65,29 @@ func TestDesktopSyncRetirementDeletesOnlyCloudData(t *testing.T) {
 	require.NoError(t, err)
 
 	retained := []string{"users", "groups", "user_subscriptions", "api_keys", "desktop_model_credentials", "desktop_device_info", "payment_orders", "auth_identities", "settings", "auth_cache_invalidation_outbox"}
+	// Freeze the historical columns so later additive migrations cannot change
+	// the snapshot shape. Every original value and row must still be preserved.
+	retainedColumns := make(map[string][]string, len(retained))
+	for _, table := range retained {
+		rows, err := db.QueryContext(ctx, `SELECT column_name FROM information_schema.columns
+			WHERE table_schema=current_schema() AND table_name=$1 ORDER BY ordinal_position`, table)
+		require.NoError(t, err, table)
+		for rows.Next() {
+			var column string
+			require.NoError(t, rows.Scan(&column), table)
+			retainedColumns[table] = append(retainedColumns[table], pq.QuoteIdentifier(column))
+		}
+		require.NoError(t, rows.Err(), table)
+		require.NoError(t, rows.Close(), table)
+		require.NotEmpty(t, retainedColumns[table], table)
+	}
 	snapshot := func() map[string][32]byte {
 		t.Helper()
 		result := make(map[string][32]byte, len(retained))
 		for _, table := range retained {
 			var value string
-			query := fmt.Sprintf(`SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text),'[]'::jsonb)::text FROM %s t`, table)
+			query := fmt.Sprintf(`SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text),'[]'::jsonb)::text
+				FROM (SELECT %s FROM %s) t`, strings.Join(retainedColumns[table], ", "), pq.QuoteIdentifier(table))
 			require.NoError(t, db.QueryRowContext(ctx, query).Scan(&value), table)
 			// Failed assertions must never print stored credential material.
 			result[table] = sha256.Sum256([]byte(value))
@@ -77,6 +95,8 @@ func TestDesktopSyncRetirementDeletesOnlyCloudData(t *testing.T) {
 		return result
 	}
 	before := snapshot()
+	var apiKeyCount int64
+	require.NoError(t, db.QueryRowContext(ctx, "SELECT count(*) FROM api_keys").Scan(&apiKeyCount))
 	oldChecksums := map[string]string{}
 	rows, err := db.QueryContext(ctx, "SELECT filename,checksum FROM schema_migrations")
 	require.NoError(t, err)
@@ -101,6 +121,9 @@ func TestDesktopSyncRetirementDeletesOnlyCloudData(t *testing.T) {
 		require.False(t, exists, table)
 	}
 	require.Equal(t, before, snapshot(), "all account, key, metadata, model and billing rows must remain byte-for-byte identical")
+	var defaultBillingPolicyCount int64
+	require.NoError(t, db.QueryRowContext(ctx, "SELECT count(*) FROM api_keys WHERE billing_policy=''").Scan(&defaultBillingPolicyCount))
+	require.Equal(t, apiKeyCount, defaultBillingPolicyCount, "existing API keys must retain the default empty billing policy")
 	for name, checksum := range oldChecksums {
 		var got string
 		require.NoError(t, db.QueryRowContext(ctx, "SELECT checksum FROM schema_migrations WHERE filename=$1", name).Scan(&got))

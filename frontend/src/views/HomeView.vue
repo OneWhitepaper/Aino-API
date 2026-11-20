@@ -90,7 +90,7 @@
     </footer>
   </div>
 
-  <AinoHome
+  <OmniFlowHome
     v-else
     :site-name="siteName"
     :site-logo="siteLogo"
@@ -99,8 +99,6 @@
     :dashboard-path="dashboardPath"
     :registration-enabled="appStore.cachedPublicSettings?.registration_enabled === true"
     :show-model-plaza="showModelPlazaEntry"
-    :is-dark="isDark"
-    @toggle-theme="toggleTheme"
   />
 </template>
 
@@ -108,7 +106,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore, useAppStore } from '@/stores'
-import AinoHome from '@/components/home/AinoHome.vue'
+import OmniFlowHome from '@/components/home/OmniFlowHome.vue'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { sanitizeUrl } from '@/utils/url'

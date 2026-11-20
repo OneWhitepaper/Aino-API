@@ -85,6 +85,7 @@ describe('HomeView compact mode', () => {
 
     expect(wrapper.get('#custom-home').text()).toBe('Custom home')
     expect(wrapper.find('[data-testid="compact-home"]').exists()).toBe(false)
+    expect(wrapper.find('#hero-prompt').exists()).toBe(false)
   })
 
   it('renders custom URL content ahead of compact mode', () => {
@@ -95,12 +96,14 @@ describe('HomeView compact mode', () => {
 
     expect(wrapper.get('iframe').attributes('src')).toBe('https://example.com/home')
     expect(wrapper.find('[data-testid="compact-home"]').exists()).toBe(false)
+    expect(wrapper.find('#hero-prompt').exists()).toBe(false)
   })
 
   it('treats whitespace-only custom content as empty and selects compact mode', () => {
     const wrapper = mountHome({ compact_home_enabled: true, home_content: ' \n\t ' })
 
     expect(wrapper.get('[data-testid="compact-home"]').text()).toContain('Test site')
+    expect(wrapper.find('#hero-prompt').exists()).toBe(false)
   })
 
   it.each([undefined, false])('selects the default home when compact mode is %s', (enabled) => {
@@ -109,6 +112,7 @@ describe('HomeView compact mode', () => {
 
     expect(wrapper.find('[data-testid="compact-home"]').exists()).toBe(false)
     expect(wrapper.get('h1').exists()).toBe(true)
+    expect(wrapper.find('#hero-prompt').exists()).toBe(true)
   })
 
   it('links unauthenticated visitors to login', () => {
@@ -189,14 +193,14 @@ describe('HomeView compact mode', () => {
 
     const closed = mountHome({ registration_enabled: false })
     expect(closed.findAllComponents(RouterLinkStub).some(link => link.props('to') === '/register')).toBe(false)
-    expect(closed.get('[data-testid="home-primary-action"]').getComponent(RouterLinkStub).props('to')).toBe('/login')
+    expect(closed.get('.of-login').getComponent(RouterLinkStub).props('to')).toBe('/login')
   })
 
   it.each([[false, '/dashboard'], [true, '/admin/dashboard']])('routes signed-in visitors directly to their dashboard (admin=%s)', (isAdmin, path) => {
     authStore.isAuthenticated = true
     authStore.isAdmin = isAdmin as boolean
     const wrapper = mountHome({ registration_enabled: true })
-    expect(wrapper.get('[data-testid="home-primary-action"]').getComponent(RouterLinkStub).props('to')).toBe(path)
+    expect(wrapper.get('.of-login').getComponent(RouterLinkStub).props('to')).toBe(path)
     expect(wrapper.findAllComponents(RouterLinkStub).some(link => link.props('to') === '/register')).toBe(false)
   })
 })

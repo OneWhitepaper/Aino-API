@@ -1,0 +1,48 @@
+const zh = {
+  skip: '跳至主要内容', navigation: '主导航', home: '首页', models: '模型目录', docs: '开发文档', menu: '切换导航菜单',
+  login: '登录控制台', dashboard: '进入控制台', register: '创建账号', gateway: '开发者模型网关',
+  heroLine1: '给你的应用，', heroLine2: '接上', heroAccent: '多模型 API', heroStop: '。',
+  heroDescription: '一个密钥，3 种原生接入协议。', heroSupport: '用熟悉的请求格式，连接不同模型。',
+  tryApi: '试用模型 API', browse: '浏览模型目录', workbench: '请求工作台', local: '本地模拟', selectModel: '选择模型', explore: '探索接入协议',
+  request: '请求', response: '响应', input: '输入消息', send: '发送模拟请求', sendAgain: '再次发送模拟请求', sending: '正在模拟…',
+  preview: '预览', processing: '模拟中', done: '已完成 · 本地模拟', loading: '正在生成本地示例响应…', noCost: '无需密钥 · 不产生费用',
+  openWorkbench: '打开完整请求台', promptError: '请输入消息后再试。', copyBase: '复制网关地址', copied: '已复制', copyFailed: '请手动复制',
+  modelsLine1: '选好模型，', modelsLine2: '接入你的应用。', modelsDescription: '三种协议示例，查看模型 ID 与请求格式。',
+  search: '搜索模型或协议', filters: '按协议筛选', all: '全部', modelColumn: '模型 / MODEL', protocolColumn: '接口协议', idColumn: '模型 ID', tryColumn: '试用',
+  sampleCount: '个示例模型', copyId: '复制模型 ID', tryModel: '试用', noResults: '没有找到匹配的模型', noResultsHint: '换个模型名，或清除当前筛选条件。', clear: '清除筛选',
+  catalogNote: '当前为三种接入示例。实际可用模型与价格，请登录控制台查看。', modelPlaza: '查看模型广场',
+  quickLine1: '从第一条', quickLine2: '请求开始。', quickDescription: '选择模型和语言，复制对应代码，在你的终端运行。', sampleModel: '示例模型',
+  envBefore: '在本机设置环境变量', envAfter: '。运行代码会发送真实请求，按账号费率计费。', localTry: '先在本地试跑', language: '示例语言', copyCode: '复制代码', code: '接入示例代码', codeCopied: '示例代码已复制。', codeFailed: '请复制选中的示例代码。',
+  connectTitle: '下一次构建，从这里开始。', viewCode: '查看接入代码', toTop: '回到顶部',
+  sandboxTitle: '请求体验台', sandboxClose: '关闭请求体验台', sandboxHint: '比较不同模型的请求格式。这里仅在本地模拟，无需密钥，不会消耗额度。',
+  prompt: '提示词', promptPlaceholder: '输入想发送给模型的内容', promptLimit: '最多 320 个字符', sandboxError: '先写一句提示词，再发送。',
+  simulationResponse: '模拟响应', waiting: '待发送', waitingHint: '发送后可对照返回文本和原始 JSON。', sandboxProcessing: '处理中', sandboxLoading: '正在本地构造响应…', sandboxDone: '模拟成功',
+  viewJson: '查看响应 JSON', json: '模拟响应 JSON', integration: '接入代码', sandboxEnvBefore: '本机运行前，请先设置环境变量', sandboxEnvAfter: '。实际调用按账号权限和费率计费。',
+  sandboxCopyFailed: '未能自动复制，请选择代码并手动复制。', manualCopy: '手动复制',
+}
+
+const en: typeof zh = {
+  skip: 'Skip to content', navigation: 'Main navigation', home: 'Home', models: 'Models', docs: 'Documentation', menu: 'Toggle navigation menu',
+  login: 'Sign in', dashboard: 'Open dashboard', register: 'Create an account', gateway: 'A model gateway for developers',
+  heroLine1: 'Connect your app,', heroLine2: 'with ', heroAccent: 'multi-model APIs', heroStop: '.',
+  heroDescription: 'One key. Three native API protocols.', heroSupport: 'Use familiar request formats to connect different models.',
+  tryApi: 'Try a model API', browse: 'Explore the models', workbench: 'Request workbench', local: 'Local simulation', selectModel: 'Choose a model', explore: 'Explore the protocols',
+  request: 'Request', response: 'Response', input: 'Your message', send: 'Send a simulated request', sendAgain: 'Send another request', sending: 'Simulating…',
+  preview: 'Preview', processing: 'Simulating', done: 'Complete · Local simulation', loading: 'Building a local example response…', noCost: 'No key · No charges',
+  openWorkbench: 'Open the full workbench', promptError: 'Enter a message to try the request.', copyBase: 'Copy the gateway URL', copied: 'Copied', copyFailed: 'Copy manually',
+  modelsLine1: 'Choose your model.', modelsLine2: 'Connect your app.', modelsDescription: 'Three protocol examples, with model IDs and request formats.',
+  search: 'Search models or protocols', filters: 'Filter by protocol', all: 'All', modelColumn: 'Model', protocolColumn: 'API protocol', idColumn: 'Model ID', tryColumn: 'Try',
+  sampleCount: 'example models', copyId: 'Copy model ID', tryModel: 'Try', noResults: 'No matching models', noResultsHint: 'Try another model name or clear the current filters.', clear: 'Clear filters',
+  catalogNote: 'These are three integration examples. Sign in to see your available models and prices.', modelPlaza: 'Open the model plaza',
+  quickLine1: 'Start with', quickLine2: 'your first request.', quickDescription: 'Choose a model and a language. Copy the code and run it in your terminal.', sampleModel: 'Example model',
+  envBefore: 'Set the environment variable', envAfter: ' on your computer. Running the code sends a real request, billed at your account rate.', localTry: 'Try the local simulation', language: 'Example language', copyCode: 'Copy code', code: 'Integration example code', codeCopied: 'Example code copied.', codeFailed: 'Copy the selected example code manually.',
+  connectTitle: 'Your next build starts here.', viewCode: 'View integration code', toTop: 'Back to top',
+  sandboxTitle: 'Request workbench', sandboxClose: 'Close the request workbench', sandboxHint: 'Compare request formats across models. This simulation runs locally, needs no key, and uses no credit.',
+  prompt: 'Prompt', promptPlaceholder: 'Enter a message for the model', promptLimit: 'Up to 320 characters', sandboxError: 'Write a prompt before sending.',
+  simulationResponse: 'Simulated response', waiting: 'Ready', waitingHint: 'Send a request to compare the text response and raw JSON.', sandboxProcessing: 'Processing', sandboxLoading: 'Building a local response…', sandboxDone: 'Simulation complete',
+  viewJson: 'View response JSON', json: 'Simulated response JSON', integration: 'Integration code', sandboxEnvBefore: 'Before running locally, set the environment variable', sandboxEnvAfter: '. Actual calls follow your account permissions and rates.',
+  sandboxCopyFailed: 'Automatic copying failed. Select the code and copy it manually.', manualCopy: 'Copy manually',
+}
+
+export function homeCopy(chinese: boolean) { return chinese ? zh : en }
+export type HomeCopy = typeof zh

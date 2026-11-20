@@ -79,6 +79,12 @@ func (h *DesktopHandler) ProvisionDeviceKey(c *gin.Context) {
 // Only metadata enters the coordinator. The secret exists solely in the first
 // request's closure; a replay returns metadata and can recover by versioned rotation.
 func (h *DesktopHandler) executeDeviceKeyMutation(c *gin.Context, userID int64, req service.DesktopDeviceKeyRequest) {
+	app, appErr := service.NormalizeDesktopApp(req.DesktopApp)
+	if appErr != nil {
+		response.ErrorFrom(c, appErr)
+		return
+	}
+	req.DesktopApp = app
 	var secret string
 	execute := func(ctx context.Context) (any, error) {
 		result, err := h.deviceKeys.Ensure(ctx, userID, req)

@@ -32,6 +32,12 @@ func (r *desktopCredentialRepository) IssueOrReuse(ctx context.Context, candidat
 	if _, err = tx.User.Query().Where(user.IDEQ(candidate.UserID), user.DeletedAtIsNil()).ForUpdate().Only(ctx); err != nil {
 		return nil, nil, err
 	}
+	app, err := desktopApplicationForInstallation(ctx, tx.Client(), candidate.UserID, candidate.DeviceID, key.DesktopApp)
+	if err != nil {
+		return nil, nil, err
+	}
+	key.DesktopApp = app
+	key.Name = service.DesktopAppKeyName(app)
 	// A new grant ID cannot resurrect a parent that lost its authority.
 	revoked, err := tx.DesktopModelCredential.Query().Where(desktopmodelcredential.UserIDEQ(candidate.UserID), desktopmodelcredential.SessionFamilyIDEQ(candidate.SessionFamilyID), desktopmodelcredential.RevokedAtNotNil(), desktopmodelcredential.RevokeReasonNEQ("expired")).Exist(ctx)
 	if err != nil {

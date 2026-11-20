@@ -23,6 +23,8 @@ const (
 	FieldDeletedAt = "deleted_at"
 	// FieldDesktopManaged holds the string denoting the desktop_managed field in the database.
 	FieldDesktopManaged = "desktop_managed"
+	// FieldDesktopApp holds the string denoting the desktop_app field in the database.
+	FieldDesktopApp = "desktop_app"
 	// FieldBillingPolicy holds the string denoting the billing_policy field in the database.
 	FieldBillingPolicy = "billing_policy"
 	// FieldDesktopCredentialType holds the string denoting the desktop_credential_type field in the database.
@@ -120,6 +122,7 @@ var Columns = []string{
 	FieldUpdatedAt,
 	FieldDeletedAt,
 	FieldDesktopManaged,
+	FieldDesktopApp,
 	FieldBillingPolicy,
 	FieldDesktopCredentialType,
 	FieldDesktopDeviceID,
@@ -173,6 +176,10 @@ var (
 	UpdateDefaultUpdatedAt func() time.Time
 	// DefaultDesktopManaged holds the default value on creation for the "desktop_managed" field.
 	DefaultDesktopManaged bool
+	// DefaultDesktopApp holds the default value on creation for the "desktop_app" field.
+	DefaultDesktopApp string
+	// DesktopAppValidator is a validator for the "desktop_app" field. It is called by the builders before save.
+	DesktopAppValidator func(string) error
 	// DefaultBillingPolicy holds the default value on creation for the "billing_policy" field.
 	DefaultBillingPolicy string
 	// BillingPolicyValidator is a validator for the "billing_policy" field. It is called by the builders before save.
@@ -237,6 +244,11 @@ func ByDeletedAt(opts ...sql.OrderTermOption) OrderOption {
 // ByDesktopManaged orders the results by the desktop_managed field.
 func ByDesktopManaged(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDesktopManaged, opts...).ToFunc()
+}
+
+// ByDesktopApp orders the results by the desktop_app field.
+func ByDesktopApp(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDesktopApp, opts...).ToFunc()
 }
 
 // ByBillingPolicy orders the results by the billing_policy field.

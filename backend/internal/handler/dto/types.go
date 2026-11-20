@@ -54,6 +54,7 @@ type AdminUser struct {
 }
 
 type APIKey struct {
+	DesktopApp            string     `json:"desktop_app"`
 	DesktopCredentialType string     `json:"desktop_credential_type,omitempty"`
 	DesktopDeviceID       string     `json:"desktop_device_id,omitempty"`
 	DesktopManaged        bool       `json:"desktop_managed"`

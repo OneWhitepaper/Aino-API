@@ -75,6 +75,10 @@ func NewDesktopCredentialService(repo DesktopCredentialRepository, keys *APIKeyS
 }
 
 func (s *DesktopCredentialService) IssueOrReuseLease(ctx context.Context, req DesktopCredentialRequest) (*DesktopCredentialResponse, error) {
+	app, err := NormalizeDesktopApp(req.DesktopApp)
+	if err != nil {
+		return nil, err
+	}
 	if err := ValidateDesktopBillingPolicy(req.BillingPolicy); err != nil {
 		return nil, err
 	}
@@ -124,7 +128,7 @@ func (s *DesktopCredentialService) IssueOrReuseLease(ctx context.Context, req De
 	}
 	groupID := resolved.GroupID
 	candidate := &DesktopCredential{Purpose: req.Purpose, UserID: user.ID, DeviceID: req.DeviceID, ConnectionGrantID: req.ConnectionGrantID, SessionFamilyID: req.SessionFamilyID, TokenVersion: resolvedTokenVersion(user), GroupID: groupID, ModelID: req.ModelID, ExpiresAt: expires}
-	key := &APIKey{BillingPolicy: req.BillingPolicy, UserID: user.ID, Name: "Aino desktop", Key: rawKey, GroupID: &groupID, Status: StatusActive, ExpiresAt: &expires, DesktopManaged: true}
+	key := &APIKey{DesktopApp: app, BillingPolicy: req.BillingPolicy, UserID: user.ID, Name: "Aino desktop", Key: rawKey, GroupID: &groupID, Status: StatusActive, ExpiresAt: &expires, DesktopManaged: true}
 	lease, key, err := s.repo.IssueOrReuse(ctx, candidate, key, ttl)
 	if err != nil {
 		return nil, err
@@ -143,10 +147,11 @@ func (s *DesktopCredentialService) IssueOrReuseLease(ctx context.Context, req De
 		return nil, err
 	}
 	s.keys.InvalidateAuthCacheByKey(ctx, key.Key)
-	return &DesktopCredentialResponse{BillingPolicy: key.BillingPolicy, Purpose: req.Purpose, CredentialID: strconv.FormatInt(lease.ID, 10), APIKey: key.Key, BaseURL: "https://api.agentera.com.cn/v1", ExpiresAt: lease.ExpiresAt, Model: resolved.Model}, nil
+	return &DesktopCredentialResponse{DesktopApp: DesktopAppForKey(key), BillingPolicy: key.BillingPolicy, Purpose: req.Purpose, CredentialID: strconv.FormatInt(lease.ID, 10), APIKey: key.Key, BaseURL: "https://api.agentera.com.cn/v1", ExpiresAt: lease.ExpiresAt, Model: resolved.Model}, nil
 }
 
 type DesktopCredentialRequest struct {
+	DesktopApp                                            string `json:"desktop_app,omitempty"`
 	BillingPolicy                                         string `json:"billing_policy,omitempty"`
 	Purpose                                               string `json:"purpose"`
 	UserID                                                int64
@@ -154,6 +159,7 @@ type DesktopCredentialRequest struct {
 }
 
 type DesktopCredentialResponse struct {
+	DesktopApp    string        `json:"desktop_app"`
 	BillingPolicy string        `json:"billing_policy"`
 	Purpose       string        `json:"purpose"`
 	CredentialID  string        `json:"credential_id"`

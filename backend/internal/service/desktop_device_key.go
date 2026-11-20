@@ -32,6 +32,7 @@ type DesktopDeviceKeyRepository interface {
 }
 
 type DesktopDeviceKeyRequest struct {
+	DesktopApp      string `json:"desktop_app,omitempty"`
 	BillingPolicy   string `json:"billing_policy,omitempty"`
 	DeviceID        string `json:"device_id"`
 	Rotate          bool   `json:"rotate,omitempty"`
@@ -40,6 +41,7 @@ type DesktopDeviceKeyRequest struct {
 }
 
 type DesktopDeviceKeyResponse struct {
+	DesktopApp    string     `json:"desktop_app"`
 	BillingPolicy string     `json:"billing_policy"`
 	KeyID         string     `json:"key_id"`
 	DeviceID      string     `json:"device_id"`
@@ -85,10 +87,14 @@ func deviceKeyResponse(key *APIKey) *DesktopDeviceKeyResponse {
 	if !key.IsActive() || key.DeletedAt != nil {
 		status = "revoked"
 	}
-	return &DesktopDeviceKeyResponse{BillingPolicy: key.BillingPolicy, KeyID: strconv.FormatInt(key.ID, 10), DeviceID: key.DesktopDeviceID, Version: key.DesktopKeyVersion, Status: status}
+	return &DesktopDeviceKeyResponse{DesktopApp: DesktopAppForKey(key), BillingPolicy: key.BillingPolicy, KeyID: strconv.FormatInt(key.ID, 10), DeviceID: key.DesktopDeviceID, Version: key.DesktopKeyVersion, Status: status}
 }
 
 func (s *DesktopDeviceKeyService) Ensure(ctx context.Context, userID int64, req DesktopDeviceKeyRequest) (*DesktopDeviceKeyResponse, error) {
+	app, err := NormalizeDesktopApp(req.DesktopApp)
+	if err != nil {
+		return nil, err
+	}
 	if err := ValidateDesktopBillingPolicy(req.BillingPolicy); err != nil {
 		return nil, err
 	}
@@ -110,7 +116,7 @@ func (s *DesktopDeviceKeyService) Ensure(ctx context.Context, userID int64, req 
 		return nil, err
 	}
 	secret := "sk-aino-device-" + base64.RawURLEncoding.EncodeToString(secretBytes)
-	candidate := &APIKey{BillingPolicy: req.BillingPolicy, UserID: userID, Key: HashDesktopDeviceSecret(secret), Name: "Aino desktop", Status: StatusActive, DesktopManaged: true, DesktopCredentialType: DesktopCredentialTypeDevice, DesktopDeviceID: req.DeviceID, DesktopKeyVersion: 1, KeyHashType: "sha256"}
+	candidate := &APIKey{DesktopApp: app, BillingPolicy: req.BillingPolicy, UserID: userID, Key: HashDesktopDeviceSecret(secret), Name: "Aino desktop", Status: StatusActive, DesktopManaged: true, DesktopCredentialType: DesktopCredentialTypeDevice, DesktopDeviceID: req.DeviceID, DesktopKeyVersion: 1, KeyHashType: "sha256"}
 	var previous *APIKey
 	if req.Rotate || req.Reauthorize {
 		previous, err = s.repo.GetDeviceKey(ctx, userID, req.DeviceID)

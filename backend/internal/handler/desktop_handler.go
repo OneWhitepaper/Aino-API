@@ -116,6 +116,7 @@ func (h *DesktopHandler) ProvisionCredential(c *gin.Context) {
 	}
 
 	var req struct {
+		DesktopApp        string `json:"desktop_app"`
 		BillingPolicy     string `json:"billing_policy"`
 		Purpose           string `json:"purpose"`
 		DeviceID          string `json:"device_id" binding:"required"`
@@ -135,6 +136,7 @@ func (h *DesktopHandler) ProvisionCredential(c *gin.Context) {
 	}
 
 	credReq := service.DesktopCredentialRequest{
+		DesktopApp:        req.DesktopApp,
 		BillingPolicy:     req.BillingPolicy,
 		Purpose:           req.Purpose,
 		UserID:            subject.UserID,

@@ -96,6 +96,7 @@ func APIKeyFromService(k *service.APIKey) *APIKey {
 		status = service.StatusAPIKeyExpired
 	}
 	out := &APIKey{
+		DesktopApp:            service.DesktopAppForKey(k),
 		DesktopCredentialType: k.DesktopCredentialType,
 		DesktopDeviceID:       k.DesktopDeviceID,
 		DesktopManaged:        k.DesktopManaged,

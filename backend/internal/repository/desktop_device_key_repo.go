@@ -98,6 +98,12 @@ func (r *apiKeyRepository) EnsureDeviceKey(ctx context.Context, candidate *servi
 	if _, err = tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock(hashtextextended($1,0))", lockID); err != nil {
 		return nil, false, err
 	}
+	app, err := desktopApplicationForInstallation(ctx, tx.Client(), candidate.UserID, candidate.DesktopDeviceID, candidate.DesktopApp)
+	if err != nil {
+		return nil, false, err
+	}
+	candidate.DesktopApp = app
+	candidate.Name = service.DesktopAppKeyName(app)
 	row, err := tx.APIKey.Query().Where(deviceIdentityScope(candidate.UserID, candidate.DesktopDeviceID)...).ForUpdate().Only(mixins.SkipSoftDelete(ctx))
 	if dbent.IsNotFound(err) {
 		if rotate || reauthorize {
@@ -116,6 +122,9 @@ func (r *apiKeyRepository) EnsureDeviceKey(ctx context.Context, candidate *servi
 		return nil, false, err
 	}
 	active := row.Status == service.StatusActive && row.DeletedAt == nil
+	if err := service.ValidateDesktopAppReuse(candidate.DesktopApp, apiKeyEntityToService(row)); err != nil {
+		return nil, false, err
+	}
 	if candidate.BillingPolicy != "" && candidate.BillingPolicy != row.BillingPolicy {
 		return nil, false, service.ErrDesktopBillingPolicyConflict
 	}

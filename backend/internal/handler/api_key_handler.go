@@ -143,6 +143,18 @@ func (h *APIKeyHandler) List(c *gin.Context) {
 		}
 		filters.DesktopManaged = &managed
 	}
+	if value, present := c.GetQuery("desktop_app"); present {
+		app, err := service.NormalizeDesktopApp(value)
+		if err != nil {
+			response.ErrorFrom(c, err)
+			return
+		}
+		if app != "" && filters.DesktopManaged != nil && !*filters.DesktopManaged {
+			response.BadRequest(c, "desktop_app requires desktop-managed keys")
+			return
+		}
+		filters.DesktopApp = app
+	}
 	if groupIDStr := c.Query("group_id"); groupIDStr != "" {
 		gid, err := strconv.ParseInt(groupIDStr, 10, 64)
 		if err == nil {

@@ -76,30 +76,36 @@ func init() {
 	apikeyDescDesktopManaged := apikeyFields[0].Descriptor()
 	// apikey.DefaultDesktopManaged holds the default value on creation for the desktop_managed field.
 	apikey.DefaultDesktopManaged = apikeyDescDesktopManaged.Default.(bool)
+	// apikeyDescDesktopApp is the schema descriptor for desktop_app field.
+	apikeyDescDesktopApp := apikeyFields[1].Descriptor()
+	// apikey.DefaultDesktopApp holds the default value on creation for the desktop_app field.
+	apikey.DefaultDesktopApp = apikeyDescDesktopApp.Default.(string)
+	// apikey.DesktopAppValidator is a validator for the "desktop_app" field. It is called by the builders before save.
+	apikey.DesktopAppValidator = apikeyDescDesktopApp.Validators[0].(func(string) error)
 	// apikeyDescBillingPolicy is the schema descriptor for billing_policy field.
-	apikeyDescBillingPolicy := apikeyFields[1].Descriptor()
+	apikeyDescBillingPolicy := apikeyFields[2].Descriptor()
 	// apikey.DefaultBillingPolicy holds the default value on creation for the billing_policy field.
 	apikey.DefaultBillingPolicy = apikeyDescBillingPolicy.Default.(string)
 	// apikey.BillingPolicyValidator is a validator for the "billing_policy" field. It is called by the builders before save.
 	apikey.BillingPolicyValidator = apikeyDescBillingPolicy.Validators[0].(func(string) error)
 	// apikeyDescDesktopCredentialType is the schema descriptor for desktop_credential_type field.
-	apikeyDescDesktopCredentialType := apikeyFields[2].Descriptor()
+	apikeyDescDesktopCredentialType := apikeyFields[3].Descriptor()
 	// apikey.DefaultDesktopCredentialType holds the default value on creation for the desktop_credential_type field.
 	apikey.DefaultDesktopCredentialType = apikeyDescDesktopCredentialType.Default.(string)
 	// apikeyDescDesktopDeviceID is the schema descriptor for desktop_device_id field.
-	apikeyDescDesktopDeviceID := apikeyFields[3].Descriptor()
+	apikeyDescDesktopDeviceID := apikeyFields[4].Descriptor()
 	// apikey.DefaultDesktopDeviceID holds the default value on creation for the desktop_device_id field.
 	apikey.DefaultDesktopDeviceID = apikeyDescDesktopDeviceID.Default.(string)
 	// apikeyDescDesktopKeyVersion is the schema descriptor for desktop_key_version field.
-	apikeyDescDesktopKeyVersion := apikeyFields[4].Descriptor()
+	apikeyDescDesktopKeyVersion := apikeyFields[5].Descriptor()
 	// apikey.DefaultDesktopKeyVersion holds the default value on creation for the desktop_key_version field.
 	apikey.DefaultDesktopKeyVersion = apikeyDescDesktopKeyVersion.Default.(int)
 	// apikeyDescKeyHashType is the schema descriptor for key_hash_type field.
-	apikeyDescKeyHashType := apikeyFields[5].Descriptor()
+	apikeyDescKeyHashType := apikeyFields[6].Descriptor()
 	// apikey.DefaultKeyHashType holds the default value on creation for the key_hash_type field.
 	apikey.DefaultKeyHashType = apikeyDescKeyHashType.Default.(string)
 	// apikeyDescKey is the schema descriptor for key field.
-	apikeyDescKey := apikeyFields[7].Descriptor()
+	apikeyDescKey := apikeyFields[8].Descriptor()
 	// apikey.KeyValidator is a validator for the "key" field. It is called by the builders before save.
 	apikey.KeyValidator = func() func(string) error {
 		validators := apikeyDescKey.Validators
@@ -117,7 +123,7 @@ func init() {
 		}
 	}()
 	// apikeyDescName is the schema descriptor for name field.
-	apikeyDescName := apikeyFields[8].Descriptor()
+	apikeyDescName := apikeyFields[9].Descriptor()
 	// apikey.NameValidator is a validator for the "name" field. It is called by the builders before save.
 	apikey.NameValidator = func() func(string) error {
 		validators := apikeyDescName.Validators
@@ -135,41 +141,41 @@ func init() {
 		}
 	}()
 	// apikeyDescStatus is the schema descriptor for status field.
-	apikeyDescStatus := apikeyFields[10].Descriptor()
+	apikeyDescStatus := apikeyFields[11].Descriptor()
 	// apikey.DefaultStatus holds the default value on creation for the status field.
 	apikey.DefaultStatus = apikeyDescStatus.Default.(string)
 	// apikey.StatusValidator is a validator for the "status" field. It is called by the builders before save.
 	apikey.StatusValidator = apikeyDescStatus.Validators[0].(func(string) error)
 	// apikeyDescQuota is the schema descriptor for quota field.
-	apikeyDescQuota := apikeyFields[14].Descriptor()
+	apikeyDescQuota := apikeyFields[15].Descriptor()
 	// apikey.DefaultQuota holds the default value on creation for the quota field.
 	apikey.DefaultQuota = apikeyDescQuota.Default.(float64)
 	// apikeyDescQuotaUsed is the schema descriptor for quota_used field.
-	apikeyDescQuotaUsed := apikeyFields[15].Descriptor()
+	apikeyDescQuotaUsed := apikeyFields[16].Descriptor()
 	// apikey.DefaultQuotaUsed holds the default value on creation for the quota_used field.
 	apikey.DefaultQuotaUsed = apikeyDescQuotaUsed.Default.(float64)
 	// apikeyDescRateLimit5h is the schema descriptor for rate_limit_5h field.
-	apikeyDescRateLimit5h := apikeyFields[17].Descriptor()
+	apikeyDescRateLimit5h := apikeyFields[18].Descriptor()
 	// apikey.DefaultRateLimit5h holds the default value on creation for the rate_limit_5h field.
 	apikey.DefaultRateLimit5h = apikeyDescRateLimit5h.Default.(float64)
 	// apikeyDescRateLimit1d is the schema descriptor for rate_limit_1d field.
-	apikeyDescRateLimit1d := apikeyFields[18].Descriptor()
+	apikeyDescRateLimit1d := apikeyFields[19].Descriptor()
 	// apikey.DefaultRateLimit1d holds the default value on creation for the rate_limit_1d field.
 	apikey.DefaultRateLimit1d = apikeyDescRateLimit1d.Default.(float64)
 	// apikeyDescRateLimit7d is the schema descriptor for rate_limit_7d field.
-	apikeyDescRateLimit7d := apikeyFields[19].Descriptor()
+	apikeyDescRateLimit7d := apikeyFields[20].Descriptor()
 	// apikey.DefaultRateLimit7d holds the default value on creation for the rate_limit_7d field.
 	apikey.DefaultRateLimit7d = apikeyDescRateLimit7d.Default.(float64)
 	// apikeyDescUsage5h is the schema descriptor for usage_5h field.
-	apikeyDescUsage5h := apikeyFields[20].Descriptor()
+	apikeyDescUsage5h := apikeyFields[21].Descriptor()
 	// apikey.DefaultUsage5h holds the default value on creation for the usage_5h field.
 	apikey.DefaultUsage5h = apikeyDescUsage5h.Default.(float64)
 	// apikeyDescUsage1d is the schema descriptor for usage_1d field.
-	apikeyDescUsage1d := apikeyFields[21].Descriptor()
+	apikeyDescUsage1d := apikeyFields[22].Descriptor()
 	// apikey.DefaultUsage1d holds the default value on creation for the usage_1d field.
 	apikey.DefaultUsage1d = apikeyDescUsage1d.Default.(float64)
 	// apikeyDescUsage7d is the schema descriptor for usage_7d field.
-	apikeyDescUsage7d := apikeyFields[22].Descriptor()
+	apikeyDescUsage7d := apikeyFields[23].Descriptor()
 	// apikey.DefaultUsage7d holds the default value on creation for the usage_7d field.
 	apikey.DefaultUsage7d = apikeyDescUsage7d.Default.(float64)
 	accountMixin := schema.Account{}.Mixin()

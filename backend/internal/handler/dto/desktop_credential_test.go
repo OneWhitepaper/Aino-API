@@ -44,3 +44,21 @@ func TestDeviceKeyDTOExposesOnlySafeDeviceIdentity(t *testing.T) {
 	require.NotContains(t, string(data), "private-verifier")
 	require.NotContains(t, string(data), "key_hash_type")
 }
+
+func TestAPIKeyDTOApplicationClassification(t *testing.T) {
+	for _, tc := range []struct {
+		key service.APIKey
+		app string
+	}{
+		{service.APIKey{}, ""},
+		{service.APIKey{DesktopManaged: true}, "aino"},
+		{service.APIKey{DesktopManaged: true, DesktopApp: "momo", Key: "fixture-secret"}, "momo"},
+		{service.APIKey{DesktopManaged: true, DesktopApp: "future_app"}, "future_app"},
+	} {
+		out := APIKeyFromService(&tc.key)
+		require.Equal(t, tc.app, out.DesktopApp)
+		if tc.key.DesktopManaged {
+			require.Empty(t, out.Key)
+		}
+	}
+}

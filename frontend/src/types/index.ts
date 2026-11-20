@@ -777,6 +777,7 @@ export interface CompositeRouteDecision {
 
 export interface ApiKey {
   desktop_managed?: boolean
+  desktop_app?: string
   desktop_credential_type?: string
   desktop_device_id?: string
   id: number

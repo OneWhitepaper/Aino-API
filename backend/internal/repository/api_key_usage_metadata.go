@@ -11,6 +11,7 @@ import (
 )
 
 var apiKeyUsageMetadataFields = []string{
+	apikey.FieldDesktopApp,
 	apikey.FieldID, apikey.FieldUserID, apikey.FieldName, apikey.FieldDesktopManaged,
 	apikey.FieldGroupID, apikey.FieldStatus, apikey.FieldExpiresAt, apikey.FieldCreatedAt, apikey.FieldUpdatedAt,
 }

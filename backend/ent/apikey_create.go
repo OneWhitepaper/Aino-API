@@ -82,6 +82,20 @@ func (_c *APIKeyCreate) SetNillableDesktopManaged(v *bool) *APIKeyCreate {
 	return _c
 }
 
+// SetDesktopApp sets the "desktop_app" field.
+func (_c *APIKeyCreate) SetDesktopApp(v string) *APIKeyCreate {
+	_c.mutation.SetDesktopApp(v)
+	return _c
+}
+
+// SetNillableDesktopApp sets the "desktop_app" field if the given value is not nil.
+func (_c *APIKeyCreate) SetNillableDesktopApp(v *string) *APIKeyCreate {
+	if v != nil {
+		_c.SetDesktopApp(*v)
+	}
+	return _c
+}
+
 // SetBillingPolicy sets the "billing_policy" field.
 func (_c *APIKeyCreate) SetBillingPolicy(v string) *APIKeyCreate {
 	_c.mutation.SetBillingPolicy(v)
@@ -487,6 +501,10 @@ func (_c *APIKeyCreate) defaults() error {
 		v := apikey.DefaultDesktopManaged
 		_c.mutation.SetDesktopManaged(v)
 	}
+	if _, ok := _c.mutation.DesktopApp(); !ok {
+		v := apikey.DefaultDesktopApp
+		_c.mutation.SetDesktopApp(v)
+	}
 	if _, ok := _c.mutation.BillingPolicy(); !ok {
 		v := apikey.DefaultBillingPolicy
 		_c.mutation.SetBillingPolicy(v)
@@ -556,6 +574,14 @@ func (_c *APIKeyCreate) check() error {
 	}
 	if _, ok := _c.mutation.DesktopManaged(); !ok {
 		return &ValidationError{Name: "desktop_managed", err: errors.New(`ent: missing required field "APIKey.desktop_managed"`)}
+	}
+	if _, ok := _c.mutation.DesktopApp(); !ok {
+		return &ValidationError{Name: "desktop_app", err: errors.New(`ent: missing required field "APIKey.desktop_app"`)}
+	}
+	if v, ok := _c.mutation.DesktopApp(); ok {
+		if err := apikey.DesktopAppValidator(v); err != nil {
+			return &ValidationError{Name: "desktop_app", err: fmt.Errorf(`ent: validator failed for field "APIKey.desktop_app": %w`, err)}
+		}
 	}
 	if _, ok := _c.mutation.BillingPolicy(); !ok {
 		return &ValidationError{Name: "billing_policy", err: errors.New(`ent: missing required field "APIKey.billing_policy"`)}
@@ -673,6 +699,10 @@ func (_c *APIKeyCreate) createSpec() (*APIKey, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.DesktopManaged(); ok {
 		_spec.SetField(apikey.FieldDesktopManaged, field.TypeBool, value)
 		_node.DesktopManaged = value
+	}
+	if value, ok := _c.mutation.DesktopApp(); ok {
+		_spec.SetField(apikey.FieldDesktopApp, field.TypeString, value)
+		_node.DesktopApp = value
 	}
 	if value, ok := _c.mutation.BillingPolicy(); ok {
 		_spec.SetField(apikey.FieldBillingPolicy, field.TypeString, value)
@@ -1284,6 +1314,9 @@ func (u *APIKeyUpsertOne) UpdateNewValues() *APIKeyUpsertOne {
 		}
 		if _, exists := u.create.mutation.DesktopManaged(); exists {
 			s.SetIgnore(apikey.FieldDesktopManaged)
+		}
+		if _, exists := u.create.mutation.DesktopApp(); exists {
+			s.SetIgnore(apikey.FieldDesktopApp)
 		}
 		if _, exists := u.create.mutation.BillingPolicy(); exists {
 			s.SetIgnore(apikey.FieldBillingPolicy)
@@ -1957,6 +1990,9 @@ func (u *APIKeyUpsertBulk) UpdateNewValues() *APIKeyUpsertBulk {
 			}
 			if _, exists := b.mutation.DesktopManaged(); exists {
 				s.SetIgnore(apikey.FieldDesktopManaged)
+			}
+			if _, exists := b.mutation.DesktopApp(); exists {
+				s.SetIgnore(apikey.FieldDesktopApp)
 			}
 			if _, exists := b.mutation.BillingPolicy(); exists {
 				s.SetIgnore(apikey.FieldBillingPolicy)

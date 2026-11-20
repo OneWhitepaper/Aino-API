@@ -28,6 +28,7 @@ func IsWindowExpired(windowStart *time.Time, duration time.Duration) bool {
 }
 
 type APIKey struct {
+	DesktopApp            string
 	BillingPolicy         string           `json:"billing_policy,omitempty"`
 	Funding               *FundingDecision `json:"-"`
 	DesktopCredentialType string
@@ -149,6 +150,7 @@ func (k *APIKey) EffectiveUsage7d() float64 {
 
 // APIKeyListFilters holds optional filtering parameters for listing API keys.
 type APIKeyListFilters struct {
+	DesktopApp      string // empty=all; other=managed apps other than Aino/MoMo
 	Search          string
 	Status          string
 	GroupID         *int64 // nil=不筛选, 0=无分组, >0=指定分组

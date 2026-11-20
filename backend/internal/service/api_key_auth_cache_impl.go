@@ -346,6 +346,7 @@ func (s *APIKeyService) snapshotFromAPIKey(ctx context.Context, apiKey *APIKey) 
 		return nil
 	}
 	snapshot := &APIKeyAuthSnapshot{
+		DesktopApp:            DesktopAppForKey(apiKey),
 		BillingPolicy:         apiKey.BillingPolicy,
 		DesktopCredentialType: apiKey.DesktopCredentialType,
 		DesktopDeviceID:       apiKey.DesktopDeviceID,
@@ -467,6 +468,7 @@ func (s *APIKeyService) snapshotToAPIKey(key string, snapshot *APIKeyAuthSnapsho
 		return nil
 	}
 	apiKey := &APIKey{
+		DesktopApp:            snapshot.DesktopApp,
 		BillingPolicy:         snapshot.BillingPolicy,
 		DesktopCredentialType: snapshot.DesktopCredentialType,
 		DesktopDeviceID:       snapshot.DesktopDeviceID,

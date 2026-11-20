@@ -23,13 +23,18 @@
               {{ type.label }}
             </button>
           </div>
+          <DesktopApplicationFilter
+            v-if="filterDesktopManaged"
+            :model-value="filterDesktopApp"
+            @update:model-value="onDesktopApplicationChange"
+          />
           <p class="text-sm leading-relaxed text-gray-500 dark:text-dark-400">
             {{ t(filterDesktopManaged ? 'keys.desktopManagedHint' : 'keys.manualKeyHint') }}
           </p>
           <div class="flex flex-wrap items-center gap-3">
             <SearchInput
               v-model="filterSearch"
-              :placeholder="t('keys.searchPlaceholder')"
+              :placeholder="t(filterDesktopManaged ? 'keys.desktopApplications.searchPlaceholder' : 'keys.searchPlaceholder')"
               class="w-full sm:w-64"
               @search="onFilterChange"
             />
@@ -117,13 +122,16 @@
 
       <template #table>
         <div class="user-table-heading px-5 py-4">
-          <div><h3>{{ t('userPages.keyList') }}</h3><p>{{ t('userPages.keyTotal', { count: pagination.total }) }}</p></div>
+          <div>
+            <h3>{{ filterDesktopManaged ? desktopTableTitle : t('userPages.keyList') }}</h3>
+            <p>{{ t(filterDesktopManaged ? 'keys.desktopApplications.tableTotal' : 'userPages.keyTotal', { count: pagination.total }) }}</p>
+          </div>
         </div>
         <DataTable
           :columns="columns"
           :data="apiKeys"
           :loading="loading"
-          selectable
+          :selectable="!filterDesktopManaged"
           :row-selectable="isKeySelectable"
           row-key="id"
           :selected-keys="selectedIds"
@@ -166,19 +174,30 @@
           </template>
 
           <template #cell-name="{ value, row }">
-            <div class="flex items-center gap-1.5">
-              <span class="font-medium text-gray-900 dark:text-white">{{ deviceInfoForKey(row)?.installation_name || value }}</span>
-              <Icon
-                v-if="row.ip_whitelist?.length > 0 || row.ip_blacklist?.length > 0"
-                name="shield"
-                size="sm"
-                class="text-blue-500"
-                :title="t('keys.ipRestrictionEnabled')"
+            <div class="flex items-start gap-3">
+              <img
+                v-if="row.desktop_managed && desktopApplicationForKey(row)?.icon"
+                :src="desktopApplicationForKey(row)?.icon"
+                alt=""
+                class="mt-0.5 h-9 w-9 shrink-0 rounded-xl object-contain"
               />
+              <div class="min-w-0">
+                <div class="flex items-center gap-1.5">
+                  <span class="font-medium text-gray-900 dark:text-white">{{ deviceInfoForKey(row)?.installation_name || value }}</span>
+                  <Icon
+                    v-if="row.ip_whitelist?.length > 0 || row.ip_blacklist?.length > 0"
+                    name="shield"
+                    size="sm"
+                    class="text-blue-500"
+                    :title="t('keys.ipRestrictionEnabled')"
+                  />
+                </div>
+                <div v-if="row.desktop_managed" class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-500 dark:text-dark-400">
+                  <span data-test="desktop-application" :title="t('keys.desktopApplications.application')" class="font-medium text-gray-700 dark:text-dark-200">{{ desktopApplicationNameForKey(row) }}</span>
+                  <span v-if="row.desktop_device_id" :title="row.desktop_device_id">{{ deviceDescription(row) }}</span>
+                </div>
+              </div>
             </div>
-            <span v-if="row.desktop_managed && row.desktop_device_id" class="mt-1 block text-xs text-gray-500 dark:text-dark-400" :title="row.desktop_device_id">
-              {{ deviceDescription(row) }}
-            </span>
           </template>
 
           <template #cell-group="{ row }">
@@ -476,8 +495,8 @@
 
           <template #empty>
             <EmptyState
-              :title="t(filterDesktopManaged ? 'keys.desktopEmptyTitle' : 'keys.noKeysYet')"
-              :description="t(filterDesktopManaged ? 'keys.desktopManagedHint' : 'keys.createFirstKey')"
+              :title="emptyTitle"
+              :description="emptyDescription"
               :action-text="filterDesktopManaged ? undefined : t('keys.createKey')"
               @action="showCreateModal = true"
             />
@@ -1253,6 +1272,8 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import UserPageHeader from '@/components/user/workspace/UserPageHeader.vue'
 import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 import BulkEditKeysModal from '@/components/keys/BulkEditKeysModal.vue'
+import DesktopApplicationFilter from '@/components/keys/DesktopApplicationFilter.vue'
+import { getDesktopApplication, getDesktopApplicationId } from '@/constants/desktopApplications'
 	import DataTable from '@/components/common/DataTable.vue'
 	import Pagination from '@/components/common/Pagination.vue'
 	import BaseDialog from '@/components/common/BaseDialog.vue'
@@ -1400,6 +1421,8 @@ const columns = computed<Column[]>(() =>
 )
 
 const apiKeys = ref<ApiKey[]>([])
+const desktopApplicationForKey = (key: ApiKey) => getDesktopApplication(getDesktopApplicationId(key))
+const desktopApplicationNameForKey = (key: ApiKey) => desktopApplicationForKey(key)?.name || getDesktopApplicationId(key)
 const isDeviceKey = (key: ApiKey) => key.desktop_managed === true && key.desktop_credential_type === 'device'
 const deviceInfoById = ref<Record<string, DesktopDeviceInfo>>({})
 const deviceInfoForKey = (key: ApiKey) => key.desktop_managed && key.desktop_device_id
@@ -1472,6 +1495,7 @@ const sortState = ref({
 // Filter state
 const filterSearch = ref('')
 const filterDesktopManaged = ref(false)
+const filterDesktopApp = ref('')
 const filterStatus = ref('')
 const filterGroupId = ref<string | number>('')
 
@@ -1576,6 +1600,26 @@ const keyTypeOptions = computed(() => [
   { managed: true, label: t('keys.keyTypes.desktop') }
 ])
 
+const selectedDesktopApplicationName = computed(() =>
+  getDesktopApplication(filterDesktopApp.value)?.name || t('keys.desktopApplications.other')
+)
+const desktopTableTitle = computed(() => filterDesktopApp.value
+  ? `${selectedDesktopApplicationName.value} · ${t('keys.desktopApplications.tableTitle')}`
+  : t('keys.desktopApplications.tableTitle')
+)
+const emptyTitle = computed(() => !filterDesktopManaged.value
+  ? t('keys.noKeysYet')
+  : filterDesktopApp.value
+    ? t('keys.desktopApplications.emptyTitle', { name: selectedDesktopApplicationName.value })
+    : t('keys.desktopEmptyTitle')
+)
+const emptyDescription = computed(() => !filterDesktopManaged.value
+  ? t('keys.createFirstKey')
+  : filterDesktopApp.value
+    ? t('keys.desktopApplications.emptyDescription', { name: selectedDesktopApplicationName.value })
+    : t('keys.desktopManagedHint')
+)
+
 const groupFilterOptions = computed(() => [
   { value: '', label: t('keys.allGroups') },
   { value: 0, label: t('keys.noGroup') },
@@ -1604,6 +1648,12 @@ const onGroupFilterChange = (value: string | number | boolean | null) => {
 const onKeyTypeChange = (managed: boolean) => {
   if (filterDesktopManaged.value === managed) return
   filterDesktopManaged.value = managed
+  onFilterChange()
+}
+
+const onDesktopApplicationChange = (application: string) => {
+  if (filterDesktopApp.value === application) return
+  filterDesktopApp.value = application
   onFilterChange()
 }
 
@@ -1698,10 +1748,12 @@ const loadApiKeys = async () => {
       search?: string
       status?: string
       desktop_managed: boolean
+      desktop_app?: string
       group_id?: number | string
       sort_by?: string
       sort_order?: 'asc' | 'desc'
     } = { desktop_managed: filterDesktopManaged.value }
+    if (filterDesktopManaged.value && filterDesktopApp.value) filters.desktop_app = filterDesktopApp.value
     if (filterSearch.value) filters.search = filterSearch.value
     if (filterStatus.value) filters.status = filterStatus.value
     if (filterGroupId.value !== '') filters.group_id = filterGroupId.value

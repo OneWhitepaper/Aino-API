@@ -52,7 +52,14 @@ const messages: Record<string, string> = {
   'keys.currentConcurrency': 'Current Concurrency',
   'keys.keyTypes.label': 'Key type',
   'keys.keyTypes.manual': 'Personal keys',
-  'keys.keyTypes.desktop': 'Desktop managed',
+  'keys.keyTypes.desktop': 'Desktop applications',
+  'keys.desktopApplications.label': 'Filter desktop applications',
+  'keys.desktopApplications.all': 'All applications',
+  'keys.desktopApplications.other': 'Other applications',
+  'keys.desktopApplications.tableTitle': 'Device authorizations',
+  'keys.desktopApplications.tableTotal': '{count} authorizations',
+  'keys.desktopApplications.emptyTitle': 'No {name} authorizations',
+  'keys.desktopApplications.emptyDescription': 'Sign in to {name} to authorize a device.',
   'keys.lastUsedAt': 'Last Used',
   'keys.lastUsedIP': 'Last Used IP',
   'keys.rateLimitColumn': 'Rate Limit',
@@ -111,9 +118,9 @@ vi.mock('vue-i18n', async () => {
   return {
     ...actual,
     useI18n: () => ({
-      t: (key: string, params?: { count?: number }) => key === 'keys.bulkEdit.selectedCount'
+      t: (key: string, params?: Record<string, string | number>) => key === 'keys.bulkEdit.selectedCount'
         ? `Selected ${params?.count}`
-        : messages[key] ?? key,
+        : (messages[key] ?? key).replace(/\{(\w+)\}/g, (match, name) => String(params?.[name] ?? match)),
     }),
   }
 })
@@ -462,7 +469,7 @@ describe('user KeysView column settings', () => {
     table.vm.$emit('update:selectedKeys', [1])
     await nextTick()
     listKeys.mockResolvedValue({ items: [{ ...createApiKey(), key: '', desktop_managed: true }], total: 1, page: 1, page_size: 20, pages: 1 })
-    await getButtonByText(wrapper, 'Desktop managed').trigger('click')
+    await getButtonByText(wrapper, 'Desktop applications').trigger('click')
     await flushPromises()
 
     expect(listKeys).toHaveBeenLastCalledWith(1, 20,
@@ -483,11 +490,99 @@ describe('user KeysView column settings', () => {
     listKeys.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20, pages: 0 })
     const wrapper = await mountView()
     expect(wrapper.findComponent({ name: 'EmptyState' }).props('actionText')).toBe('Create API Key')
-    await getButtonByText(wrapper, 'Desktop managed').trigger('click')
+    await getButtonByText(wrapper, 'Desktop applications').trigger('click')
     await flushPromises()
     const empty = wrapper.findComponent({ name: 'EmptyState' })
     expect(empty.props('title')).toBe('keys.desktopEmptyTitle')
     expect(empty.props('description')).toBe('keys.desktopManagedHint')
+    expect(empty.props('actionText')).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it('shows desktop application categories only in the desktop view and uses server pagination', async () => {
+    const wrapper = await mountView()
+    expect(wrapper.find('[data-testid="desktop-app-filter-aino"]').exists()).toBe(false)
+    listKeys.mockResolvedValue({
+      items: [{ ...createApiKey(), desktop_managed: true, desktop_app: 'momo', name: 'Same laptop' }],
+      total: 61, page: 1, page_size: 20, pages: 4,
+    })
+    await getButtonByText(wrapper, 'Desktop applications').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="desktop-app-filter-momo"]').trigger('click')
+    await flushPromises()
+    expect(listKeys).toHaveBeenLastCalledWith(1, 20,
+      expect.objectContaining({ desktop_managed: true, desktop_app: 'momo' }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }))
+    expect(wrapper.get('[data-testid="desktop-app-filter-momo"]').attributes('aria-pressed')).toBe('true')
+    expect(wrapper.text()).toContain('MoMo · Device authorizations')
+    expect(wrapper.text()).toContain('61 authorizations')
+    expect(wrapper.get('[data-test="desktop-application"]').text()).toBe('MoMo')
+    expect(wrapper.findComponent({ name: 'DataTable' }).props('selectable')).toBe(false)
+    expect(wrapper.findComponent({ name: 'Pagination' }).props('total')).toBe(61)
+
+    await getButtonByText(wrapper, 'Personal keys').trigger('click')
+    await flushPromises()
+    expect(listKeys.mock.lastCall?.[2]).not.toHaveProperty('desktop_app')
+    expect(wrapper.find('[data-testid="desktop-app-filter-aino"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('resets the page and keeps search, group, status and sorting when changing the desktop application', async () => {
+    getAvailableGroups.mockResolvedValue([{ id: 42, name: 'OpenAI' }])
+    const wrapper = await mountView()
+    await getButtonByText(wrapper, 'Desktop applications').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-test="page-size-50"]').trigger('click')
+    await wrapper.findComponent({ name: 'SearchInput' }).vm.$emit('update:modelValue', 'laptop')
+    await wrapper.findComponent({ name: 'SearchInput' }).vm.$emit('search')
+    await wrapper.findAllComponents({ name: 'Select' })[0].vm.$emit('update:modelValue', 42)
+    await wrapper.findAllComponents({ name: 'Select' })[1].vm.$emit('update:modelValue', 'active')
+    wrapper.findComponent({ name: 'DataTable' }).vm.$emit('sort', 'current_concurrency', 'asc')
+    await flushPromises()
+    await wrapper.get('[data-test="page-2"]').trigger('click')
+    await flushPromises()
+    const previousSignal = listKeys.mock.lastCall?.[3].signal
+    await wrapper.get('[data-testid="desktop-app-filter-aino"]').trigger('click')
+    await flushPromises()
+    expect(previousSignal.aborted).toBe(true)
+    expect(listKeys).toHaveBeenLastCalledWith(1, 50, {
+      desktop_managed: true, desktop_app: 'aino', search: 'laptop', group_id: 42,
+      status: 'active', sort_by: 'current_concurrency', sort_order: 'asc',
+    }, expect.objectContaining({ signal: expect.any(AbortSignal) }))
+    await wrapper.get('[data-testid="desktop-app-filter-other"]').trigger('click')
+    await flushPromises()
+    expect(listKeys.mock.lastCall?.[2]).toHaveProperty('desktop_app', 'other')
+    await wrapper.get('[data-testid="desktop-app-filter-all"]').trigger('click')
+    await flushPromises()
+    expect(listKeys.mock.lastCall?.[2]).not.toHaveProperty('desktop_app')
+    wrapper.unmount()
+  })
+
+  it('labels authorization rows from the application identity instead of guessing from device names', async () => {
+    listKeys.mockResolvedValue({ items: [
+      { ...createApiKey(), desktop_managed: true, name: 'MoMo laptop' },
+      { ...createApiKey(), id: 2, desktop_managed: true, desktop_app: 'momo', name: 'Aino laptop' },
+      { ...createApiKey(), id: 3, desktop_managed: true, desktop_app: 'future_desktop', name: 'Future laptop' },
+      { ...createApiKey(), id: 4, name: 'Personal project' },
+    ], total: 4, page: 1, page_size: 20, pages: 1 })
+    const wrapper = await mountView()
+    expect(wrapper.findAll('[data-test="desktop-application"]').map(badge => badge.text()))
+      .toEqual(['Aino', 'MoMo', 'future_desktop'])
+    expect(wrapper.findAll('img[src="/aino-app-icon.png"]')).toHaveLength(1)
+    expect(wrapper.findAll('img[src="/momo-app-icon.png"]')).toHaveLength(1)
+    wrapper.unmount()
+  })
+
+  it('explains how to authorize the selected application in its empty state', async () => {
+    listKeys.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20, pages: 0 })
+    const wrapper = await mountView()
+    await getButtonByText(wrapper, 'Desktop applications').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="desktop-app-filter-momo"]').trigger('click')
+    await flushPromises()
+    const empty = wrapper.findComponent({ name: 'EmptyState' })
+    expect(empty.props('title')).toBe('No MoMo authorizations')
+    expect(empty.props('description')).toBe('Sign in to MoMo to authorize a device.')
     expect(empty.props('actionText')).toBeUndefined()
     wrapper.unmount()
   })
@@ -851,7 +946,7 @@ describe('user KeysView column settings', () => {
 
     it('returns to personal keys after creating a key from the desktop view', async () => {
       const wrapper = await mountView()
-      await getButtonByText(wrapper, 'Desktop managed').trigger('click')
+      await getButtonByText(wrapper, 'Desktop applications').trigger('click')
       await flushPromises()
       await wrapper.get('[data-tour="keys-create-btn"]').trigger('click')
       await wrapper.get('[data-tour="key-form-name"]').setValue('New personal key')

@@ -43,7 +43,9 @@ func (r *apiKeyRepository) activeQuery() *dbent.APIKeyQuery {
 }
 
 func (r *apiKeyRepository) Create(ctx context.Context, key *service.APIKey) error {
+	key.DesktopApp = service.DesktopAppForKey(key)
 	builder := r.client.APIKey.Create().
+		SetDesktopApp(key.DesktopApp).
 		SetDesktopManaged(key.DesktopManaged).
 		SetBillingPolicy(key.BillingPolicy).
 		SetDesktopCredentialType(key.DesktopCredentialType).
@@ -137,6 +139,7 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 	m, err := r.activeQuery().
 		Where(apiKeyCredentialPredicate(key)).
 		Select(
+			apikey.FieldDesktopApp,
 			apikey.FieldDesktopManaged,
 			apikey.FieldBillingPolicy,
 			apikey.FieldDesktopCredentialType,
@@ -470,6 +473,14 @@ func (r *apiKeyRepository) apiKeyListByUserIDQuery(userID int64, filters service
 	}
 	if filters.DesktopManaged != nil {
 		q = q.Where(apikey.DesktopManagedEQ(*filters.DesktopManaged))
+	}
+	if filters.DesktopApp != "" {
+		q = q.Where(apikey.DesktopManagedEQ(true))
+		if filters.DesktopApp == service.DesktopAppOther {
+			q = q.Where(apikey.DesktopAppNotIn(service.DesktopAppAino, service.DesktopAppMoMo))
+		} else {
+			q = q.Where(apikey.DesktopAppEQ(filters.DesktopApp))
+		}
 	}
 	if filters.GroupID != nil {
 		if *filters.GroupID == 0 {
@@ -917,6 +928,7 @@ func apiKeyEntityToService(m *dbent.APIKey) *service.APIKey {
 		return nil
 	}
 	out := &service.APIKey{
+		DesktopApp:            m.DesktopApp,
 		BillingPolicy:         m.BillingPolicy,
 		DesktopCredentialType: m.DesktopCredentialType,
 		DesktopDeviceID:       m.DesktopDeviceID,

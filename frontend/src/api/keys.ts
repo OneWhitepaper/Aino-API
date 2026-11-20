@@ -38,6 +38,7 @@ export async function list(
     search?: string
     status?: string
     desktop_managed?: boolean
+    desktop_app?: string
     include_archived?: boolean
     group_id?: number | string
     sort_by?: string

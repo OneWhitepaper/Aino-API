@@ -28,6 +28,8 @@ type APIKey struct {
 	DeletedAt *time.Time `json:"deleted_at,omitempty"`
 	// DesktopManaged holds the value of the "desktop_managed" field.
 	DesktopManaged bool `json:"desktop_managed,omitempty"`
+	// DesktopApp holds the value of the "desktop_app" field.
+	DesktopApp string `json:"desktop_app,omitempty"`
 	// BillingPolicy holds the value of the "billing_policy" field.
 	BillingPolicy string `json:"billing_policy,omitempty"`
 	// DesktopCredentialType holds the value of the "desktop_credential_type" field.
@@ -152,7 +154,7 @@ func (*APIKey) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullFloat64)
 		case apikey.FieldID, apikey.FieldDesktopKeyVersion, apikey.FieldUserID, apikey.FieldGroupID:
 			values[i] = new(sql.NullInt64)
-		case apikey.FieldBillingPolicy, apikey.FieldDesktopCredentialType, apikey.FieldDesktopDeviceID, apikey.FieldKeyHashType, apikey.FieldKey, apikey.FieldName, apikey.FieldStatus:
+		case apikey.FieldDesktopApp, apikey.FieldBillingPolicy, apikey.FieldDesktopCredentialType, apikey.FieldDesktopDeviceID, apikey.FieldKeyHashType, apikey.FieldKey, apikey.FieldName, apikey.FieldStatus:
 			values[i] = new(sql.NullString)
 		case apikey.FieldCreatedAt, apikey.FieldUpdatedAt, apikey.FieldDeletedAt, apikey.FieldLastUsedAt, apikey.FieldExpiresAt, apikey.FieldWindow5hStart, apikey.FieldWindow1dStart, apikey.FieldWindow7dStart:
 			values[i] = new(sql.NullTime)
@@ -201,6 +203,12 @@ func (_m *APIKey) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field desktop_managed", values[i])
 			} else if value.Valid {
 				_m.DesktopManaged = value.Bool
+			}
+		case apikey.FieldDesktopApp:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field desktop_app", values[i])
+			} else if value.Valid {
+				_m.DesktopApp = value.String
 			}
 		case apikey.FieldBillingPolicy:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -431,6 +439,9 @@ func (_m *APIKey) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("desktop_managed=")
 	builder.WriteString(fmt.Sprintf("%v", _m.DesktopManaged))
+	builder.WriteString(", ")
+	builder.WriteString("desktop_app=")
+	builder.WriteString(_m.DesktopApp)
 	builder.WriteString(", ")
 	builder.WriteString("billing_policy=")
 	builder.WriteString(_m.BillingPolicy)

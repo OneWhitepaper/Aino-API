@@ -75,6 +75,11 @@ func DesktopManaged(v bool) predicate.APIKey {
 	return predicate.APIKey(sql.FieldEQ(FieldDesktopManaged, v))
 }
 
+// DesktopApp applies equality check predicate on the "desktop_app" field. It's identical to DesktopAppEQ.
+func DesktopApp(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldDesktopApp, v))
+}
+
 // BillingPolicy applies equality check predicate on the "billing_policy" field. It's identical to BillingPolicyEQ.
 func BillingPolicy(v string) predicate.APIKey {
 	return predicate.APIKey(sql.FieldEQ(FieldBillingPolicy, v))
@@ -328,6 +333,71 @@ func DesktopManagedEQ(v bool) predicate.APIKey {
 // DesktopManagedNEQ applies the NEQ predicate on the "desktop_managed" field.
 func DesktopManagedNEQ(v bool) predicate.APIKey {
 	return predicate.APIKey(sql.FieldNEQ(FieldDesktopManaged, v))
+}
+
+// DesktopAppEQ applies the EQ predicate on the "desktop_app" field.
+func DesktopAppEQ(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldDesktopApp, v))
+}
+
+// DesktopAppNEQ applies the NEQ predicate on the "desktop_app" field.
+func DesktopAppNEQ(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNEQ(FieldDesktopApp, v))
+}
+
+// DesktopAppIn applies the In predicate on the "desktop_app" field.
+func DesktopAppIn(vs ...string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldIn(FieldDesktopApp, vs...))
+}
+
+// DesktopAppNotIn applies the NotIn predicate on the "desktop_app" field.
+func DesktopAppNotIn(vs ...string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNotIn(FieldDesktopApp, vs...))
+}
+
+// DesktopAppGT applies the GT predicate on the "desktop_app" field.
+func DesktopAppGT(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldGT(FieldDesktopApp, v))
+}
+
+// DesktopAppGTE applies the GTE predicate on the "desktop_app" field.
+func DesktopAppGTE(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldGTE(FieldDesktopApp, v))
+}
+
+// DesktopAppLT applies the LT predicate on the "desktop_app" field.
+func DesktopAppLT(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldLT(FieldDesktopApp, v))
+}
+
+// DesktopAppLTE applies the LTE predicate on the "desktop_app" field.
+func DesktopAppLTE(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldLTE(FieldDesktopApp, v))
+}
+
+// DesktopAppContains applies the Contains predicate on the "desktop_app" field.
+func DesktopAppContains(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldContains(FieldDesktopApp, v))
+}
+
+// DesktopAppHasPrefix applies the HasPrefix predicate on the "desktop_app" field.
+func DesktopAppHasPrefix(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldHasPrefix(FieldDesktopApp, v))
+}
+
+// DesktopAppHasSuffix applies the HasSuffix predicate on the "desktop_app" field.
+func DesktopAppHasSuffix(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldHasSuffix(FieldDesktopApp, v))
+}
+
+// DesktopAppEqualFold applies the EqualFold predicate on the "desktop_app" field.
+func DesktopAppEqualFold(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEqualFold(FieldDesktopApp, v))
+}
+
+// DesktopAppContainsFold applies the ContainsFold predicate on the "desktop_app" field.
+func DesktopAppContainsFold(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldContainsFold(FieldDesktopApp, v))
 }
 
 // BillingPolicyEQ applies the EQ predicate on the "billing_policy" field.

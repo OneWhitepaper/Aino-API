@@ -315,7 +315,7 @@ export default {
     recharge: {
       eyebrow: '账户与账单',
       title: '为下一次灵感，续上能量。',
-      description: '充值余额，用于 Aino API 与桌面端 AI 服务。',
+      description: '充值余额，用于 OmniFlow API 与桌面端 AI 服务。',
       selectAmount: '选择充值金额',
       currency: '支付币种 · {currency}',
       amountHint: '选择常用金额，或输入你需要的金额',

@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
-import ainoMark from '@/assets/aino/aino-mark.svg'
+import { resolveSiteName, resolveSiteLogo } from '@/utils/branding'
 
 const props = defineProps<{
   siteName: string
@@ -17,7 +17,8 @@ const props = defineProps<{
 }>()
 defineEmits<{ 'toggle-theme': [] }>()
 const { t } = useI18n()
-const brand = computed(() => props.siteName === 'Sub2API' ? 'Aino API' : props.siteName)
+const brand = computed(() => resolveSiteName(props.siteName))
+const logo = computed(() => resolveSiteLogo(props.siteLogo, props.siteName))
 const primaryPath = computed(() => props.isAuthenticated ? props.dashboardPath : props.registrationEnabled ? '/register' : '/login')
 const primaryLabel = computed(() => props.isAuthenticated ? t('home.goToDashboard') : props.registrationEnabled ? t('home.aino.createAccount') : t('home.getStarted'))
 const activeTab = ref(0)
@@ -44,7 +45,7 @@ function navigateTab(event: KeyboardEvent, index: number) {
     <header class="aino-header">
       <nav class="aino-nav aino-shell" :aria-label="t('home.aino.navigation')">
         <router-link to="/" class="aino-brand" :aria-label="brand">
-          <img :src="siteLogo || ainoMark" alt="" width="28" height="28" />
+          <img :src="logo" alt="" width="28" height="28" />
           <span>{{ brand }}</span>
         </router-link>
         <div id="aino-navigation" class="aino-nav-links" :class="{ 'is-open': menuOpen }" @click="menuOpen = false">
@@ -88,7 +89,7 @@ function navigateTab(event: KeyboardEvent, index: number) {
           <img class="aino-showcase-art" src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260826_125039_45a71f04-36dd-4620-99d8-7526316d439e.png" alt="" decoding="async" />
           <div class="aino-preview">
             <aside class="aino-preview-sidebar" aria-hidden="true">
-              <span class="aino-preview-brand">Aino<span>.</span></span>
+              <span class="aino-preview-brand">{{ brand }}</span>
               <span class="aino-sidebar-label">{{ t('home.aino.workspace') }}</span>
               <span v-for="(tab, index) in tabs" :key="tab" class="aino-sidebar-item" :class="{ selected: activeTab === index }">
                 <Icon :name="tabIcons[index]" size="sm" />{{ t(`home.aino.${tab}`) }}
@@ -138,7 +139,7 @@ function navigateTab(event: KeyboardEvent, index: number) {
           </div>
           <div class="aino-feature-visual">
             <div class="aino-connection-card">
-              <img :src="ainoMark" width="40" height="40" alt="" />
+              <img :src="logo" class="aino-platform-logo" width="40" height="40" alt="" />
               <h4>{{ t('home.aino.connectionTitle') }}</h4>
               <div class="aino-detail-row"><span>{{ t('home.aino.client') }}</span><strong>Aino · SDK · {{ t('home.aino.yourApp') }}</strong></div>
               <div class="aino-detail-row"><span>{{ t('home.aino.access') }}</span><strong>API Key</strong></div>
@@ -191,13 +192,13 @@ function navigateTab(event: KeyboardEvent, index: number) {
       </section>
 
       <section class="aino-final-cta">
-        <div class="aino-shell"><img :src="ainoMark" width="54" height="54" alt="" /><h2>{{ t('home.aino.ctaLine1') }}<br />{{ t('home.aino.ctaLine2') }}</h2><p>{{ t('home.aino.ctaDescription') }}</p><router-link :to="primaryPath" class="aino-button aino-button-dark">{{ primaryLabel }}<Icon name="arrowRight" size="sm" aria-hidden="true" /></router-link></div>
+        <div class="aino-shell"><img :src="logo" class="aino-platform-logo" width="54" height="54" alt="" /><h2>{{ t('home.aino.ctaLine1') }}<br />{{ t('home.aino.ctaLine2') }}</h2><p>{{ t('home.aino.ctaDescription') }}</p><router-link :to="primaryPath" class="aino-button aino-button-dark">{{ primaryLabel }}<Icon name="arrowRight" size="sm" aria-hidden="true" /></router-link></div>
       </section>
     </main>
 
     <footer class="aino-footer aino-shell">
-      <div class="aino-footer-main"><div><router-link to="/" class="aino-brand"><img :src="siteLogo || ainoMark" width="28" height="28" alt="" /><span>{{ brand }}</span></router-link><p>{{ t('home.aino.footerDescription') }}</p></div><div class="aino-footer-links"><a href="#aino-platform">{{ t('home.aino.platform') }}</a><a href="#aino-start">{{ t('home.aino.quickStart') }}</a><a href="#aino-faq">{{ t('home.aino.faq') }}</a><a v-if="docUrl" :href="docUrl" target="_blank" rel="noopener noreferrer">{{ t('home.docs') }}</a></div></div>
-      <div class="aino-footer-bottom"><span>© {{ year }} {{ brand }}</span><a href="https://github.com/Ablankpaper/Aino-API" target="_blank" rel="noopener noreferrer">Aino API · GitHub<Icon name="externalLink" size="xs" aria-hidden="true" /></a></div>
+      <div class="aino-footer-main"><div><router-link to="/" class="aino-brand"><img :src="logo" width="28" height="28" alt="" /><span>{{ brand }}</span></router-link><p>{{ t('home.aino.footerDescription') }}</p></div><div class="aino-footer-links"><a href="#aino-platform">{{ t('home.aino.platform') }}</a><a href="#aino-start">{{ t('home.aino.quickStart') }}</a><a href="#aino-faq">{{ t('home.aino.faq') }}</a><a v-if="docUrl" :href="docUrl" target="_blank" rel="noopener noreferrer">{{ t('home.docs') }}</a></div></div>
+      <div class="aino-footer-bottom"><span>© {{ year }} {{ brand }}</span><a href="https://github.com/Ablankpaper/Aino-API" target="_blank" rel="noopener noreferrer">{{ brand }} · GitHub<Icon name="externalLink" size="xs" aria-hidden="true" /></a></div>
     </footer>
   </div>
 </template>

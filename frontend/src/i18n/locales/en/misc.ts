@@ -291,7 +291,7 @@ export default {
     recharge: {
       eyebrow: 'ACCOUNT & BILLING',
       title: 'Keep your next idea moving.',
-      description: 'Top up for Aino API and desktop AI services.',
+      description: 'Top up for OmniFlow API and desktop AI services.',
       selectAmount: 'Choose an amount',
       currency: 'Payment currency · {currency}',
       amountHint: 'Choose a preset or enter your own amount.',

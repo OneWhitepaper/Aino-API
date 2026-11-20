@@ -2,26 +2,23 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores'
-import { sanitizeUrl } from '@/utils/url'
+import { DEFAULT_SITE_SUBTITLE, resolveSiteName, resolveSiteLogo, resolveSiteSubtitle } from '@/utils/branding'
 import Icon from '@/components/icons/Icon.vue'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
-import ainoMark from '@/assets/aino/aino-mark.svg'
 
 const { t } = useI18n()
 const appStore = useAppStore()
-const brand = computed(() => {
-  const name = appStore.cachedPublicSettings?.site_name || appStore.siteName
-  return !name || name === 'Sub2API' ? 'Aino API' : name
-})
-const logo = computed(() => sanitizeUrl(
-  appStore.cachedPublicSettings?.site_logo || appStore.siteLogo || '',
-  { allowRelative: true, allowDataUrl: true },
-) || ainoMark)
+const configuredName = computed(() => appStore.cachedPublicSettings?.site_name || appStore.siteName)
+const brand = computed(() => resolveSiteName(configuredName.value))
+const logo = computed(() => resolveSiteLogo(
+  appStore.cachedPublicSettings?.site_logo || appStore.siteLogo,
+  configuredName.value,
+))
 const isDark = ref(document.documentElement.classList.contains('dark'))
 const year = new Date().getFullYear()
 const description = computed(() => {
   const subtitle = appStore.cachedPublicSettings?.site_subtitle
-  return subtitle && subtitle !== 'Subscription to API Conversion Platform'
+  return subtitle && resolveSiteSubtitle(subtitle) !== DEFAULT_SITE_SUBTITLE
     ? subtitle
     : t('home.aino.loginDescription')
 })
@@ -61,7 +58,7 @@ onMounted(() => {
     <main class="login-main login-shell">
       <section class="login-story" aria-labelledby="login-story-title">
         <div class="login-story-copy">
-          <img :src="ainoMark" alt="" width="44" height="44" />
+          <img :src="logo" alt="" width="44" height="44" />
           <h2 id="login-story-title">{{ t('home.aino.loginLine1') }}<br />{{ t('home.aino.loginLine2') }}</h2>
           <p>{{ description }}</p>
           <div class="login-story-caption">
@@ -70,7 +67,7 @@ onMounted(() => {
         </div>
         <div class="login-art" aria-hidden="true">
           <img class="login-art-background" src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260826_125039_45a71f04-36dd-4620-99d8-7526316d439e.png" alt="" decoding="async" />
-          <div class="login-art-brand"><img :src="ainoMark" width="54" height="54" alt="" /><span>Aino<span class="login-brand-dot">.</span></span></div>
+          <div class="login-art-brand"><img :src="logo" width="54" height="54" alt="" /><span>{{ brand }}</span></div>
         </div>
       </section>
 
@@ -137,9 +134,9 @@ onMounted(() => {
 .login-story-caption span + span::before { content: '/'; color: #9bb3b0; margin-right: 14px; }
 .login-art { min-height: 190px; display: grid; place-items: center; isolation: isolate; position: relative; background: #12bcb8; }
 .login-art-background { position: absolute; inset: 0; height: 100%; width: 100%; object-fit: cover; z-index: -1; }
-.login-art-brand { display: flex; align-items: center; gap: 15px; padding: 24px 42px; border-radius: 18px; background: #fff; box-shadow: 0 8px 35px #03446120; }
-.login-art-brand > span { font-size: 42px; font-weight: 750; letter-spacing: -2px; color: #092e48; line-height: 1; }
-.login-brand-dot { color: #ffc63d; }
+.login-art-brand { display: flex; align-items: center; gap: 15px; max-width: calc(100% - 40px); padding: 24px 28px; border-radius: 18px; background: #fff; box-shadow: 0 8px 35px #03446120; }
+.login-art-brand > img { flex: none; border-radius: 12px; }
+.login-art-brand > span { min-width: 0; font-size: clamp(24px, 2.8vw, 36px); font-weight: 750; letter-spacing: -1.3px; color: #092e48; line-height: 1.15; overflow-wrap: anywhere; }
 .login-form-region { min-width: 0; padding: 20px 22px; }
 .login-form-content { max-width: 380px; margin-inline: auto; }
 .login-form-footer { margin-top: 26px; font-size: 13px; text-align: center; }

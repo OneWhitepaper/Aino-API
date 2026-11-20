@@ -67,8 +67,8 @@
 .aino-showcase-art { position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%; object-fit: cover; }
 .aino-preview { max-width: 920px; margin: auto; display: grid; grid-template-columns: 174px minmax(0, 1fr); border-radius: 18px; background: var(--aino-paper); box-shadow: 0 0 0 1px #ffffff99, 0 8px 60px #03446136; overflow: hidden; animation: aino-rise .7s .12s var(--aino-ease) both; }
 .aino-preview-sidebar { background: var(--aino-surface); padding: 24px 14px; display: flex; flex-direction: column; gap: 5px; }
-.aino-preview-brand { padding: 0 9px; font-size: 24px; font-weight: 750; letter-spacing: -1px; }
-.aino-preview-brand > span { color: #ffc63d; }
+.aino-preview-brand { padding: 0 9px; font-size: 20px; font-weight: 750; letter-spacing: -.7px; line-height: 1.25; overflow-wrap: anywhere; }
+.aino-platform-logo { border-radius: 12px; object-fit: contain; }
 .aino-sidebar-label { color: var(--aino-muted); font-size: 10px; padding: 26px 9px 10px; }
 .aino-sidebar-item { display: flex; align-items: center; gap: 9px; font-size: 12px; color: var(--aino-muted); padding: 10px 9px; border-radius: 7px; }
 .aino-sidebar-item.selected { background: var(--aino-line); color: var(--aino-ink); }
@@ -173,7 +173,7 @@
   .aino-shell { width: calc(100% - 40px); }
   .aino-header { padding-top: 14px; }
   .aino-nav { width: calc(100% - 24px); gap: 8px; padding-left: 14px; min-height: 56px; }
-  .aino-nav .aino-brand { font-size: 20px; max-width: 130px; gap: 7px; }
+  .aino-nav .aino-brand { font-size: 18px; max-width: none; gap: 7px; }
   .aino-nav .aino-brand img { width: 24px; height: 24px; }
   .aino-nav-actions { gap: 1px; }
   .aino-nav-cta { padding: 9px 13px; min-height: 36px; font-size: 12px; }

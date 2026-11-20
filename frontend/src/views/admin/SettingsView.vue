@@ -9024,6 +9024,7 @@ import { affiliatesAPI, type AffiliateAdminEntry, type SimpleUser as AffiliateSi
 import { extractApiErrorMessage, extractI18nErrorMessage } from "@/utils/apiError";
 import { useAppStore } from "@/stores";
 import { useAdminSettingsStore } from "@/stores/adminSettings";
+import { DEFAULT_SITE_NAME, DEFAULT_SITE_LOGO, DEFAULT_SITE_SUBTITLE } from "@/utils/branding";
 import { normalizeVisibleMethod } from "@/components/payment/paymentFlow";
 import {
   isRegistrationEmailSuffixDomainValid,
@@ -9800,9 +9801,9 @@ const form = reactive<SettingsForm>({
   default_subscriptions: [],
   force_email_on_third_party_signup: false,
   default_user_rpm_limit: 0,
-  site_name: "Sub2API",
-  site_logo: "",
-  site_subtitle: "Subscription to API Conversion Platform",
+  site_name: DEFAULT_SITE_NAME,
+  site_logo: DEFAULT_SITE_LOGO,
+  site_subtitle: DEFAULT_SITE_SUBTITLE,
   api_base_url: "",
   contact_info: "",
   doc_url: "",

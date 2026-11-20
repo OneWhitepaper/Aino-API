@@ -5,7 +5,7 @@
       <nav class="mx-auto flex max-w-6xl items-center justify-between">
         <router-link to="/home" class="flex items-center gap-3">
           <div class="h-10 w-10 overflow-hidden rounded-xl shadow-md">
-            <img :src="siteLogo || ainoMark" :alt="siteName" class="h-full w-full object-contain" />
+            <img :src="siteLogo" :alt="siteName" class="h-full w-full object-contain" />
           </div>
           <span class="text-lg font-semibold tracking-tight text-gray-900 dark:text-white">{{ siteName }}</span>
         </router-link>
@@ -417,7 +417,7 @@
 </template>
 
 <script setup lang="ts">
-import ainoMark from '@/assets/aino/aino-mark.svg'
+import { resolveSiteName, resolveSiteLogo } from '@/utils/branding'
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores'
@@ -434,11 +434,9 @@ const subscriptionFeatureEnabled = computed(() => resolveFeatureFlag(appStore.ca
 
 // ==================== Site Settings (same as HomeView) ====================
 
-const siteName = computed(() => {
-  const name = appStore.cachedPublicSettings?.site_name || appStore.siteName
-  return !name || name === 'Sub2API' ? 'Aino API' : name
-})
-const siteLogo = computed(() => sanitizeUrl(appStore.cachedPublicSettings?.site_logo || appStore.siteLogo || '', { allowRelative: true, allowDataUrl: true }))
+const configuredName = computed(() => appStore.cachedPublicSettings?.site_name || appStore.siteName)
+const siteName = computed(() => resolveSiteName(configuredName.value))
+const siteLogo = computed(() => resolveSiteLogo(appStore.cachedPublicSettings?.site_logo || appStore.siteLogo, configuredName.value))
 const docUrl = computed(() => sanitizeUrl(appStore.cachedPublicSettings?.doc_url || appStore.docUrl || ''))
 const githubUrl = 'https://github.com/Wei-Shaw/sub2api'
 

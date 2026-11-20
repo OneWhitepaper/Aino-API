@@ -9,6 +9,7 @@ import promptAudit from './promptAudit'
 import plugins from './plugins'
 import diagnostics from './diagnostics'
 import desktopModels from './desktopModels'
+import desktopApps from './desktopApps'
 
 export default {
   ...overview,
@@ -22,4 +23,5 @@ export default {
   ...plugins,
   ...diagnostics,
   ...desktopModels,
+  ...desktopApps,
 }

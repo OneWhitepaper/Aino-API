@@ -1,8 +1,9 @@
 export default {
   "desktopModels": {
+    "application": "Aino desktop",
     "title": "Built-in models",
-    "eyebrow": "Desktop · Model catalog",
-    "description": "Manage desktop model choices, routing, and defaults in one place.",
+    "eyebrow": "Aino desktop · Model catalog",
+    "description": "Manage Aino desktop model choices, routing, and defaults.",
     "movedHint": "The model catalog now has its own page and saves independently.",
     "manage": "Manage built-in models",
     "preview": "Preview desktop",

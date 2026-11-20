@@ -1,8 +1,9 @@
 export default {
   "desktopModels": {
+    "application": "Aino 桌面端",
     "title": "内置模型",
-    "eyebrow": "桌面端 · 模型目录",
-    "description": "统一管理桌面端可选模型、调用配置与默认选择。",
+    "eyebrow": "Aino 桌面端 · 模型目录",
+    "description": "管理 Aino 桌面端可选模型、调用配置与默认选择。",
     "movedHint": "内置模型已移至独立页面，统一管理并单独保存。",
     "manage": "管理内置模型",
     "preview": "预览桌面端",

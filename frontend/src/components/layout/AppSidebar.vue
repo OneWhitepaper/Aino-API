@@ -37,19 +37,22 @@
         <div class="sidebar-section">
           <template v-for="item in adminNavItems" :key="item.path">
             <!-- Collapsible group (has children) -->
-            <template v-if="item.children?.length">
+            <template v-if="item.children">
               <button
                 type="button"
                 class="sidebar-link mb-1 w-full"
                 :class="{
-                  'sidebar-link-active': isGroupActive(item) && !isGroupExpanded(item),
+                  'sidebar-link-active': isGroupActive(item) && (sidebarCollapsed || !isGroupExpanded(item)),
                   'sidebar-link-collapsed': sidebarCollapsed
                 }"
                 :title="sidebarCollapsed ? item.label : undefined"
                 :aria-label="item.label"
+                :aria-expanded="!sidebarCollapsed && isGroupExpanded(item)"
+                :aria-controls="groupPanelId(item)"
                 @click="handleGroupClick(item)"
               >
-                <component :is="item.icon" class="h-5 w-5 flex-shrink-0" />
+                <img v-if="item.iconImage" :src="item.iconImage" alt="" class="h-5 w-5 flex-shrink-0 rounded-md object-contain" />
+                <component v-else :is="item.icon" class="h-5 w-5 flex-shrink-0" />
                 <span
                   class="sidebar-label sidebar-label-flex"
                   :class="{ 'sidebar-label-collapsed': sidebarCollapsed }"
@@ -57,18 +60,25 @@
                 >
                   <span class="min-w-0 truncate">{{ item.label }}</span>
                   <ChevronDownIcon
-                    class="h-4 w-4 flex-shrink-0 transition-transform duration-200"
+                    class="h-4 w-4 flex-shrink-0 transition-transform duration-200 motion-reduce:transition-none"
                     :class="isGroupExpanded(item) ? 'rotate-180' : ''"
                   />
                 </span>
               </button>
               <!-- Children -->
-              <div v-if="!sidebarCollapsed && isGroupExpanded(item)" class="mb-1 ml-4 border-l border-gray-200 pl-2 dark:border-dark-600">
+              <div
+                v-show="!sidebarCollapsed && isGroupExpanded(item)"
+                :id="groupPanelId(item)"
+                class="mb-1 ml-4 border-l border-gray-200 pl-2 dark:border-dark-600"
+              >
+                <p v-if="!item.children.length" class="px-4 py-3 text-xs leading-5 text-gray-500 dark:text-dark-400">
+                  {{ item.emptyLabel }}
+                </p>
                 <router-link
                   v-for="child in item.children"
                   :key="child.path"
                   :to="child.path"
-                  class="sidebar-link mb-0.5 py-1.5 text-sm"
+                  class="sidebar-link mb-0.5 min-h-11 py-1.5 text-sm"
                   :class="{ 'sidebar-link-active': route.path === child.path }"
                   @click="handleMenuItemClick(child.path)"
                 >
@@ -227,8 +237,10 @@ interface NavItem {
   label: string
   icon: unknown
   iconSvg?: string
+  iconImage?: string
   hideInSimpleMode?: boolean
   children?: NavItem[]
+  emptyLabel?: string
   /**
    * When true, the parent item only toggles the expand/collapse state and
    * does NOT navigate to its `path`. The `path` is purely a stable key.
@@ -831,7 +843,25 @@ const adminNavItems = computed((): NavItem[] => {
         { path: '/admin/channels/monitor', label: t('nav.channelMonitor'), icon: SignalIcon, featureFlag: flagChannelMonitor },
       ],
     },
-    { path: '/admin/desktop-models', label: t('admin.desktopModels.title'), icon: () => h(Icon, { name: 'grid', class: 'h-5 w-5' }) },
+    {
+      path: '/admin/apps/aino',
+      label: t('admin.desktopModels.application'),
+      icon: null,
+      iconImage: '/aino-app-icon.png',
+      expandOnly: true,
+      children: [
+        { path: '/admin/desktop-models', label: t('admin.desktopModels.title'), icon: () => h(Icon, { name: 'grid', class: 'h-4 w-4' }) },
+      ],
+    },
+    {
+      path: '/admin/apps/momo',
+      label: t('admin.desktopApps.momo.title'),
+      icon: null,
+      iconImage: '/momo-app-icon.png',
+      expandOnly: true,
+      children: [],
+      emptyLabel: t('admin.desktopApps.momo.empty'),
+    },
     // 「仅充值」站点连管理端的「订阅管理」入口也一并收起（路由本身不拦截）。
     { path: '/admin/subscriptions', label: t('nav.subscriptions'), icon: CreditCardIcon, hideInSimpleMode: true, featureFlag: flagSubscription },
     { path: '/admin/accounts', label: t('nav.accounts'), icon: GlobeIcon },
@@ -952,19 +982,27 @@ function isGroupExpanded(item: NavItem): boolean {
   return isGroupActive(item)
 }
 
+function groupPanelId(item: NavItem): string {
+  return `sidebar-group${item.path.replace(/\//g, '-')}`
+}
+
 function toggleGroup(item: NavItem) {
   groupExpandOverrides.value.set(item.path, !isGroupExpanded(item))
 }
 
 /**
  * Click handler for collapsible parent items.
- * - When sidebar is collapsed: do nothing (children are not visible).
+ * - When sidebar is collapsed: reveal the sidebar and the group's children.
  * - When `expandOnly` is true: only toggle expand state.
  * - Otherwise (default, e.g. /admin/orders): navigate to the parent path
  *   (router-link semantics) and ensure the group is expanded.
  */
 function handleGroupClick(item: NavItem) {
-  if (sidebarCollapsed.value) return
+  if (sidebarCollapsed.value) {
+    appStore.setSidebarCollapsed(false)
+    groupExpandOverrides.value.set(item.path, true)
+    return
+  }
   if (item.expandOnly) {
     toggleGroup(item)
     return

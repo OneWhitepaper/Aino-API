@@ -25,7 +25,11 @@ type desktopCatalogProjection struct {
 // The existing auth L1 owns eviction and lifetime. Only authorization/routing
 // projections enter it; balances and subscription usage remain billing inputs.
 func (s *DesktopModelService) catalogProjection(ctx context.Context, userID int64) ([]ResolvedPlatformModel, error) {
+	policy := desktopBillingPolicy(ctx)
 	cacheKey := fmt.Sprintf("desktop:catalog:%d", userID)
+	if policy != "" {
+		cacheKey += ":" + policy
+	}
 	read := func() ([]byte, bool) {
 		if s.keys == nil || s.keys.authCacheL1 == nil {
 			return nil, false
@@ -88,6 +92,15 @@ func (s *DesktopModelService) resolveCatalog(ctx context.Context, userID int64) 
 		}
 		entry.Model.IsDefault = entry.Model.IsDefault && entry.Model.State == "available"
 	}
+	if desktopBillingPolicy(ctx) == BillingPolicyBalanceOnly {
+		available := make([]ResolvedPlatformModel, 0, len(entries))
+		for _, entry := range entries {
+			if entry.Model.State == "available" {
+				available = append(available, entry)
+			}
+		}
+		entries = available
+	}
 	return entries, nil
 }
 
@@ -97,6 +110,10 @@ func (s *DesktopModelService) ResolveRequest(ctx context.Context, key *APIKey, m
 	if s == nil || key == nil || key.User == nil {
 		return nil, ErrServiceUnavailable
 	}
+	if err := ValidateDesktopBillingPolicy(key.BillingPolicy); err != nil {
+		return nil, err
+	}
+	ctx = WithDesktopBillingPolicy(ctx, key.BillingPolicy)
 	// Authorization and routing must reflect the account's current group access
 	// for every inference request. The short-lived catalog projection is only a
 	// display optimization and must not keep a revoked model callable.
@@ -152,5 +169,6 @@ func (s *DesktopModelService) ResolveRequest(ctx context.Context, key *APIKey, m
 func (s *APIKeyService) InvalidateDesktopCatalogProjection(userID int64) {
 	if s.authCacheL1 != nil {
 		s.authCacheL1.Del(fmt.Sprintf("desktop:catalog:%d", userID))
+		s.authCacheL1.Del(fmt.Sprintf("desktop:catalog:%d:%s", userID, BillingPolicyBalanceOnly))
 	}
 }

@@ -505,7 +505,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	simpleModeKeyRateLimitOnly := simpleModeKeyRateLimitBillingEnabled(s.cfg, apiKey)
 	if s.cfg != nil && s.cfg.RunMode == config.RunModeSimple && !simpleModeKeyRateLimitOnly {
 		attachDesktopUsage(usageLog, apiKey)
-		settleDesktopUsage(usageLog, &UsageBillingCommand{})
+		settleDesktopUsage(usageLog, &UsageBillingCommand{}, &UsageBillingApplyResult{Applied: true})
 		writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.openai_gateway")
 		logger.LegacyPrintf("service.openai_gateway", "[SIMPLE MODE] Usage recorded (not billed): user=%d, tokens=%d", usageLog.UserID, usageLog.TotalTokens())
 		s.deferredService.ScheduleLastUsedUpdate(account.ID)
@@ -520,7 +520,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	}
 
 	attachDesktopUsage(usageLog, apiKey)
-	_, billingErr := applyUsageBilling(ctx, requestID, usageLog, &postUsageBillingParams{
+	billed, billingErr := applyUsageBilling(ctx, requestID, usageLog, &postUsageBillingParams{
 		Cost:                       cost,
 		User:                       user,
 		APIKey:                     apiKey,
@@ -539,7 +539,9 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.openai_gateway")
 		return billingErr
 	}
-	writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.openai_gateway")
+	if billed {
+		writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.openai_gateway")
+	}
 
 	return nil
 }

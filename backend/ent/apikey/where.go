@@ -75,6 +75,11 @@ func DesktopManaged(v bool) predicate.APIKey {
 	return predicate.APIKey(sql.FieldEQ(FieldDesktopManaged, v))
 }
 
+// BillingPolicy applies equality check predicate on the "billing_policy" field. It's identical to BillingPolicyEQ.
+func BillingPolicy(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldBillingPolicy, v))
+}
+
 // DesktopCredentialType applies equality check predicate on the "desktop_credential_type" field. It's identical to DesktopCredentialTypeEQ.
 func DesktopCredentialType(v string) predicate.APIKey {
 	return predicate.APIKey(sql.FieldEQ(FieldDesktopCredentialType, v))
@@ -323,6 +328,71 @@ func DesktopManagedEQ(v bool) predicate.APIKey {
 // DesktopManagedNEQ applies the NEQ predicate on the "desktop_managed" field.
 func DesktopManagedNEQ(v bool) predicate.APIKey {
 	return predicate.APIKey(sql.FieldNEQ(FieldDesktopManaged, v))
+}
+
+// BillingPolicyEQ applies the EQ predicate on the "billing_policy" field.
+func BillingPolicyEQ(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldBillingPolicy, v))
+}
+
+// BillingPolicyNEQ applies the NEQ predicate on the "billing_policy" field.
+func BillingPolicyNEQ(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNEQ(FieldBillingPolicy, v))
+}
+
+// BillingPolicyIn applies the In predicate on the "billing_policy" field.
+func BillingPolicyIn(vs ...string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldIn(FieldBillingPolicy, vs...))
+}
+
+// BillingPolicyNotIn applies the NotIn predicate on the "billing_policy" field.
+func BillingPolicyNotIn(vs ...string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNotIn(FieldBillingPolicy, vs...))
+}
+
+// BillingPolicyGT applies the GT predicate on the "billing_policy" field.
+func BillingPolicyGT(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldGT(FieldBillingPolicy, v))
+}
+
+// BillingPolicyGTE applies the GTE predicate on the "billing_policy" field.
+func BillingPolicyGTE(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldGTE(FieldBillingPolicy, v))
+}
+
+// BillingPolicyLT applies the LT predicate on the "billing_policy" field.
+func BillingPolicyLT(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldLT(FieldBillingPolicy, v))
+}
+
+// BillingPolicyLTE applies the LTE predicate on the "billing_policy" field.
+func BillingPolicyLTE(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldLTE(FieldBillingPolicy, v))
+}
+
+// BillingPolicyContains applies the Contains predicate on the "billing_policy" field.
+func BillingPolicyContains(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldContains(FieldBillingPolicy, v))
+}
+
+// BillingPolicyHasPrefix applies the HasPrefix predicate on the "billing_policy" field.
+func BillingPolicyHasPrefix(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldHasPrefix(FieldBillingPolicy, v))
+}
+
+// BillingPolicyHasSuffix applies the HasSuffix predicate on the "billing_policy" field.
+func BillingPolicyHasSuffix(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldHasSuffix(FieldBillingPolicy, v))
+}
+
+// BillingPolicyEqualFold applies the EqualFold predicate on the "billing_policy" field.
+func BillingPolicyEqualFold(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEqualFold(FieldBillingPolicy, v))
+}
+
+// BillingPolicyContainsFold applies the ContainsFold predicate on the "billing_policy" field.
+func BillingPolicyContainsFold(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldContainsFold(FieldBillingPolicy, v))
 }
 
 // DesktopCredentialTypeEQ applies the EQ predicate on the "desktop_credential_type" field.

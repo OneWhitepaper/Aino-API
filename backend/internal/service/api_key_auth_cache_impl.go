@@ -14,7 +14,7 @@ import (
 	"github.com/dgraph-io/ristretto"
 )
 
-const apiKeyAuthSnapshotVersion = 28 // v28: retain device/image billing fields and add group privacy/RPM snapshots
+const apiKeyAuthSnapshotVersion = 29
 
 type apiKeyAuthCacheConfig struct {
 	l1Size        int
@@ -346,6 +346,7 @@ func (s *APIKeyService) snapshotFromAPIKey(ctx context.Context, apiKey *APIKey) 
 		return nil
 	}
 	snapshot := &APIKeyAuthSnapshot{
+		BillingPolicy:         apiKey.BillingPolicy,
 		DesktopCredentialType: apiKey.DesktopCredentialType,
 		DesktopDeviceID:       apiKey.DesktopDeviceID,
 		DesktopKeyVersion:     apiKey.DesktopKeyVersion,
@@ -466,6 +467,7 @@ func (s *APIKeyService) snapshotToAPIKey(key string, snapshot *APIKeyAuthSnapsho
 		return nil
 	}
 	apiKey := &APIKey{
+		BillingPolicy:         snapshot.BillingPolicy,
 		DesktopCredentialType: snapshot.DesktopCredentialType,
 		DesktopDeviceID:       snapshot.DesktopDeviceID,
 		DesktopKeyVersion:     snapshot.DesktopKeyVersion,

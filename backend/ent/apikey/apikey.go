@@ -23,6 +23,8 @@ const (
 	FieldDeletedAt = "deleted_at"
 	// FieldDesktopManaged holds the string denoting the desktop_managed field in the database.
 	FieldDesktopManaged = "desktop_managed"
+	// FieldBillingPolicy holds the string denoting the billing_policy field in the database.
+	FieldBillingPolicy = "billing_policy"
 	// FieldDesktopCredentialType holds the string denoting the desktop_credential_type field in the database.
 	FieldDesktopCredentialType = "desktop_credential_type"
 	// FieldDesktopDeviceID holds the string denoting the desktop_device_id field in the database.
@@ -118,6 +120,7 @@ var Columns = []string{
 	FieldUpdatedAt,
 	FieldDeletedAt,
 	FieldDesktopManaged,
+	FieldBillingPolicy,
 	FieldDesktopCredentialType,
 	FieldDesktopDeviceID,
 	FieldDesktopKeyVersion,
@@ -170,6 +173,10 @@ var (
 	UpdateDefaultUpdatedAt func() time.Time
 	// DefaultDesktopManaged holds the default value on creation for the "desktop_managed" field.
 	DefaultDesktopManaged bool
+	// DefaultBillingPolicy holds the default value on creation for the "billing_policy" field.
+	DefaultBillingPolicy string
+	// BillingPolicyValidator is a validator for the "billing_policy" field. It is called by the builders before save.
+	BillingPolicyValidator func(string) error
 	// DefaultDesktopCredentialType holds the default value on creation for the "desktop_credential_type" field.
 	DefaultDesktopCredentialType string
 	// DefaultDesktopDeviceID holds the default value on creation for the "desktop_device_id" field.
@@ -230,6 +237,11 @@ func ByDeletedAt(opts ...sql.OrderTermOption) OrderOption {
 // ByDesktopManaged orders the results by the desktop_managed field.
 func ByDesktopManaged(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDesktopManaged, opts...).ToFunc()
+}
+
+// ByBillingPolicy orders the results by the billing_policy field.
+func ByBillingPolicy(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBillingPolicy, opts...).ToFunc()
 }
 
 // ByDesktopCredentialType orders the results by the desktop_credential_type field.

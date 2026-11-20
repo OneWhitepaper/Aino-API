@@ -192,6 +192,9 @@ func RestoreAsyncFundingSnapshot(key *APIKey, snapshot *AsyncFundingSnapshot) (*
 		result.GroupID = &id
 	}
 	result.Funding.Subscription = copied.Subscription
+	if err := validateBalanceOnlySource(&result, result.Funding); err != nil {
+		return nil, nil, err
+	}
 	return &result, copied.Subscription, nil
 }
 func (s *APIKeyService) HandoffFundingToAsync(ctx context.Context, key *APIKey, provider, taskID string) error {

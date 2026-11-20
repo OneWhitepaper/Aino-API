@@ -46,8 +46,20 @@ func (r *teamFundingRepository) ReservePersonalFunding(ctx context.Context, c *s
 	var out *service.PersonalFundingReservation
 	e = teamFundingTx(ctx, r.db, func(tx *sql.Tx) error {
 		var keyUser int64
-		if e := tx.QueryRowContext(ctx, "SELECT user_id FROM api_keys WHERE id=$1 AND deleted_at IS NULL", c.APIKeyID).Scan(&keyUser); e != nil || keyUser != c.MemberUserID {
+		var keyPolicy string
+		var managed bool
+		if e := tx.QueryRowContext(ctx, "SELECT user_id,billing_policy,desktop_managed FROM api_keys WHERE id=$1 AND deleted_at IS NULL", c.APIKeyID).Scan(&keyUser, &keyPolicy, &managed); e != nil || keyUser != c.MemberUserID {
 			return service.ErrTeamFundingForbidden
+		}
+		balanceOnly := keyPolicy == service.BillingPolicyBalanceOnly
+		if keyPolicy != "" && (!balanceOnly || !managed || c.Source != service.FundingSourcePersonalBalance || c.SubscriptionID != nil || c.GroupID <= 0) {
+			return service.ErrTeamFundingForbidden
+		}
+		if balanceOnly {
+			var subscriptionType string
+			if e := tx.QueryRowContext(ctx, "SELECT subscription_type FROM groups WHERE id=$1 AND deleted_at IS NULL AND status='active' FOR SHARE", c.GroupID).Scan(&subscriptionType); e != nil || subscriptionType == service.SubscriptionTypeSubscription {
+				return service.ErrTeamFundingForbidden
+			}
 		}
 		var actor int64
 		if e := tx.QueryRowContext(ctx, "SELECT id FROM users WHERE id=$1 AND deleted_at IS NULL AND status='active' FOR UPDATE", c.MemberUserID).Scan(&actor); e != nil {
@@ -55,7 +67,12 @@ func (r *teamFundingRepository) ReservePersonalFunding(ctx context.Context, c *s
 		}
 		var mode string
 		var allowBalance, allowSub bool
-		e := tx.QueryRowContext(ctx, "SELECT mode,allow_personal_balance,allow_personal_subscription FROM funding_preferences WHERE user_id=$1 FOR SHARE", c.MemberUserID).Scan(&mode, &allowBalance, &allowSub)
+		var e error
+		if balanceOnly {
+			mode, allowBalance = service.FundingModePersonalOnly, true
+		} else {
+			e = tx.QueryRowContext(ctx, "SELECT mode,allow_personal_balance,allow_personal_subscription FROM funding_preferences WHERE user_id=$1 FOR SHARE", c.MemberUserID).Scan(&mode, &allowBalance, &allowSub)
+		}
 		if errors.Is(e, sql.ErrNoRows) {
 			var protectedOwner bool
 			// Pending work keeps implicit owner protection after team deletion.

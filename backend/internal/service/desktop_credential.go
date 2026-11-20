@@ -75,6 +75,10 @@ func NewDesktopCredentialService(repo DesktopCredentialRepository, keys *APIKeyS
 }
 
 func (s *DesktopCredentialService) IssueOrReuseLease(ctx context.Context, req DesktopCredentialRequest) (*DesktopCredentialResponse, error) {
+	if err := ValidateDesktopBillingPolicy(req.BillingPolicy); err != nil {
+		return nil, err
+	}
+	ctx = WithDesktopBillingPolicy(ctx, req.BillingPolicy)
 	if req.Purpose == "" {
 		req.Purpose = DesktopPurposeChat
 	}
@@ -120,7 +124,7 @@ func (s *DesktopCredentialService) IssueOrReuseLease(ctx context.Context, req De
 	}
 	groupID := resolved.GroupID
 	candidate := &DesktopCredential{Purpose: req.Purpose, UserID: user.ID, DeviceID: req.DeviceID, ConnectionGrantID: req.ConnectionGrantID, SessionFamilyID: req.SessionFamilyID, TokenVersion: resolvedTokenVersion(user), GroupID: groupID, ModelID: req.ModelID, ExpiresAt: expires}
-	key := &APIKey{UserID: user.ID, Name: "Aino desktop", Key: rawKey, GroupID: &groupID, Status: StatusActive, ExpiresAt: &expires, DesktopManaged: true}
+	key := &APIKey{BillingPolicy: req.BillingPolicy, UserID: user.ID, Name: "Aino desktop", Key: rawKey, GroupID: &groupID, Status: StatusActive, ExpiresAt: &expires, DesktopManaged: true}
 	lease, key, err := s.repo.IssueOrReuse(ctx, candidate, key, ttl)
 	if err != nil {
 		return nil, err
@@ -139,22 +143,24 @@ func (s *DesktopCredentialService) IssueOrReuseLease(ctx context.Context, req De
 		return nil, err
 	}
 	s.keys.InvalidateAuthCacheByKey(ctx, key.Key)
-	return &DesktopCredentialResponse{Purpose: req.Purpose, CredentialID: strconv.FormatInt(lease.ID, 10), APIKey: key.Key, BaseURL: "https://api.agentera.com.cn/v1", ExpiresAt: lease.ExpiresAt, Model: resolved.Model}, nil
+	return &DesktopCredentialResponse{BillingPolicy: key.BillingPolicy, Purpose: req.Purpose, CredentialID: strconv.FormatInt(lease.ID, 10), APIKey: key.Key, BaseURL: "https://api.agentera.com.cn/v1", ExpiresAt: lease.ExpiresAt, Model: resolved.Model}, nil
 }
 
 type DesktopCredentialRequest struct {
+	BillingPolicy                                         string `json:"billing_policy,omitempty"`
 	Purpose                                               string `json:"purpose"`
 	UserID                                                int64
 	DeviceID, ConnectionGrantID, SessionFamilyID, ModelID string
 }
 
 type DesktopCredentialResponse struct {
-	Purpose      string        `json:"purpose"`
-	CredentialID string        `json:"credential_id"`
-	APIKey       string        `json:"api_key"`
-	BaseURL      string        `json:"base_url"`
-	ExpiresAt    time.Time     `json:"expires_at"`
-	Model        PlatformModel `json:"model"`
+	BillingPolicy string        `json:"billing_policy"`
+	Purpose       string        `json:"purpose"`
+	CredentialID  string        `json:"credential_id"`
+	APIKey        string        `json:"api_key"`
+	BaseURL       string        `json:"base_url"`
+	ExpiresAt     time.Time     `json:"expires_at"`
+	Model         PlatformModel `json:"model"`
 }
 
 type DesktopDevice struct {

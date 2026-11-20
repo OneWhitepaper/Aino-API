@@ -174,12 +174,20 @@ func (s *APIKeyService) resolveFundingDecisionForCost(ctx context.Context, key *
 	return s.resolveFundingDecisionExcluding(ctx, key, required, nil)
 }
 func (s *APIKeyService) resolveFundingDecisionExcluding(ctx context.Context, key *APIKey, required *decimal.Decimal, excluded map[string]bool) (*FundingDecision, error) {
+	if err := validateBalanceOnlyFunding(key, nil); err != nil {
+		return nil, err
+	}
 	if s == nil || s.teamFunding == nil || key == nil || key.User == nil {
+		if key != nil && key.BillingPolicy != "" {
+			return nil, ErrServiceUnavailable
+		}
 		return nil, nil
 	}
 	var f *FundingContext
 	var err error
-	if key.Funding != nil && key.Funding.fundingContext != nil {
+	if key.BillingPolicy == BillingPolicyBalanceOnly {
+		f = &FundingContext{Preferences: FundingPreferences{Configured: true, Mode: FundingModePersonalOnly, AllowPersonalBalance: true}}
+	} else if key.Funding != nil && key.Funding.fundingContext != nil {
 		f = key.Funding.fundingContext
 	} else {
 		f, err = s.teamFunding.GetFundingContext(ctx, key.UserID)
@@ -365,6 +373,9 @@ func (s *APIKeyService) prepareFundingRequestWithPlan(ctx context.Context, key *
 		base.RequestID = ""
 		base.ReservedAmount = ""
 		base.dispatchContext = nil
+	}
+	if err := validateBalanceOnlyFunding(key, base); err != nil {
+		return nil, nil, nil, err
 	}
 	var err error
 	if base == nil {
@@ -1226,7 +1237,10 @@ func (s *APIKeyService) ValidateNewFundingOperation(ctx context.Context, key *AP
 			return nil, err
 		}
 	}
-	if next.Funding == nil && s != nil && s.teamFunding != nil {
+	if err := validateBalanceOnlyFunding(&next, next.Funding); err != nil {
+		return nil, err
+	}
+	if next.Funding == nil && next.BillingPolicy == "" && s != nil && s.teamFunding != nil {
 		funding, err := s.teamFunding.GetFundingContext(ctx, next.UserID)
 		if err != nil {
 			return nil, err

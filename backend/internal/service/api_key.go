@@ -28,6 +28,7 @@ func IsWindowExpired(windowStart *time.Time, duration time.Duration) bool {
 }
 
 type APIKey struct {
+	BillingPolicy         string           `json:"billing_policy,omitempty"`
 	Funding               *FundingDecision `json:"-"`
 	DesktopCredentialType string
 	DesktopDeviceID       string

@@ -45,6 +45,7 @@ func (r *apiKeyRepository) activeQuery() *dbent.APIKeyQuery {
 func (r *apiKeyRepository) Create(ctx context.Context, key *service.APIKey) error {
 	builder := r.client.APIKey.Create().
 		SetDesktopManaged(key.DesktopManaged).
+		SetBillingPolicy(key.BillingPolicy).
 		SetDesktopCredentialType(key.DesktopCredentialType).
 		SetDesktopDeviceID(key.DesktopDeviceID).
 		SetDesktopKeyVersion(key.DesktopKeyVersion).
@@ -137,6 +138,7 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 		Where(apiKeyCredentialPredicate(key)).
 		Select(
 			apikey.FieldDesktopManaged,
+			apikey.FieldBillingPolicy,
 			apikey.FieldDesktopCredentialType,
 			apikey.FieldDesktopDeviceID,
 			apikey.FieldDesktopKeyVersion,
@@ -915,6 +917,7 @@ func apiKeyEntityToService(m *dbent.APIKey) *service.APIKey {
 		return nil
 	}
 	out := &service.APIKey{
+		BillingPolicy:         m.BillingPolicy,
 		DesktopCredentialType: m.DesktopCredentialType,
 		DesktopDeviceID:       m.DesktopDeviceID,
 		DesktopKeyVersion:     m.DesktopKeyVersion,

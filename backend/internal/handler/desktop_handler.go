@@ -52,7 +52,12 @@ func (h *DesktopHandler) GetBootstrap(c *gin.Context) {
 		response.Unauthorized(c, "User not authenticated")
 		return
 	}
-	bootstrap, err := h.models.Bootstrap(c.Request.Context(), subject.UserID)
+	policy := c.Query("billing_policy")
+	if err := service.ValidateDesktopBillingPolicy(policy); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	bootstrap, err := h.models.Bootstrap(service.WithDesktopBillingPolicy(c.Request.Context(), policy), subject.UserID)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -65,7 +70,7 @@ func (h *DesktopHandler) GetBootstrap(c *gin.Context) {
 	response.Success(c, struct {
 		*service.DesktopBootstrap
 		Capabilities map[string]int `json:"capabilities"`
-	}{bootstrap, map[string]int{"managed_device_key": deviceKeyCapability}})
+	}{bootstrap, map[string]int{"managed_device_key": deviceKeyCapability, "managed_billing_policy_balance_only": 1}})
 }
 
 // ListModels keeps the legacy chat catalog unless the client opts into images.
@@ -79,7 +84,12 @@ func (h *DesktopHandler) ListModels(c *gin.Context) {
 	if !ok {
 		return
 	}
-	models, err := h.models.ListForUser(c.Request.Context(), subject.UserID)
+	policy := c.Query("billing_policy")
+	if err := service.ValidateDesktopBillingPolicy(policy); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	models, err := h.models.ListForUser(service.WithDesktopBillingPolicy(c.Request.Context(), policy), subject.UserID)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -106,6 +116,7 @@ func (h *DesktopHandler) ProvisionCredential(c *gin.Context) {
 	}
 
 	var req struct {
+		BillingPolicy     string `json:"billing_policy"`
 		Purpose           string `json:"purpose"`
 		DeviceID          string `json:"device_id" binding:"required"`
 		ConnectionGrantID string `json:"connection_grant_id" binding:"required"`
@@ -124,6 +135,7 @@ func (h *DesktopHandler) ProvisionCredential(c *gin.Context) {
 	}
 
 	credReq := service.DesktopCredentialRequest{
+		BillingPolicy:     req.BillingPolicy,
 		Purpose:           req.Purpose,
 		UserID:            subject.UserID,
 		DeviceID:          req.DeviceID,

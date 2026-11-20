@@ -399,7 +399,7 @@ func applyUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog
 		return false, err
 	}
 	if result != nil {
-		settleDesktopUsage(usageLog, cmd)
+		settleDesktopUsage(usageLog, cmd, result)
 	}
 
 	if result == nil || !result.Applied {
@@ -907,7 +907,7 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 
 	simpleModeKeyRateLimitOnly := simpleModeKeyRateLimitBillingEnabled(s.cfg, apiKey)
 	if s.cfg != nil && s.cfg.RunMode == config.RunModeSimple && !simpleModeKeyRateLimitOnly {
-		settleDesktopUsage(usageLog, &UsageBillingCommand{})
+		settleDesktopUsage(usageLog, &UsageBillingCommand{}, &UsageBillingApplyResult{Applied: true})
 		writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.gateway")
 		logger.LegacyPrintf("service.gateway", "[SIMPLE MODE] Usage recorded (not billed): user=%d, tokens=%d", usageLog.UserID, usageLog.TotalTokens())
 		s.deferredService.ScheduleLastUsedUpdate(account.ID)
@@ -925,7 +925,7 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		}
 	}
 	requestID := usageLog.RequestID
-	_, billingErr := applyUsageBilling(ctx, requestID, usageLog, &postUsageBillingParams{
+	billed, billingErr := applyUsageBilling(ctx, requestID, usageLog, &postUsageBillingParams{
 		Cost:                       cost,
 		User:                       user,
 		APIKey:                     apiKey,
@@ -944,7 +944,9 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.gateway")
 		return billingErr
 	}
-	writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.gateway")
+	if billed {
+		writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.gateway")
+	}
 
 	return nil
 }

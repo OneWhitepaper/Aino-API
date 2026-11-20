@@ -44,7 +44,7 @@ func TestDeviceKeyIdempotencyStoresMetadataAndNeverReplaysSecret(t *testing.T) {
 	store := newUserMemoryIdempotencyRepoStub()
 	service.SetDefaultIdempotencyCoordinator(service.NewIdempotencyCoordinator(store, service.DefaultIdempotencyConfig()))
 	t.Cleanup(func() { service.SetDefaultIdempotencyCoordinator(nil) })
-	request := service.DesktopDeviceKeyRequest{DeviceID: "00000000-0000-4000-8000-000000000001"}
+	request := service.DesktopDeviceKeyRequest{DeviceID: "00000000-0000-4000-8000-000000000001", BillingPolicy: "balance_only"}
 	call := func() *httptest.ResponseRecorder {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
@@ -61,6 +61,7 @@ func TestDeviceKeyIdempotencyStoresMetadataAndNeverReplaysSecret(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(first.Body.Bytes(), &envelope))
 	require.NotEmpty(t, envelope.Data.APIKey)
+	require.Equal(t, "balance_only", envelope.Data.BillingPolicy)
 	secret := envelope.Data.APIKey
 	for _, record := range store.data {
 		require.NotNil(t, record.ResponseBody)
@@ -72,6 +73,7 @@ func TestDeviceKeyIdempotencyStoresMetadataAndNeverReplaysSecret(t *testing.T) {
 	require.Equal(t, "true", second.Header().Get("X-Idempotency-Replayed"))
 	require.NotContains(t, second.Body.String(), secret)
 	require.NotContains(t, second.Body.String(), "api_key")
+	require.Contains(t, second.Body.String(), `"billing_policy":"balance_only"`)
 	require.Equal(t, 1, repo.writes)
 	repo.key.Status = service.StatusAPIKeyDisabled
 	third := call()

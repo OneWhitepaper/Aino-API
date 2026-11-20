@@ -110,6 +110,9 @@ func TestDeviceBillingHTTPToOriginalGroupLedger(t *testing.T) {
 		require.Equal(t, expected.group, *row.GroupID)
 		require.Equal(t, expected.subscription, row.SubscriptionID)
 		require.Equal(t, fmt.Sprint(row.APIKeyID), identity.KeyID)
+		require.Equal(t, "settled", row.SettlementStatus)
+		require.NotNil(t, row.ActualCostDecimal)
+		require.Equal(t, "0.00010000", *row.ActualCostDecimal)
 	}
 	stored, err := repository.NewDesktopDeviceKeyRepository(r.client).GetDeviceKey(r.ctx, user.ID, identity.DeviceID)
 	require.NoError(t, err)

@@ -77,7 +77,7 @@ func resolveDesktopDeviceRoute(c *gin.Context, key *service.APIKey, models deskt
 		return nil, false
 	}
 	if c.Request.Method == http.MethodGet && (path == "/v1/models" || c.FullPath() == "/v1/models/:model") {
-		list, err := models.ListForUser(c.Request.Context(), key.UserID)
+		list, err := models.ListForUser(service.WithDesktopBillingPolicy(c.Request.Context(), key.BillingPolicy), key.UserID)
 		if err != nil {
 			abortDesktopRouteError(c, err)
 			return nil, false
